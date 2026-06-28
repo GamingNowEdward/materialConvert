@@ -1,0 +1,49 @@
+{
+  "base": {
+    "baseColor": "baseColor",
+    "baseColorWeight": "baseColorWeight",
+    "metallic": "metallic",
+    "roughness": "roughness"
+  },
+  "specular": {
+    "specularWeight": "specularWeight",
+    "specularColor": "specularColor",
+    "specularRoughness": "specular_roughness",
+    "specularAnisotropy": "specular_anisotropy",
+    "ior": "specular_ior"
+  },
+  "transmission": {
+    "transmissionWeight": "transmissionWeight",
+    "transmissionColor": "transmissionColor"
+  },
+  "geometry": {
+    "normal_bump": "normal_bump",
+    "opacity": "opacity",
+    "thinWalled": "thinWalled"
+  },
+  "subsurface": {
+    "subsurfaceWeight": "subsurfaceWeight",
+    "subsurfaceColor": "subsurfaceColor",
+    "subsurfaceRadius": "subsurfaceRadius",
+    "subsurfaceScale": "subsurfaceScale"
+  },
+  "coat": {
+    "coatWeight": "coatWeight",
+    "coatColor": "coatColor",
+    "coatRoughness": "coatRoughness",
+    "coatIor": "coatIor"
+  },
+  "fuzz": {
+    "fuzzWeight": "fuzzWeight",
+    "fuzzColor": "fuzzColor",
+    "fuzzRoughness": "fuzzRoughness"
+  },
+  "emission": {
+    "emissionWeight": "emissionWeight",
+    "emissionColor": "emissionColor"
+  },
+  "displacement": {
+    "displacementScale": "displacementScale",
+    "displacementTexture": "displacementTexture"
+  }
+}

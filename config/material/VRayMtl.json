@@ -1,0 +1,63 @@
+{
+  "material": {
+    "node_type": "VRayMtl",
+    "target_connection": "surfaceShader",
+    "prerequisites": {
+      "roughness_mode": {
+        "attribute": "useRoughness",
+        "value": 1
+      }
+    },
+    "short_name": "vray",
+    "uiPanel_display_name": "V-Ray",
+    "renderer": "vray"
+  },
+  "base": {
+    "baseColor": "color",
+    "baseColorWeight": "diffuseColorAmount",
+    "metallic": "metalness",
+    "roughness": "roughnessAmount"
+  },
+  "specular": {
+    "specularWeight": "reflectionColorAmount",
+    "specularColor": "reflectionColor",
+    "specularRoughness": "reflectionGlossiness",
+    "specularAnisotropy": "anisotropy",
+    "ior": "refractionIOR"
+  },
+  "transmission": {
+    "transmissionWeight": "refractionColorAmount",
+    "transmissionColor": "refractionColor"
+  },
+  "geometry": {
+    "normal_bump": "bumpMap",
+    "opacity": "opacityMap",
+    "thinWalled": "refrThinWalled"
+  },
+  "subsurface": {
+    "subsurfaceWeight": "",
+    "subsurfaceColor": "",
+    "subsurfaceRadius": "",
+    "subsurfaceScale": ""
+  },
+  "coat": {
+    "coatWeight": "coatColorAmount",
+    "coatColor": "coatColor",
+    "coatRoughness": "coatGlossiness",
+    "coatIor": "coatIor"
+  },
+  "fuzz": {
+    "fuzzWeight": "sheenColorAmount",
+    "fuzzColor": "sheenColor",
+    "fuzzRoughness": "sheenGlossiness"
+  },
+  "emission": {
+    "emissionWeight": "",
+    "emissionColor": "illumColor"
+  },
+  "displacement": {
+    "node_type": "displacementShader",
+    "displacementScale": "scale",
+    "displacementTexture": "displacement"
+  }
+}

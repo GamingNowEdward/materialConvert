@@ -1,0 +1,57 @@
+{
+  "material": {
+    "node_type": "RedshiftStandardMaterial",
+    "target_connection": "surfaceShader",
+    "short_name": "rsStdMat",
+    "uiPanel_display_name": "Redshift Standard Material",
+    "renderer": "redshift"
+  },
+  "base": {
+    "baseColor": "base_color",
+    "baseColorWeight": "base_color_weight",
+    "metallic": "metalness",
+    "roughness": "diffuse_roughness"
+  },
+  "specular": {
+    "specularWeight": "refl_weight",
+    "specularColor": "refl_color",
+    "specularRoughness": "refl_roughness",
+    "specularAnisotropy": "refl_aniso",
+    "ior": "refl_ior"
+  },
+  "transmission": {
+    "transmissionWeight": "refr_weight",
+    "transmissionColor": "refr_color"
+  },
+  "geometry": {
+    "normal_bump": "bump_input",
+    "opacity": "opacity_color",
+    "thinWalled": "refr_thin_walled"
+  },
+  "subsurface": {
+    "subsurfaceWeight": "ms_amount",
+    "subsurfaceColor": "ms_color",
+    "subsurfaceRadius": "ms_radius",
+    "subsurfaceScale": "ms_radius_scale"
+  },
+  "coat": {
+    "coatWeight": "coat_weight",
+    "coatColor": "coat_color",
+    "coatRoughness": "coat_roughness",
+    "coatIor": "coat_ior"
+  },
+  "fuzz": {
+    "fuzzWeight": "sheen_weight",
+    "fuzzColor": "sheen_color",
+    "fuzzRoughness": "sheen_roughness"
+  },
+  "emission": {
+    "emissionWeight": "emission_weight",
+    "emissionColor": "emission_color"
+  },
+  "displacement": {
+    "node_type": "RedshiftDisplacement",
+    "displacementScale": "scale",
+    "displacementTexture": "texMap"
+  }
+}

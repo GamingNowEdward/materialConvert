@@ -1,0 +1,81 @@
+{
+  "common": {
+    "base": {
+      "gamma": "gamma",
+      "contrast": "contrast",
+      "gain": "gain"
+    },
+    "color": {
+      "hue": "hue",
+      "saturation": "saturation"
+    }
+  },
+  "maya": {
+    "material": {
+      "node_type": "colorCorrect",
+      "target_connection": "outColor",
+      "source_connection": "inColor"
+    },
+    "base": {
+      "gamma": "",
+      "contrast": "",
+      "gain": "valGain"
+    },
+    "color": {
+      "hue": "hueShift",
+      "saturation": "satGain",
+      "hue_range": [0, 360]
+    }
+  },
+  "arnold": {
+    "material": {
+      "node_type": "aiColorCorrect",
+      "target_connection": "outColor",
+      "source_connection": "input"
+    },
+    "base": {
+      "gamma": "gamma",
+      "contrast": "contrast",
+      "gain": "exposure"
+    },
+    "color": {
+      "hue": "hueShift",
+      "saturation": "saturation",
+      "hue_range": [-1, 1]
+    }
+  },
+  "redshift": {
+    "material": {
+      "node_type": "RedshiftColorCorrection",
+      "target_connection": "outColor",
+      "source_connection": "input"
+    },
+    "base": {
+      "gamma": "gamma",
+      "contrast": "contrast",
+      "gain": "level"
+    },
+    "color": {
+      "hue": "hue",
+      "saturation": "saturation",
+      "hue_range": [0, 360]
+    }
+  },
+  "vray": {
+    "material": {
+      "node_type": "VRayColorCorrection",
+      "target_connection": "outColor",
+      "source_connection": "texture_map"
+    },
+    "base": {
+      "gamma": "",
+      "contrast": "contrast",
+      "gain": "brightness"
+    },
+    "color": {
+      "hue": "hue_shift",
+      "saturation": "saturation",
+      "hue_range": [-180, 180]
+    }
+  }
+}

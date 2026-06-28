@@ -1,0 +1,57 @@
+{
+  "material": {
+    "node_type": "aiOpenPBRSurface",
+    "target_connection": "surfaceShader",
+    "short_name": "aiPBR",
+    "uiPanel_display_name": "Arnold OpenPBR Surface",
+    "renderer": "arnold"
+  },
+  "base": {
+    "baseColor": "baseColor",
+    "baseColorWeight": "baseWeight",
+    "metallic": "baseMetalness",
+    "roughness": "baseDiffuseRoughness"
+  },
+  "specular": {
+    "specularWeight": "specularWeight",
+    "specularColor": "specularColor",
+    "specularRoughness": "specularRoughness",
+    "specularAnisotropy": "specularRoughnessAnisotropy",
+    "ior": "specularIOR"
+  },
+  "transmission": {
+    "transmissionWeight": "transmissionWeight",
+    "transmissionColor": "transmissionColor"
+  },
+  "geometry": {
+    "normal_bump": "normalCamera",
+    "opacity": "geometryOpacity",
+    "thinWalled": "geometryThinWalled"
+  },
+  "subsurface": {
+    "subsurfaceWeight": "subsurfaceWeight",
+    "subsurfaceColor": "subsurfaceColor",
+    "subsurfaceRadius": "subsurfaceRadius",
+    "subsurfaceScale": "subsurfaceRadiusScale"
+  },
+  "coat": {
+    "coatWeight": "coatWeight",
+    "coatColor": "coatColor",
+    "coatRoughness": "coatRoughness",
+    "coatIor": "coatIOR"
+  },
+  "fuzz": {
+    "fuzzWeight": "fuzzWeight",
+    "fuzzColor": "fuzzColor",
+    "fuzzRoughness": "fuzzRoughness"
+  },
+  "emission": {
+    "emissionWeight": "emissionLuminance",
+    "emissionColor": "emissionColor"
+  },
+  "displacement": {
+    "node_type": "displacementShader",
+    "displacementScale": "scale",
+    "displacementTexture": "displacement"
+  }
+}

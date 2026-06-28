@@ -1,0 +1,91 @@
+{
+  "arnold": {
+    "plugin": "mtoa",
+    "shader_type": "aiOpenPBRSurface",
+    "cc_type": "colorCorrect",
+    "cc_in": "inColor",
+    "cc_out": "outColor",
+    "attr_map": {
+      "color": "baseColor",
+      "rough": "specularRoughness",
+      "nrm": "normalCamera",
+      "sss": "subsurfaceColor"
+    },
+    "nb": {
+      "node": { "nrm": "aiNormalMap", "bump": "aiBump2d" },
+      "in": { "nrm": "input", "bump": "bumpMap" },
+      "out": { "nrm": "outValue", "bump": "outValue" },
+      "file_src": { "nrm": "outColor", "bump": "outAlpha" },
+      "init_attrs": {
+        "nrm": { "strength": 1.0 },
+        "bump": { "bumpHeight": 0.1 }
+      }
+    },
+    "disp": {
+      "node": "displacementShader",
+      "in": "displacement",
+      "out": "displacement",
+      "file_src": "outAlpha",
+      "lyr_src": "outAlpha"
+    }
+  },
+  "redshift": {
+    "plugin": "redshift4maya",
+    "shader_type": "RedshiftOpenPBRMaterial",
+    "cc_type": "RedshiftColorCorrection",
+    "cc_in": "input",
+    "cc_out": "outColor",
+    "attr_map": {
+      "color": "base_color",
+      "rough": "specular_roughness",
+      "nrm": "geometry_normal",
+      "sss": "subsurface_color"
+    },
+    "nb": {
+      "node": { "nrm": "RedshiftBumpMap", "bump": "RedshiftBumpMap" },
+      "in": { "nrm": "input", "bump": "input" },
+      "out": { "nrm": "out", "bump": "out" },
+      "file_src": { "nrm": "outColor", "bump": "outColor" },
+      "init_attrs": {
+        "nrm": { "inputType": 1, "scale": 1.0 },
+        "bump": { "inputType": 0, "scale": 0.1 }
+      }
+    },
+    "disp": {
+      "node": "RedshiftDisplacement",
+      "in": "texMap",
+      "out": "out",
+      "file_src": "outAlpha",
+      "lyr_src": "outColor"
+    }
+  },
+  "vray": {
+    "plugin": "vrayformaya",
+    "shader_type": "VRayMtl",
+    "mat_init_attrs": { "useRoughness": 1 },
+    "cc_type": "colorCorrect",
+    "cc_in": "inColor",
+    "cc_out": "outColor",
+    "attr_map": {
+      "color": "color",
+      "rough": "reflectionGlossiness",
+      "nrm": "bumpMap",
+      "sss": "ssColor"
+    },
+    "nb": {
+      "node": { "nrm": null, "bump": null },
+      "file_src": { "nrm": "outColor", "bump": "outColor" },
+      "mat_attrs": {
+        "nrm": { "bumpMapType": 1, "bumpMult": 1.0 },
+        "bump": { "bumpMapType": 0, "bumpMult": 0.1 }
+      }
+    },
+    "disp": {
+      "node": "displacementShader",
+      "in": "displacement",
+      "out": "displacement",
+      "file_src": "outAlpha",
+      "lyr_src": "outAlpha"
+    }
+  }
+}

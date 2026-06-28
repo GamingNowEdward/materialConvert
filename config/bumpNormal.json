@@ -1,0 +1,88 @@
+{
+  "common": {
+    "bump": {
+      "scale": "scale",
+      "input": "input",
+      "output": "output"
+    },
+    "normal": {
+      "scale": "scale",
+      "input": "input",
+      "output": "output"
+    }
+  },
+  "maya": {
+    "bump": {
+      "is_material_attribute": false,
+      "node_type": "bump2d",
+      "target_connection": "outNormal",
+      "source_connection": "bumpValue",
+      "scale": "bumpDepth",
+      "isNormal": "bumpInterp",
+      "isNormal_value": 0
+    },
+    "normal": {
+      "is_material_attribute": false,
+      "node_type": "bump2d",
+      "target_connection": "outNormal",
+      "source_connection": "bumpValue",
+      "scale": "bumpDepth",
+      "isNormal": "bumpInterp",
+      "isNormal_value": 1
+    }
+  },
+  "arnold": {
+    "bump": {
+      "is_material_attribute": false,
+      "node_type": "aiBump2d",
+      "target_connection": "outValue",
+      "source_connection": "bumpMap",
+      "scale": "bumpHeight"
+    },
+    "normal": {
+      "is_material_attribute": false,
+      "node_type": "aiNormalMap",
+      "target_connection": "outValue",
+      "source_connection": "input",
+      "scale": "strength"
+    }
+  },
+  "redshift": {
+    "bump": {
+      "is_material_attribute": false,
+      "node_type": "RedshiftBumpMap",
+      "target_connection": "out",
+      "source_connection": "input",
+      "scale": "scale",
+      "isNormal": "inputType",
+      "isNormal_value": 0
+    },
+    "normal": {
+      "is_material_attribute": false,
+      "node_type": "RedshiftBumpMap",
+      "target_connection": "out",
+      "source_connection": "input",
+      "scale": "scale",
+      "isNormal": "inputType",
+      "isNormal_value": 1
+    }
+  },
+  "vray": {
+    "bump": {
+      "is_material_attribute": true,
+      "node_type": "",
+      "scale": "bumpMult",
+      "input": "bumpMap",
+      "input_type": "bumpMapType",
+      "input_type_value": 0
+    },
+    "normal": {
+      "is_material_attribute": true,
+      "node_type": "",
+      "scale": "bumpMult",
+      "input": "bumpMap",
+      "input_type": "bumpMapType",
+      "input_type_value": 1
+    }
+  }
+}
