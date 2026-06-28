@@ -46,8 +46,18 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 对齐、原点居中、冻结变换
 - 世界空间定位
 
+### Locator
+- 为选中物体自动创建 Layout Locator
+- 根据包围盒尺寸缩放 Locator
+- 支持前缀、三轴独立缩放倍率、覆盖色
+
 ### Attr Modifier
 - 批量修改节点属性值
+
+### Locator
+- 为选中物体自动创建 Layout Locator
+- 根据包围盒尺寸缩放 Locator
+- 支持前缀、三轴独立缩放倍率、覆盖色
 
 ## 项目结构
 
@@ -60,7 +70,7 @@ materialConvert/
 ├── ui/                  # 用户界面
 │   ├── converter_ui.py  # 主窗口
 │   ├── styles.py        # QSS 样式
-│   └── tabs/            # 五个功能标签页
+│   └── tabs/            # 六个功能标签页
 └── main.py              # 入口脚本
 ```
 

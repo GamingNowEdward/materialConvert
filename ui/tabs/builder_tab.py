@@ -1,10 +1,5 @@
-from core.builder_context import qt_maya_logger
-
-try:
-    from PySide2 import QtWidgets, QtCore, QtGui
-except ImportError:
-    from PySide6 import QtWidgets, QtCore, QtGui
-from core.builder_context import BuilderContext
+from ui import QtWidgets, QtCore, QtGui
+from core.builder_context import qt_maya_logger, BuilderContext
 
 
 class BuilderTab:

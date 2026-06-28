@@ -35,13 +35,22 @@ exec(open(r"你的路径\materialConvert\main.py").read())
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
+  - `locator_tab.py` — Layout Locator 创建（包围盒缩放 + 覆盖色）
 - 调度器：`core/converter.py`（约 90 行）
 - 工具函数：`core/node_utils.py`（全部为静态方法 — 使用 `NodeUtils`，不要 `NodeUtils()`）
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，5 个标签页，约 50 行）
+- 界面：`ui/converter_ui.py`（QTabWidget，6 个标签页，约 40 行）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/builder_context.py`（`BuilderContext` 状态管理 + 工具方法）
 - Builder 配置：`config/builder_specs.json`（渲染器规格） + `config/builder_naming.json`（命名约定）
+
+### 统一导入
+所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
+```python
+from ui import QtWidgets, QtCore, QtGui, cmds       # tabs
+from ui import QtWidgets, QtCore, QtGui, shiboken    # converter_ui.py
+```
+PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一行 import。
 
 ### 新增渲染器材质
 只需在 `config/material/` 目录下添加对应的 JSON 文件，包含 `node_type`、`uiPanel_display_name`、`renderer` 和属性映射。无需修改任何 Python 代码，UI 下拉框和转换逻辑自动支持。

@@ -342,7 +342,33 @@ UI 支持同时批量转换多个材质：
 
 ---
 
-## 十一、项目结构
+## 十一、Locator 工具
+
+为选中物体自动创建 Layout Locator，将物体设为 Locator 的子级，并根据包围盒尺寸缩放 Locator。
+
+### 11.1 功能
+
+| 参数 | 说明 |
+|---|---|
+| Prefix | 生成 Locator 的名称前缀，默认 `loc_` |
+| Scale Multipliers | X/Y/Z 三轴独立缩放倍率，作用于包围盒最大边长 |
+| Enable Override Color | 勾选后可选择 Locator 的显示覆盖色 |
+
+### 11.2 转换流程
+
+```
+选中物体 → 获取包围盒大小 → 创建 Locator（同名位置） → 将物体设为 Locator 子级
+→ 清空物体变换 → 设置 Locator 缩放 = 包围盒边长 × 倍率 → 可选设置覆盖色
+```
+
+### 11.3 跳过规则
+
+- 如果物体已有 Locator 作为 direct shape（即本身就是 Locator），跳过
+- 每次操作包裹在 `undoInfo(openChunk=True/closeChunk)` 中，支持单步撤销
+
+---
+
+## 十二、项目结构
 
 ```
 materialConvert/
@@ -372,12 +398,13 @@ materialConvert/
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (~50行, QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题样式
-│   └── tabs/                        # 五个功能标签页
+│   └── tabs/                        # 六个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
 │       ├── node_tools_tab.py        # Node Tools
 │       ├── transform_tab.py         # Transform Tools
-│       └── attr_modifier_tab.py     # Attr Modifier
+│       ├── attr_modifier_tab.py     # Attr Modifier
+│       └── locator_tab.py           # Locator 工具
 ├── main.py                          # 入口脚本
 ├── AGENTS.md                        # AI Agent 开发指南
 └── CONVERSION_SPEC.md               # 本文档

@@ -1,10 +1,5 @@
+from ui import QtWidgets, QtCore, QtGui, cmds
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
-
-try:
-    from PySide2 import QtWidgets, QtCore, QtGui
-except ImportError:
-    from PySide6 import QtWidgets, QtCore, QtGui
-import maya.cmds as cmds
 
 
 class NodeToolsTab:

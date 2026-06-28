@@ -1,19 +1,8 @@
-try:
-    from PySide2 import QtWidgets, QtCore, QtGui
-except ImportError:
-    from PySide6 import QtWidgets, QtCore, QtGui
-
-try:
-    import shiboken2 as shiboken
-except ImportError:
-    try:
-        import shiboken6 as shiboken
-    except ImportError:
-        shiboken = None
-
+from ui import QtWidgets, QtCore, QtGui, shiboken
 from core.builder_context import BuilderContext
 from ui.styles import FULL_STYLESHEET
-from ui.tabs import ConverterTab, BuilderTab, NodeToolsTab, TransformTab, AttrModifierTab
+from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab,
+                      TransformTab, AttrModifierTab, LocatorTab)
 
 
 def _maya_main_window():
@@ -43,10 +32,11 @@ class ConverterWindow(QtWidgets.QDialog):
         self.node_tools_tab = NodeToolsTab(self.ctx)
         self.transform_tab = TransformTab(self.ctx)
         self.attr_modifier_tab = AttrModifierTab(self.ctx)
+        self.locator_tab = LocatorTab(self.ctx)
 
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
-        self.setMinimumSize(860, 800)
+        self.setMinimumSize(960, 800)
         self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint)
 
         self._build_ui()
@@ -69,6 +59,7 @@ class ConverterWindow(QtWidgets.QDialog):
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
         self.tab_widget.addTab(self.transform_tab.build_ui(), "  Transform Tools  ")
         self.tab_widget.addTab(self.attr_modifier_tab.build_ui(), "  Attr Modifier  ")
+        self.tab_widget.addTab(self.locator_tab.build_ui(), "  Locator  ")
 
 
 def show():

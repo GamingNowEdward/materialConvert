@@ -1,11 +1,7 @@
+from ui import QtWidgets, QtCore, QtGui
 import pymel.core as pm
 import sys
 import os
-
-try:
-    from PySide2 import QtWidgets, QtCore, QtGui
-except ImportError:
-    from PySide6 import QtWidgets, QtCore, QtGui
 
 # Ensure project root is importable
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
