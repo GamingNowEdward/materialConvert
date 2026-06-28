@@ -3,7 +3,7 @@
 ## 概述
 
 通过**通用 PBR 属性格式**在 Arnold、Redshift、V-Ray 之间转换材质。  
-所有映射定义在 `config/` JSON 文件中，Python 代码中不存在硬编码属性名。
+所有映射定义在 `config/` JSON 文件中，Python 代码中零硬编码属性名。
 
 **转换流程：**
 
@@ -100,6 +100,8 @@
 > 例如：VRayMtl 的 `sheenColor=(0,0,0)` 但 `sheenColorAmount=1.0`，转换后目标材质的 `fuzzWeight` 会被置为 0。
 
 此处理在属性传递之前执行，与目标渲染器无关。
+
+> 颜色-权重配对关系定义在 `config/material/common.json` 的 `color_weight_pairs` 数组中，新增配对只需修改该 JSON，无需改 Python 代码。
 
 ### 1.5 渲染器特定前提条件
 
