@@ -1,4 +1,13 @@
 {
+  "color_weight_pairs": [
+    ["baseColor", "baseColorWeight"],
+    ["specularColor", "specularWeight"],
+    ["transmissionColor", "transmissionWeight"],
+    ["subsurfaceColor", "subsurfaceWeight"],
+    ["coatColor", "coatWeight"],
+    ["fuzzColor", "fuzzWeight"],
+    ["emissionColor", "emissionWeight"]
+  ],
   "base": {
     "baseColor": "baseColor",
     "baseColorWeight": "baseColorWeight",

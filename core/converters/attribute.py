@@ -1,15 +1,5 @@
 from core.prerequisites import apply_attr_prerequisites
 
-COLOR_WEIGHT_PAIRS = {
-    "baseColor": "baseColorWeight",
-    "specularColor": "specularWeight",
-    "transmissionColor": "transmissionWeight",
-    "subsurfaceColor": "subsurfaceWeight",
-    "coatColor": "coatWeight",
-    "fuzzColor": "fuzzWeight",
-    "emissionColor": "emissionWeight",
-}
-
 
 class AttributeConverter:
 
@@ -32,7 +22,7 @@ class AttributeConverter:
         return self.utils.collect_attribute_info(mat, list(attrs_to_collect))
 
     def _zero_black_colors(self, attr_info, source_config):
-        for color_ca, weight_ca in COLOR_WEIGHT_PAIRS.items():
+        for color_ca, weight_ca in self.config.get_color_weight_pairs():
             color_attr = source_config.get_maya_attr(color_ca)
             weight_attr = source_config.get_maya_attr(weight_ca)
             if not (color_attr and weight_attr):

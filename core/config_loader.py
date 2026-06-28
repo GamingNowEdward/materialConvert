@@ -114,6 +114,7 @@ class ConfigLoader:
         self._color_correction_configs = {}
         self._builder_specs = {}
         self._builder_naming = {}
+        self._color_weight_pairs = []
         self._load_all()
 
     def _load_all(self):
@@ -127,6 +128,7 @@ class ConfigLoader:
     def _load_common(self):
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
         raw = self._read_json(path)
+        self._color_weight_pairs = raw.get("color_weight_pairs", [])
 
         common_attr_groups = {}
         for group_name, group_data in raw.items():
@@ -203,6 +205,9 @@ class ConfigLoader:
 
     def get_all_material_configs(self):
         return dict(self._material_configs)
+
+    def get_color_weight_pairs(self):
+        return list(self._color_weight_pairs)
 
     def get_common_attrs(self):
         return list(self._common_attrs)
