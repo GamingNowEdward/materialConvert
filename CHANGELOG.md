@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-02
+
+### 文档更新
+- `README.md` / `README_zh.md`：明确支持 Maya 2024+，补充 PyMEL 依赖说明及官方文档链接
+
 ## 2026-07-01
 
 ### Bug 修复

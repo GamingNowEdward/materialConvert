@@ -24,7 +24,8 @@ sys.path.insert(0, r"your_path\materialConvert")
 exec(open(r"your_path\materialConvert\main.py").read())
 ```
 
-**Zero external dependencies** — no pip install required.
+**Supported**: Maya 2024+
+**Requires**: [PyMEL](https://help.autodesk.com/view/MAYAUL/2027/ENU/?guid=GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4) (included with Maya, ensure it is installed in your Maya environment)
 
 ## Features
 
