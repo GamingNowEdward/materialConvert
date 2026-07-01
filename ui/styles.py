@@ -22,6 +22,8 @@ QPushButton#createFileBtn { background-color: #2b5c46; color: #8de8b8; }
 QPushButton#createFileBtn:hover { background-color: #3b7c5e; color: white; border: 1px solid #00FFAD; }
 QPushButton#applyCsBtn { background-color: #3d2b5c; color: #c48de8; }
 QPushButton#applyCsBtn:hover { background-color: #4e3b7c; color: white; border: 1px solid #B500FF; }
+QPushButton#autoCsBtn { background-color: #2b5c46; color: #8de8b8; }
+QPushButton#autoCsBtn:hover { background-color: #3b7c5e; color: white; border: 1px solid #00FFAD; }
 QPushButton#applyTransformBtn { background-color: #2b5c46; color: #8de8b8; }
 QPushButton#applyTransformBtn:hover { background-color: #3b7c5e; color: white; border: 1px solid #00FFAD; }
 QPushButton#setLocBtn { background-color: #4D3D2E; color: #E8BA8D; }

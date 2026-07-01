@@ -12,5 +12,3 @@ except ImportError:
         shiboken = None
 
 import maya.cmds as cmds
-
-from ui.converter_ui import show

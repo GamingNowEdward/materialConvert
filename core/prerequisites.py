@@ -1,3 +1,6 @@
+import pymel.core as pm
+
+
 def apply_prerequisites(material, config):
     prereqs = config.get_prerequisites()
     _apply_prereq_dict(material, prereqs)
@@ -17,7 +20,7 @@ def _apply_single_prereq(material, prereq_info):
             try:
                 material.attr(prereq_attr).set(prereq_value)
             except Exception:
-                pass
+                pm.warning(f"prerequisites: failed to set {prereq_attr}={prereq_value} on {material.name()}")
 
 
 def _apply_prereq_dict(material, prereq_dict):

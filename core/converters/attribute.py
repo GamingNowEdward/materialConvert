@@ -1,3 +1,5 @@
+import pymel.core as pm
+
 from core.prerequisites import apply_attr_prerequisites
 
 
@@ -41,31 +43,22 @@ class AttributeConverter:
                     and isinstance(weight_val, (int, float)) and weight_val > 0):
                 weight_data["value"] = 0
 
-    def _fix_alpha_luminance(self, attr_info, target_renderer, log):
+    def _fix_alpha_luminance(self, target_mat, target_renderer, log):
         if target_renderer == "redshift":
             return
 
-        for data in attr_info.values():
-            connection = data.get("connection")
-            if not connection:
-                continue
-
-            plug = connection.get("plug")
-            if not plug or plug.attrName(longName=True) != "outAlpha":
-                continue
-
-            tex_node = plug.node()
-            if not tex_node.hasAttr("alphaIsLuminance"):
-                continue
-
-            alpha = tex_node.alphaIsLuminance
-            if alpha.get():
-                continue
-
+        for common_attr in self.config.get_common_attrs():
             try:
-                alpha.set(True)
-                log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
-            except RuntimeError:
+                plug = target_mat.attr(common_attr)
+                conns = plug.connections(plugs=True, source=True)
+                for conn in conns:
+                    if conn.attrName(longName=True) == "outAlpha":
+                        tex_node = conn.node()
+                        if (tex_node.hasAttr("alphaIsLuminance")
+                                and not tex_node.alphaIsLuminance.get()):
+                            tex_node.alphaIsLuminance.set(True)
+                            log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
+            except Exception:
                 pass
 
     def _fix_vray_emission(self, attr_info, source_config, target_mat, target_config):
@@ -87,12 +80,11 @@ class AttributeConverter:
             try:
                 target_mat.attr(weight_attr).set(1)
             except Exception:
-                pass
+                pm.warning(f"AttributeConverter: failed to set emission weight on {target_mat.name()}")
 
     def transfer_all(self, target_mat, source_config, target_config, target_renderer,
                      attr_info, cc_cache, log):
         self._zero_black_colors(attr_info, source_config)
-        self._fix_alpha_luminance(attr_info, target_renderer, log)
         self._fix_vray_emission(attr_info, source_config, target_mat, target_config)
         skip_attrs = {"normal_bump", "displacementScale", "displacementTexture"}
         for common_attr in self.config.get_common_attrs():
@@ -111,6 +103,8 @@ class AttributeConverter:
             apply_attr_prerequisites(target_mat, target_config, common_attr)
             self._transfer_one(target_mat, tgt_maya_attr, src_maya_attr,
                                src_data, cc_cache, target_renderer, log)
+
+        self._fix_alpha_luminance(target_mat, target_renderer, log)
 
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
                        src_data, cc_cache, target_renderer, log):
@@ -138,9 +132,12 @@ class AttributeConverter:
             try:
                 target_plug.set(value)
             except Exception:
-                pass
+                pm.warning(f"AttributeConverter: failed to set float value on {target_mat.name()}.{target_attr}")
         elif isinstance(value, (tuple, list)) and len(value) >= 3:
             try:
                 target_plug.set(value)
             except Exception:
-                pass
+                try:
+                    target_plug.set(value[0])
+                except Exception:
+                    pm.warning(f"AttributeConverter: failed to set color value on {target_mat.name()}.{target_attr}")

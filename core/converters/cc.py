@@ -87,11 +87,11 @@ class CCConverter:
                 try:
                     cc_node.attr(cc_config.target_connection) >> dest
                 except Exception:
-                    pass
+                    pm.warning(f"CCConverter: failed to connect {cc_node.name()} to {dest}")
         else:
             try:
                 cc_node.attr(cc_config.target_connection) >> target_plug
             except Exception:
-                pass
+                pm.warning(f"CCConverter: failed to connect {cc_node.name()} to {target_plug}")
 
         log.append(f"  Color correction converted: {cc_node.name()}")

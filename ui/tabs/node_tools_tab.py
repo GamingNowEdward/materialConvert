@@ -1,11 +1,15 @@
 from ui import QtWidgets, QtCore, QtGui, cmds
+import os
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
+from core.config_loader import ConfigLoader
 
 
 class NodeToolsTab:
 
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
+        self.config = ConfigLoader()
+        self.cs_config = self.config.get_color_space_config()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -61,6 +65,12 @@ class NodeToolsTab:
         btn_apply_cs.setObjectName("applyCsBtn")
         btn_apply_cs.clicked.connect(self._apply_color_space)
         cs_layout.addWidget(btn_apply_cs)
+
+        btn_auto_cs = QtWidgets.QPushButton("Auto Match Selected")
+        btn_auto_cs.setFixedHeight(35)
+        btn_auto_cs.setObjectName("autoCsBtn")
+        btn_auto_cs.clicked.connect(self._auto_match_color_space)
+        cs_layout.addWidget(btn_auto_cs)
 
         layout.addWidget(grp_cs)
 
@@ -123,9 +133,9 @@ class NodeToolsTab:
             cmds.select(clear=True)
 
     def _select_all_bump_nodes(self):
-        bump_types = ["RedshiftBumpMap", "aiNormalMap", "aiBump2d", "bump2d", "bump3d"]
+        bn_types = ConfigLoader().get_all_bn_types()
         nodes = []
-        for bt in bump_types:
+        for bt in bn_types:
             found = cmds.ls(type=bt)
             if found:
                 nodes.extend(found)
@@ -144,7 +154,7 @@ class NodeToolsTab:
             cmds.select(clear=True)
 
     def _select_all_color_corrections(self):
-        cc_types = ["RedshiftColorCorrection", "colorCorrect", "aiColorCorrect", "VRayColorCorrection"]
+        cc_types = ConfigLoader().get_all_cc_types()
         nodes = []
         for ct in cc_types:
             found = cmds.ls(type=ct)
@@ -213,3 +223,62 @@ class NodeToolsTab:
                 print(f"{sg} renamed to {new_name}")
             except Exception as e:
                 cmds.warning(f"Cannot rename {sg}: {str(e)}")
+
+    def _get_available_color_spaces(self):
+        result = cmds.colorManagementPrefs(q=True, inputSpaceNames=True)
+        if result:
+            return set(result)
+        return set()
+
+    def _set_color_space(self, file_node, role):
+        available = self._get_available_color_spaces()
+        cs_data = self.cs_config.get("colorSpaces", {}).get(role, {})
+        for cs_name in cs_data.get("aliases", []):
+            if cs_name in available:
+                cmds.setAttr(f"{file_node}.colorSpace", cs_name, type="string")
+                return True
+        return False
+
+    def _match_by_filename(self, file_node):
+        path = cmds.getAttr(f"{file_node}.fileTextureName")
+        if not path:
+            return None
+        filename = os.path.basename(path).lower()
+        for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
+            for kw in cs_data.get("filenameKeywords", []):
+                if kw in filename:
+                    return role
+        return None
+
+    def _match_by_channel(self, file_node):
+        conns = cmds.listConnections(f"{file_node}.outColor", plugs=True, source=False) or []
+        for conn in conns:
+            attr_name = conn.split(".")[-1]
+            for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
+                if attr_name in cs_data.get("attributeKeywords", []):
+                    return role
+        return None
+
+    def _auto_match_color_space(self):
+        selected = cmds.ls(selection=True, type="file")
+        if not selected:
+            cmds.warning("Please select file nodes first.")
+            return
+
+        default_role = self.cs_config.get("default", "raw")
+        count = 0
+
+        for f in selected:
+            role = self._match_by_filename(f)
+            if not role:
+                role = self._match_by_channel(f)
+            if not role:
+                role = default_role
+
+            if self._set_color_space(f, role):
+                count += 1
+                print(f"{f}: set to {role}")
+            else:
+                cmds.warning(f"{f}: no matching color space found for role '{role}'")
+
+        print(f"Auto matched color space on {count}/{len(selected)} file node(s).")

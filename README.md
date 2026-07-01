@@ -30,12 +30,13 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 在 Arnold / Redshift / V-Ray 间批量转换 PBR 材质
 - 自动识别材质类型，一键全部转换
 - 支持 bump/normal 节点、颜色校正节点、置换节点的连带转换
+- 批量转换带进度条，支持单步撤销（Ctrl+Z）
 - 支持 6 种材质类型：`aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
 ### Material Builder
 - 从纹理路径一键构建完整 PBR 材质
 - 支持 Color / Roughness / Normal / Bump / Displacement 通道
-- 三种渲染器：Arnold / Redshift / V-Ray
+- 渲染器按钮从配置动态生成，新增渲染器只需改 JSON
 
 ### Node Tools
 - 按类型批量选择节点
@@ -61,11 +62,14 @@ materialConvert/
 ├── config/              # JSON 配置文件（渲染器材质/CC/bump 映射）
 ├── core/                # 核心转换引擎
 │   ├── converter.py     # 调度器
-│   └── converters/      # 四个业务转换模块
+│   ├── converters/      # 四个业务转换模块
+│   ├── node_utils.py    # 节点操作工具函数
+│   └── logger.py        # 统一日志模块
 ├── ui/                  # 用户界面
 │   ├── converter_ui.py  # 主窗口
 │   ├── styles.py        # QSS 样式
 │   └── tabs/            # 六个功能标签页
+├── docs/                # 文档
 └── main.py              # 入口脚本
 ```
 

@@ -115,6 +115,7 @@ class ConfigLoader:
         self._builder_specs = {}
         self._builder_naming = {}
         self._color_weight_pairs = []
+        self._color_space_config = {}
         self._load_all()
 
     def _load_all(self):
@@ -124,6 +125,7 @@ class ConfigLoader:
         self._load_color_correction()
         self._load_builder_specs()
         self._load_builder_naming()
+        self._load_color_space()
 
     def _load_common(self):
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
@@ -275,3 +277,19 @@ class ConfigLoader:
     def get_renderer_name(self, node_type):
         config = self._material_configs.get(node_type)
         return config.renderer if config else "unknown"
+
+    def get_all_cc_types(self):
+        types = set()
+        for cc in self._color_correction_configs.values():
+            if cc.node_type:
+                types.add(cc.node_type)
+        return types
+
+    def _load_color_space(self):
+        path = os.path.join(self._CONFIG_DIR, "colorSpace.json")
+        if not os.path.exists(path):
+            return
+        self._color_space_config = self._read_json(path)
+
+    def get_color_space_config(self):
+        return dict(self._color_space_config)

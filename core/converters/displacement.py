@@ -42,7 +42,7 @@ class DisplacementConverter:
                 try:
                     disp_node.attr(target_config.displacement_scale).set(scale_val)
                 except Exception:
-                    pass
+                    pm.warning(f"DisplacementConverter: failed to set scale on {disp_node.name()}")
 
             try:
                 for out_attr in ["outDisplacement", "out", "outColor"]:
@@ -50,7 +50,7 @@ class DisplacementConverter:
                         disp_node.attr(out_attr) >> sg.displacementShader
                         break
             except Exception:
-                pass
+                pm.warning(f"DisplacementConverter: failed to connect {disp_node.name()} to SG")
 
             log.append(f"  Displacement: converted to {target_config.displacement_node_type}")
         else:
@@ -64,7 +64,7 @@ class DisplacementConverter:
                 try:
                     disp_node.scale.set(scale_val)
                 except Exception:
-                    pass
+                    pm.warning(f"DisplacementConverter: failed to set scale on {disp_node.name()}")
 
             disp_node.displacement >> sg.displacementShader
             log.append("  Displacement: converted to displacementShader")

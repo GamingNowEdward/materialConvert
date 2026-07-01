@@ -1,24 +1,18 @@
 from ui import QtWidgets, QtCore, QtGui
 import pymel.core as pm
-import sys
-import os
-
-# Ensure project root is importable
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
 
 from core.config_loader import ConfigLoader
 from core.converter import MaterialConverter
-from core.node_utils import NodeUtils
+from core.logger import Logger
+import core.node_utils as node_utils
 
 
 class ConverterTab:
 
     def __init__(self):
         self.config = ConfigLoader()
-        self.converter_obj = MaterialConverter()
-        self.utils = NodeUtils()
+        self.logger = Logger()
+        self.converter_obj = MaterialConverter(logger=self.logger)
         self.current_materials = []
         self.selection_display = None
         self.mat_list = None
@@ -83,6 +77,12 @@ class ConverterTab:
         btn_row.addWidget(convert_btn)
         conv_layout.addLayout(btn_row)
 
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("%v / %m")
+        conv_layout.addWidget(self.progress_bar)
+
         layout.addWidget(conv_group, stretch=0)
 
         log_group = QtWidgets.QGroupBox("Process Log")
@@ -95,6 +95,8 @@ class ConverterTab:
 
         layout.addWidget(log_group, stretch=3)
         log_layout.addWidget(self.log_output)
+
+        self.logger.set_callback(self._add_log)
 
         self._populate_target_list()
         return widget
@@ -122,7 +124,7 @@ class ConverterTab:
             display += f" (+{len(selection) - 5} more)"
         self.selection_display.setText(display)
 
-        materials = self.utils.get_materials_from_selection()
+        materials = node_utils.get_materials_from_selection()
         self.current_materials = materials
 
         if not materials:
@@ -130,7 +132,7 @@ class ConverterTab:
             return
 
         for mat in materials:
-            node_type = self.utils.identify_node_type(mat)
+            node_type = node_utils.identify_node_type(mat)
             display_name = self.config.get_display_name(node_type)
             item_text = f" {mat.name()}   ({display_name})"
             item = QtWidgets.QListWidgetItem(item_text)
@@ -152,18 +154,21 @@ class ConverterTab:
         target_display = self.config.get_display_name(target_node_type)
         self._add_log(f"--- Converting to {target_display} ---")
 
+        total = len(self.current_materials)
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(True)
+        QtWidgets.QApplication.processEvents()
+
         results = self.converter_obj.convert_all(self.current_materials, target_node_type)
 
         converted = 0
         skipped = 0
         failed = 0
 
-        for r in results:
-            for line in r.get("log", []):
-                if "[ERROR]" in line:
-                    self._add_log(line, error=True)
-                else:
-                    self._add_log(line)
+        for i, r in enumerate(results):
+            self.progress_bar.setValue(i + 1)
+            QtWidgets.QApplication.processEvents()
 
             if r.get("skipped"):
                 skipped += 1
@@ -176,6 +181,8 @@ class ConverterTab:
         if failed:
             summary += f", {failed} failed"
         self._add_log(f"--- {summary} ---")
+
+        self.progress_bar.setVisible(False)
 
         new_mats = [r["new_material"] for r in results if r.get("success") and r.get("new_material")]
         if new_mats:

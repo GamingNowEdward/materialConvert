@@ -31,18 +31,20 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 所有渲染器映射定义在 `config/*.json` 中，Python 代码中**零硬编码渲染器类型名**
 - 新增渲染器支持：**只需添加 JSON 文件，不需要改业务代码**
 - 四个转换模块位于 `core/converters/` 目录下：
-  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 修复
+  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（扫描目标材质实际连接）
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
   - `locator_tab.py` — Layout Locator 创建（包围盒缩放 + 覆盖色）
-- 调度器：`core/converter.py`（约 90 行）
-- 工具函数：`core/node_utils.py`（全部为静态方法 — 使用 `NodeUtils`，不要 `NodeUtils()`）
+- 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数
+- 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`
+- 日志：`core/logger.py` — `Logger` 类，支持回调函数，UI 层注册回调更新日志面板
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，6 个标签页，约 40 行）
+- 界面：`ui/converter_ui.py`（QTabWidget，6 个标签页）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/builder_context.py`（`BuilderContext` 状态管理 + 工具方法）
 - Builder 配置：`config/builder_specs.json`（渲染器规格） + `config/builder_naming.json`（命名约定）
+- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords}，自动匹配 file 节点色彩空间）
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
@@ -114,5 +116,5 @@ renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为
 | 凹凸和法线混淆 | 共享类型节点（`bump2d` / `RedshiftBumpMap`）需要检查 `inputType`/`bumpInterp` |
 | V-Ray 凹凸类型属性设置失败 | 属性名是 `bumpMapType`，不是 `bumpType` |
 | `outAlpha` → `input` 连接失败 | 类型不兼容：float → color。使用 `smart_connect` 回退到 `outColor` |
+| float3 值设置到 float 属性报错 | 源属性为颜色（float3）但目标为标量（float）— 已自动回退取第一个通道 |
 | 材质转换后消失 | ShadingEngine 未重新绑定。检查 SG 替换逻辑 |
-| V-Ray specularWeight 未传递 | JSON 中拼写错误：`reflectionColorAmoun`（缺少字母 `t`） |

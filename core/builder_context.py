@@ -17,10 +17,7 @@ def qt_maya_logger(func):
             return result
         except Exception as e:
             cmds.warning(f"Action Failed: {str(e)}")
-            try:
-                from PySide2 import QtWidgets
-            except ImportError:
-                from PySide6 import QtWidgets
+            from ui import QtWidgets
             QtWidgets.QMessageBox.critical(self, "Error", f"Operation failed:\n{str(e)}")
             raise
     return wrapper

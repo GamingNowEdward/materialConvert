@@ -234,7 +234,7 @@ class BumpConverter:
             else:
                 return bn_node.attr(attr_val).get()
         except Exception:
-            pass
+            pm.warning(f"BumpConverter: failed to read {attr_val} on {bn_node.name()}")
         return None
 
     # ── Do Convert ──────────────────────────────────────────

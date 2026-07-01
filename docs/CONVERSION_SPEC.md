@@ -37,7 +37,7 @@
 | **baseColorWeight** | baseWeight | base | diffuse_weight | base_weight | diffuseColorAmount |
 | **metallic** | baseMetalness | metalness | refl_metalness | base_metalness | metalness |
 | **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | roughnessAmount |
-| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | reflectionColorAmoun |
+| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | reflectionColorAmount |
 | **specularColor** | specularColor | specularColor | refl_color | specular_color | reflectionColor |
 | **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | reflectionGlossiness |
 | **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | anisotropy |
@@ -73,8 +73,9 @@
 ### 1.3 值传递规则
 
 - **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
+- **Alpha Is Luminance**：属性传递完成后，扫描目标材质所有连接，若发现使用 `outAlpha` 的连接，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过）
 - **数值**：直接复制（float/int）
-- **颜色值**：直接复制（tuple/list，长度 >= 3）
+- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float（如 V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`），自动回退取第一个通道值
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
@@ -338,7 +339,20 @@ UI 支持同时批量转换多个材质：
 
 - 按类型选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - 批量设置 file 节点的颜色空间
+- 自动匹配选中 file 节点的色彩空间（参考 `config/colorSpace.json`）
 - 批量重命名 Shading Engine（SG）
+
+### 10.1 自动匹配色彩空间规则
+
+匹配优先级（从高到低）：
+
+1. **文件名匹配**（最高优先）：检查文件名是否包含 `filenameKeywords` 中的关键词（不区分大小写）
+   - 例如：`wood_basecolor.jpg` 包含 `basecolor` → 匹配 `srgb` 类型
+2. **连接通道匹配**（次选）：追踪 file 节点的 `outColor` 连接，检查目标材质属性是否在 `attributeKeywords` 中
+   - 例如：file 节点连接到 `mat.roughness` → 匹配 `raw` 类型
+3. **默认类型**（最低优先）：无匹配时使用 `config/colorSpace.json` 中 `default` 指定的类型（当前为 `raw`）
+
+匹配到类型后，从该类型的 `aliases` 列表中依次尝试，选择当前 OCIO 配置中实际可用的色彩空间名称进行设置。
 
 ---
 
@@ -385,27 +399,30 @@ materialConvert/
 │   ├── builder_specs.json             # Material Builder 渲染器规格
 │   └── builder_naming.json            # Material Builder 命名约定
 ├── core/                            # 核心引擎
-│   ├── converter.py                 # MaterialConverter 调度器 (~90行)
+│   ├── converter.py                 # MaterialConverter 调度器
 │   ├── converters/                  # 四个业务转换模块
 │   │   ├── attribute.py             # 属性收集与传递
 │   │   ├── bump.py                  # 凹凸/法线转换
 │   │   ├── cc.py                    # 颜色校正转换
 │   │   └── displacement.py          # 置换转换
 │   ├── config_loader.py             # JSON 配置解析
-│   ├── node_utils.py                # Maya 节点操作工具（smart_connect 等）
+│   ├── node_utils.py                # Maya 节点操作工具函数（模块级）
 │   ├── prerequisites.py             # 渲染器前提条件处理
+│   ├── logger.py                    # 统一日志模块
 │   └── builder_context.py           # Material Builder 共享状态与工具
 ├── ui/                              # 用户界面
-│   ├── converter_ui.py              # 主窗口 (~50行, QTabWidget)
+│   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题样式
 │   └── tabs/                        # 六个功能标签页
-│       ├── converter_tab.py         # 材质转换
+│       ├── converter_tab.py         # 材质转换（含进度条）
 │       ├── builder_tab.py           # Material Builder
 │       ├── node_tools_tab.py        # Node Tools
 │       ├── transform_tab.py         # Transform Tools
 │       ├── attr_modifier_tab.py     # Attr Modifier
 │       └── locator_tab.py           # Locator 工具
 ├── main.py                          # 入口脚本
-├── AGENTS.md                        # AI Agent 开发指南
-└── CONVERSION_SPEC.md               # 本文档
+├── docs/
+│   ├── AGENTS.md                    # AI Agent 开发指南
+│   └── CONVERSION_SPEC.md           # 本文档
+└── CHANGELOG.md                     # 变更日志
 ```

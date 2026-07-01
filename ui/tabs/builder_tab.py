@@ -1,11 +1,13 @@
 from ui import QtWidgets, QtCore, QtGui
 from core.builder_context import qt_maya_logger, BuilderContext
+from core.config_loader import ConfigLoader
 
 
 class BuilderTab:
 
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
+        self.config = ConfigLoader()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -51,23 +53,23 @@ class BuilderTab:
         layout.addLayout(cb_layout)
 
         btn_layout = QtWidgets.QHBoxLayout()
-        btn_arnold = QtWidgets.QPushButton("BUILD ARNOLD")
-        btn_arnold.setFixedHeight(45)
-        btn_arnold.clicked.connect(lambda: self._create_material_logic('arnold'))
-
-        btn_rs = QtWidgets.QPushButton("BUILD REDSHIFT")
-        btn_rs.setFixedHeight(45)
-        btn_rs.setObjectName("rsBtn")
-        btn_rs.clicked.connect(lambda: self._create_material_logic('redshift'))
-
-        btn_vray = QtWidgets.QPushButton("BUILD VRAY")
-        btn_vray.setFixedHeight(45)
-        btn_vray.setObjectName("vrayBtn")
-        btn_vray.clicked.connect(lambda: self._create_material_logic('vray'))
-
-        btn_layout.addWidget(btn_arnold)
-        btn_layout.addWidget(btn_rs)
-        btn_layout.addWidget(btn_vray)
+        renderer_styles = {
+            'arnold': None,
+            'redshift': 'rsBtn',
+            'vray': 'vrayBtn',
+        }
+        for renderer in ['arnold', 'redshift', 'vray']:
+            spec = self.config.get_builder_spec(renderer)
+            if not spec:
+                continue
+            display_name = renderer.upper()
+            btn = QtWidgets.QPushButton(f"BUILD {display_name}")
+            btn.setFixedHeight(45)
+            style = renderer_styles.get(renderer)
+            if style:
+                btn.setObjectName(style)
+            btn.clicked.connect(lambda checked=False, r=renderer: self._create_material_logic(r))
+            btn_layout.addWidget(btn)
         layout.addLayout(btn_layout)
 
         line = QtWidgets.QFrame()
