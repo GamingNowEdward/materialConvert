@@ -37,7 +37,7 @@
 | **baseColorWeight** | baseWeight | base | diffuse_weight | base_weight | diffuseColorAmount |
 | **metallic** | baseMetalness | metalness | refl_metalness | base_metalness | metalness |
 | **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | roughnessAmount |
-| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | reflectionColorAmoun |
+| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | reflectionColorAmount |
 | **specularColor** | specularColor | specularColor | refl_color | specular_color | reflectionColor |
 | **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | reflectionGlossiness |
 | **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | anisotropy |
