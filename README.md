@@ -1,82 +1,144 @@
 # PBR Material Converter
 
-Maya 工具 —— 在 Arnold / Redshift / V-Ray 之间一键转换 PBR 材质，自动处理凹凸/法线、颜色校正、置换节点。
+**English** | [简体中文](docs/README_zh.md)
 
-## 安装
+Maya toolkit for PBR material conversion, building, and scene management across Arnold / Redshift / V-Ray.
 
-将 `materialConvert` 文件夹放到任意位置，在 Maya 中建一个 Shelf 按钮粘贴以下 3 行（把路径换成你的实际路径）：
+## Installation
 
-**方式一：复制到 Maya scripts 目录（推荐）**
+Place the `materialConvert` folder anywhere, then create a Shelf button in Maya with the following 3 lines (replace the path with your actual path):
 
-```python
-import sys
-sys.path.insert(0, r"C:\Users\<用户名>\Documents\maya\<版本>\scripts\materialConvert")
-exec(open(r"C:\Users\<用户名>\Documents\maya\<版本>\scripts\materialConvert\main.py").read())
-```
-
-**方式二：放在任意目录**
+**Option 1: Copy to Maya scripts directory (recommended)**
 
 ```python
 import sys
-sys.path.insert(0, r"你的路径\materialConvert")
-exec(open(r"你的路径\materialConvert\main.py").read())
+sys.path.insert(0, r"C:\Users\<username>\Documents\maya\<version>\scripts\materialConvert")
+exec(open(r"C:\Users\<username>\Documents\maya\<version>\scripts\materialConvert\main.py").read())
 ```
 
-**零外部依赖**，不需要 pip install。
+**Option 2: Place in any directory**
 
-## 功能
+```python
+import sys
+sys.path.insert(0, r"your_path\materialConvert")
+exec(open(r"your_path\materialConvert\main.py").read())
+```
+
+**Zero external dependencies** — no pip install required.
+
+## Features
 
 ### Material Converter
-- 在 Arnold / Redshift / V-Ray 间批量转换 PBR 材质
-- 自动识别材质类型，一键全部转换
-- 支持 bump/normal 节点、颜色校正节点、置换节点的连带转换
-- 批量转换带进度条，支持单步撤销（Ctrl+Z）
-- 支持 6 种材质类型：`aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
+- Batch convert PBR materials between Arnold / Redshift / V-Ray
+- Auto-detect material types, one-click convert all
+- Supports bump/normal nodes, color correction nodes, and displacement nodes
+- Progress bar for batch conversion, single-step undo (Ctrl+Z)
+- Supports 6 material types: `aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
 ### Material Builder
-- 从纹理路径一键构建完整 PBR 材质
-- 支持 Color / Roughness / Normal / Bump / Displacement 通道
-- 渲染器按钮从配置动态生成，新增渲染器只需改 JSON
+- One-click build complete PBR materials from texture paths
+- Supports Color / Roughness / Normal / Bump / Displacement channels
+- SSS channel support (colorCorrect + layeredTexture + ramp)
+- Displacement node chain support
+- Renderer buttons dynamically generated from config
+- Create File From P2D: create file node from selected place2dTexture
 
 ### Node Tools
-- 按类型批量选择节点
-- 批量设置 file 节点颜色空间
-- 批量重命名 Shading Engine
+- **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
+- **Set File Color Space**: Batch set color space on selected file nodes
+- **Auto Match Selected**: Automatically match color space based on filename keywords and connection channels (reference `config/colorSpace.json`)
+- **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
+- **Rename Shading Engine**: Batch rename SG to match material names
 
 ### Transform Tools
-- 对齐、原点居中、冻结变换
-- 世界空间定位
+- **Align To Floor**: Move objects so lowest point touches Y=0
+- **Axis Alignment**: Align to X/Y/Z min/max bounds
+- **Center Pivots**: Center pivot points on selected objects
+- **World Space Location**: Move objects to specified world coordinates
+- **Freeze Translations**: Reset translation values to zero
+- **Freeze Rotations**: Reset rotation values to zero
+- **Freeze Scale**: Reset scale values to one
+- **Freeze All**: Reset all transforms at once
+- **Apply All Pipeline**: Center pivots → Set location → Floor align → Y-min align → Freeze all
 
 ### Attr Modifier
-- 批量修改节点属性值
+- Batch modify attribute values on selected nodes
+- Supports Boolean, Float, Integer, and String data types
+- Automatically checks both transform and shape nodes
 
 ### Locator
-- 为选中物体自动创建 Locator
-- 根据boubdingBox尺寸缩放 Locator
-- 支持前缀、三轴独立缩放倍率、覆盖色
+- Auto-create Layout Locator for selected objects
+- Scale Locator based on bounding box dimensions
+- Per-axis (X/Y/Z) independent scale multipliers
+- Optional display override color
+- Prefix support for naming convention
 
-## 项目结构
+## Architecture
+
+### Data Flow
+```
+Source material → [Source JSON config] → Universal format → [Target JSON config] → Target material
+```
+
+### Key Design Principles
+- **Config-driven**: All renderer mappings defined in JSON files, zero hardcoded attribute names in Python code
+- **Easy extension**: Adding new renderer support = add JSON file in `config/material/`, no code changes needed
+- **Modular converters**: 4 independent modules handle attribute transfer, bump/normal, color correction, and displacement
+- **Unified imports**: PySide version detection centralized in `ui/__init__.py`
+- **Logging**: Unified Logger class with callback support for UI integration
+
+## Project Structure
 
 ```
 materialConvert/
-├── config/              # JSON 配置文件（渲染器材质/CC/bump 映射）
-├── core/                # 核心转换引擎
-│   ├── converter.py     # 调度器
-│   ├── converters/      # 四个业务转换模块
-│   ├── node_utils.py    # 节点操作工具函数
-│   └── logger.py        # 统一日志模块
-├── ui/                  # 用户界面
-│   ├── converter_ui.py  # 主窗口
-│   ├── styles.py        # QSS 样式
-│   └── tabs/            # 六个功能标签页
-├── docs/                # 文档
-└── main.py              # 入口脚本
+├── config/                          # JSON configuration files
+│   ├── material/                    # Renderer material attribute mappings
+│   │   ├── common.json              # Universal PBR parameters
+│   │   ├── aiStandardSurface.json
+│   │   ├── aiOpenPBRSurface.json
+│   │   ├── RedshiftMaterial.json
+│   │   ├── RedshiftOpenPBRMaterial.json
+│   │   ├── RedshiftStandardMaterial.json
+│   │   └── VRayMtl.json
+│   ├── bumpNormal.json              # Bump/normal node mappings
+│   ├── colorCorrection.json         # Color correction node mappings
+│   ├── colorSpace.json              # Color space auto-match rules
+│   ├── builder_specs.json           # Material Builder renderer specs
+│   └── builder_naming.json          # Material Builder naming conventions
+├── core/                            # Core engine
+│   ├── converter.py                 # MaterialConverter dispatcher
+│   ├── converters/                  # Business conversion modules
+│   │   ├── attribute.py             # Attribute collection & transfer
+│   │   ├── bump.py                  # Bump/normal conversion
+│   │   ├── cc.py                    # Color correction conversion
+│   │   └── displacement.py          # Displacement conversion
+│   ├── config_loader.py             # JSON config parser
+│   ├── node_utils.py                # Maya node utility functions
+│   ├── prerequisites.py             # Renderer prerequisite handling
+│   ├── logger.py                    # Unified logging module
+│   └── builder_context.py           # Material Builder shared state
+├── ui/                              # User interface
+│   ├── converter_ui.py              # Main window (QTabWidget)
+│   ├── styles.py                    # QSS dark theme
+│   └── tabs/                        # Six functional tabs
+│       ├── converter_tab.py         # Material conversion
+│       ├── builder_tab.py           # Material Builder
+│       ├── node_tools_tab.py        # Node Tools
+│       ├── transform_tab.py         # Transform Tools
+│       ├── attr_modifier_tab.py     # Attr Modifier
+│       └── locator_tab.py           # Locator tool
+├── docs/                            # Documentation
+│   ├── CONVERSION_SPEC.md           # Full conversion specification
+│   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
+│   └── README_zh.md                 # 中文版 README
+├── main.py                          # Entry script
+└── CHANGELOG.md                     # Changelog
 ```
 
-## 文档
+## Documentation
 
-- [CONVERSION_SPEC.md](docs/CONVERSION_SPEC.md) — 完整转换规格说明
-- [AGENTS.md](docs/AGENTS.md) — AI Agent 开发指南
+- [CONVERSION_SPEC.md](docs/CONVERSION_SPEC.md) — Full conversion specification
+- [CONVERSION_SPEC_zh.md](docs/CONVERSION_SPEC_zh.md) — 中文版转换规格说明
 
 ## License
 

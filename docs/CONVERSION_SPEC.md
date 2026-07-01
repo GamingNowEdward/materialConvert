@@ -1,19 +1,21 @@
-# PBR 材质转换器 — 转换规格说明
+# PBR Material Converter — Conversion Specification
 
-## 概述
+**English** | [简体中文](CONVERSION_SPEC_zh.md)
 
-通过**通用 PBR 属性格式**在 Arnold、Redshift、V-Ray 之间转换材质。  
-所有映射定义在 `config/` JSON 文件中，Python 代码中零硬编码属性名。
+## Overview
 
-**转换流程：**
+Converts materials between Arnold, Redshift, and V-Ray via a **universal PBR attribute format**.
+All mappings are defined in `config/` JSON files with zero hardcoded attribute names in Python code.
+
+**Conversion Flow:**
 
 ```
-源材质属性 → [源配置] → 通用格式 → [目标配置] → 目标材质属性
+Source material attributes → [Source config] → Universal format → [Target config] → Target material attributes
 ```
 
-**支持的材质类型：**
+**Supported Material Types:**
 
-| 渲染器 | 材质类型 | 命名后缀 |
+| Renderer | Material Type | Naming Suffix |
 |---|---|---|
 | Arnold | `aiStandardSurface` | `_aiStd` |
 | Arnold | `aiOpenPBRSurface` | `_aiPBR` |
@@ -24,14 +26,14 @@
 
 ---
 
-## 一、主材质属性
+## 1. Main Material Attributes
 
-### 1.1 完整映射表
+### 1.1 Full Mapping Table
 
-列：aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMaterial / VRayMtl  
-`-` 表示该渲染器不支持此属性。
+Columns: aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMaterial / VRayMtl
+`-` indicates unsupported by that renderer.
 
-| 通用属性 | aiOpenPBR | aiStd | RS Material | RS OpenPBR | VRayMtl |
+| Universal Attribute | aiOpenPBR | aiStd | RS Material | RS OpenPBR | VRayMtl |
 |---|---|---|---|---|---|
 | **baseColor** | baseColor | baseColor | diffuse_color | base_color | color |
 | **baseColorWeight** | baseWeight | base | diffuse_weight | base_weight | diffuseColorAmount |
@@ -60,29 +62,29 @@
 | **emissionWeight** | emissionLuminance | emission | emission_weight | emission_luminance | - |
 | **emissionColor** | emissionColor | emissionColor | emission_color | emission_color | illumColor |
 
-### 1.2 属性传递循环中跳过的属性
+### 1.2 Attributes Skipped in Transfer Loop
 
-以下通用属性**不**经过主属性传递循环，由专门模块处理：
+These universal attributes are **not** processed in the main transfer loop — they are handled by dedicated modules:
 
-| 属性 | 处理模块 | 原因 |
+| Attribute | Handler | Reason |
 |---|---|---|
-| `normal_bump` | `_convert_bump_normal()` | 需要创建 bump/normal 节点或映射材质内联属性 |
-| `displacementScale` | `_convert_displacement()` | 需要创建置换节点 |
-| `displacementTexture` | `_convert_displacement()` | 需要创建置换节点 |
+| `normal_bump` | `_convert_bump_normal()` | Requires bump/normal node creation or material attribute mapping |
+| `displacementScale` | `_convert_displacement()` | Requires displacement node creation |
+| `displacementTexture` | `_convert_displacement()` | Requires displacement node creation |
 
-### 1.3 值传递规则
+### 1.3 Value Transfer Rules
 
-- **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
-- **Alpha Is Luminance**：属性传递完成后，扫描目标材质所有连接，若发现使用 `outAlpha` 的连接，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过）
-- **数值**：直接复制（float/int）
-- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float（如 V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`），自动回退取第一个通道值
-- **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
+- **Texture connections**: Migrated via `_smart_connect()` — tries direct connection first, falls back to `outColor` then `outAlpha` for type incompatibility
+- **Alpha Is Luminance**: After attribute transfer, scans all target material connections; if `outAlpha` is used, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift)
+- **Numeric values**: Copied directly (float/int)
+- **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float (e.g., V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`), falls back to first channel value
+- **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
-### 1.4 黑色颜色自动归零
+### 1.4 Black Color Auto-Zeroing
 
-当源材质中某颜色属性的值为 `(0, 0, 0)` 且**无纹理连接**时，自动将对应的权重属性置为 0，避免通道意外激活：
+When a source material color attribute value is `(0, 0, 0)` with **no texture connection**, the corresponding weight attribute is automatically set to 0 to prevent unintended channel activation:
 
-| 颜色属性 | 对应权重属性 |
+| Color Attribute | Corresponding Weight |
 |---|---|
 | baseColor | baseColorWeight |
 | specularColor | specularWeight |
@@ -92,337 +94,338 @@
 | fuzzColor | fuzzWeight |
 | emissionColor | emissionWeight |
 
-**触发条件（三个条件同时满足）：**
+**Trigger conditions (all three must be met):**
 
-1. 颜色值为纯黑 `(0, 0, 0)`
-2. 颜色属性无纹理连接（纯数值非贴图）
-3. 对应权重值 > 0
+1. Color value is pure black `(0, 0, 0)`
+2. Color attribute has no texture connection (pure value, not a texture)
+3. Corresponding weight value > 0
 
-> 例如：VRayMtl 的 `sheenColor=(0,0,0)` 但 `sheenColorAmount=1.0`，转换后目标材质的 `fuzzWeight` 会被置为 0。
+> Example: VRayMtl with `sheenColor=(0,0,0)` but `sheenColorAmount=1.0` — target material's `fuzzWeight` will be set to 0.
 
-此处理在属性传递之前执行，与目标渲染器无关。
+This processing runs before attribute transfer, regardless of target renderer.
 
-> 颜色-权重配对关系定义在 `config/material/common.json` 的 `color_weight_pairs` 数组中，新增配对只需修改该 JSON，无需改 Python 代码。
+> Color-weight pairings are defined in `config/material/common.json`'s `color_weight_pairs` array. Adding new pairs only requires modifying that JSON, no Python code changes.
 
-### 1.5 渲染器特定前提条件
+### 1.5 Renderer-Specific Prerequisites
 
-属性传递前自动设置：
+Automatically set before attribute transfer:
 
-| 渲染器 | 前提属性 | 值 |
+| Renderer | Prerequisite Attribute | Value |
 |---|---|---|
 | RedshiftMaterial | `refl_brdf` | `1` |
 | RedshiftMaterial | `coat_brdf` | `1` |
-| RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
-| VRayMtl（roughness） | `useRoughness` | `1` |
+| RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
+| VRayMtl (roughness) | `useRoughness` | `1` |
 
 ---
 
-## 二、凹凸/法线转换
+## 2. Bump/Normal Conversion
 
-### 2.1 转换流程
+### 2.1 Conversion Flow
 
 ```
-源 bump 节点 → [源配置] → 通用格式 {scale, input_plug, is_normal} → [目标配置] → 目标 bump 节点或材质属性
+Source bump node → [Source config] → Universal format {scale, input_plug, is_normal} → [Target config] → Target bump node or material attribute
 ```
 
-### 2.2 各渲染器配置
+### 2.2 Renderer Configurations
 
-| 渲染器 | 凹凸模式 | 凹凸节点 | 法线模式 | 法线节点 | Scale 属性 | 输入属性 |
+| Renderer | Bump Mode | Bump Node | Normal Mode | Normal Node | Scale Attribute | Input Attribute |
 |---|---|---|---|---|---|---|
-| **Arnold** | 独立节点 | `aiBump2d` | 独立节点 | `aiNormalMap` | bump: `bumpHeight` / nrm: `strength` | bump: `bumpMap` / nrm: `input` |
-| **Redshift** | 独立节点 | `RedshiftBumpMap` | 同节点 | `RedshiftBumpMap` | `scale` | `input` |
-| **Maya** | 独立节点 | `bump2d` | 同节点 | `bump2d` | `bumpDepth` | `bumpValue` |
-| **V-Ray** | 材质内嵌 | _无_ | 材质内嵌 | _无_ | `bumpMult` | `bumpMap` |
+| **Arnold** | Standalone | `aiBump2d` | Standalone | `aiNormalMap` | bump: `bumpHeight` / nrm: `strength` | bump: `bumpMap` / nrm: `input` |
+| **Redshift** | Standalone | `RedshiftBumpMap` | Same node | `RedshiftBumpMap` | `scale` | `input` |
+| **Maya** | Standalone | `bump2d` | Same node | `bump2d` | `bumpDepth` | `bumpValue` |
+| **V-Ray** | Embedded | _none_ | Embedded | _none_ | `bumpMult` | `bumpMap` |
 
-### 2.3 模式判定
+### 2.3 Mode Detection
 
-- **独立不同类型**（Arnold）：节点类型直接判定（`aiBump2d` → bump，`aiNormalMap` → normal）
-- **共享类型**（Redshift `RedshiftBumpMap`、Maya `bump2d`）：通过 `inputType` / `bumpInterp` 属性值判定（0=bump，1=normal）
-- **材质内嵌**（V-Ray）：通过 `bumpMapType` 属性值判定（0=bump，1=normal）
+- **Standalone different types** (Arnold): Node type directly determines mode (`aiBump2d` → bump, `aiNormalMap` → normal)
+- **Shared type** (Redshift `RedshiftBumpMap`, Maya `bump2d`): Determined by `inputType` / `bumpInterp` attribute value (0=bump, 1=normal)
+- **Embedded** (V-Ray): Determined by `bumpMapType` attribute value (0=bump, 1=normal)
 
-### 2.4 材质内嵌 ↔ 独立节点互转
+### 2.4 Embedded ↔ Standalone Node Conversion
 
-- **材质内嵌 → 独立节点**：从源材质读取 `bumpMap` 输入 + `bumpMult` scale + `bumpMapType` 模式。创建目标 bump 节点，设置正确模式，连接到目标材质 `normal_bump` 属性
-- **独立节点 → 材质内嵌**：读取源 bump 节点的输入 + scale + 模式。直接写入目标材质的 `bumpMap`/`bumpMult`/`bumpMapType`。旧 bump 节点保留（不删除）
-- **独立节点 → 独立节点**：创建目标类型的新 bump 节点。复制 scale + 输入连接。设置模式属性。连接到目标材质
+- **Embedded → Standalone**: Reads source material `bumpMap` input + `bumpMult` scale + `bumpMapType` mode. Creates target bump node with correct mode, connects to target material `normal_bump` attribute
+- **Standalone → Embedded**: Reads source bump node input + scale + mode. Writes directly to target material's `bumpMap`/`bumpMult`/`bumpMapType`. Old bump node preserved (not deleted)
+- **Standalone → Standalone**: Creates new target type bump node. Copies scale + input connection. Sets mode attribute. Connects to target material
 
-### 2.5 节点命名
+### 2.5 Node Naming
 
-新 bump/normal 节点命名：`{源节点名}_{渲染器缩写}{Bump|Nrm}`
+New bump/normal node naming: `{source_node_name}_{renderer_short}{Bump|Nrm}`
 
 - `bump_Material` → Redshift bump → `bump_Material_rsBump`
 - `nrm_Material` → Arnold normal → `nrm_Material_aiNrm`
 
-### 2.6 跨渲染器 Bump 识别
+### 2.6 Cross-Renderer Bump Detection
 
-转换器可识别**所有**渲染器的 bump/normal 节点，不限于源材质类型。连接在 Arnold 材质上的 Maya `bump2d` 节点会被正确识别，并用 Maya 配置读取属性。
+The converter can detect bump/normal nodes from **all** renderers, not limited to the source material type. A Maya `bump2d` node connected to an Arnold material will be correctly detected and read using the Maya configuration.
 
 ---
 
-## 三、颜色校正转换
+## 3. Color Correction Conversion
 
-### 3.1 转换流程
+### 3.1 Conversion Flow
 
 ```
-源 CC 节点 → [源配置] → 通用格式 {gamma, contrast, gain, hue, saturation} → [目标配置] → 目标 CC 节点
+Source CC node → [Source config] → Universal format {gamma, contrast, gain, hue, saturation} → [Target config] → Target CC node
 ```
 
-### 3.2 各渲染器配置
+### 3.2 Renderer Configurations
 
-| 渲染器 | CC 节点类型 | 输入属性 | 输出属性 | Hue 属性 | Hue 范围 |
+| Renderer | CC Node Type | Input Attribute | Output Attribute | Hue Attribute | Hue Range |
 |---|---|---|---|---|---|
 | **Maya** | `colorCorrect` | `inColor` | `outColor` | `hueShift` | [0, 360] |
 | **Arnold** | `aiColorCorrect` | `input` | `outColor` | `hueShift` | [-1, 1] |
 | **Redshift** | `RedshiftColorCorrection` | `input` | `outColor` | `hue` | [0, 360] |
 | **V-Ray** | `VRayColorCorrection` | `texture_map` | `outColor` | `hue_shift` | [-180, 180] |
 
-### 3.3 Hue 范围归一化
+### 3.3 Hue Range Normalization
 
-所有 hue 值统一归一化到 **0-360** 作为通用格式：
+All hue values are normalized to **0-360** as the universal format:
 
-| 源范围 | → 通用 (0-360) | 通用 → 目标范围 |
+| Source Range | → Universal (0-360) | Universal → Target Range |
 |---|---|---|
 | Arnold [-1, 1] | `(v + 1) / 2 * 360` | → Arnold: `-1 + v/360 * 2` |
 | V-Ray [-180, 180] | `(v + 180) / 360 * 360` | → V-Ray: `-180 + v/360 * 360` |
-| Maya/Redshift [0, 360] | 直通 | 直通 |
+| Maya/Redshift [0, 360] | Pass-through | Pass-through |
 
-### 3.4 CC 上游检测
+### 3.4 CC Upstream Detection
 
-两种检测策略：
+Two detection strategies:
 
-1. **直连检测**：材质属性直接连接到 CC 节点时立即识别
-2. **上游搜索**（`listHistory()`）：材质属性连接了中间节点（layeredTexture、ramp、multiplyDivide 等）时，扫描整条上游历史寻找 CC 节点
+1. **Direct connection**: Immediately detected when material attribute is directly connected to a CC node
+2. **Upstream search** (`listHistory()`): When material attribute connects through intermediate nodes (layeredTexture, ramp, multiplyDivide, etc.), scans the entire upstream history for CC nodes
 
-### 3.5 多通道共用去重
+### 3.5 Multi-Channel Deduplication
 
-如果同一个源 CC 节点驱动多个材质通道（如 baseColor + subsurfaceColor），转换器仅创建**一个**目标 CC 节点并连接到所有下游中间节点，不会重复创建。
+If the same source CC node drives multiple material channels (e.g., baseColor + subsurfaceColor), the converter creates only **one** target CC node and connects it to all downstream intermediate nodes.
 
-### 3.6 连接链保留
+### 3.6 Connection Chain Preservation
 
-当 CC 节点位于纹理和中间节点之间时：
-
-```
-file → CC → layeredTexture → 材质
-```
-
-新 CC 插入到相同位置：
+When a CC node sits between texture and intermediate nodes:
 
 ```
-file → 新CC → layeredTexture → 材质
+file → CC → layeredTexture → material
 ```
 
-无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性。
+New CC is inserted at the same position:
 
-### 3.7 节点命名
+```
+file → newCC → layeredTexture → material
+```
 
-新 CC 节点命名：`{源CC名}_{渲染器缩写}`
+Without intermediate nodes (CC directly connected to material), new CC connects directly to target material attribute.
+
+### 3.7 Node Naming
+
+New CC node naming: `{source_CC_name}_{renderer_short}`
 
 - `cc_test_color` → Redshift → `cc_test_color_rs`
 - `CC_sofa_sss` → Arnold → `CC_sofa_sss_ai`
 
-### 3.8 目标渲染器无 CC 支持
+### 3.8 No CC Support in Target Renderer
 
-如果目标渲染器无 CC 节点配置，跳过 CC 转换，纹理直接连接到目标材质属性。
+If the target renderer has no CC node configuration, CC conversion is skipped and texture connects directly to target material attribute.
 
 ---
 
-## 四、置换转换
+## 4. Displacement Conversion
 
-### 4.1 转换流程
+### 4.1 Conversion Flow
 
 ```
-源 SG.displacementShader → 通过源配置读取纹理 + scale → 创建目标置换节点或原生 displacementShader → 连接到 SG
+Source SG.displacementShader → Read texture + scale via source config → Create target displacement node or native displacementShader → Connect to SG
 ```
 
-### 4.2 各渲染器配置
+### 4.2 Renderer Configurations
 
-| 渲染器 | 置换节点类型 | 纹理属性 | Scale 属性 | 输出属性 |
+| Renderer | Displacement Node Type | Texture Attribute | Scale Attribute | Output Attribute |
 |---|---|---|---|---|
-| **Arnold** | 原生 `displacementShader` | `displacement` | `scale` | `displacement` |
+| **Arnold** | Native `displacementShader` | `displacement` | `scale` | `displacement` |
 | **Redshift** | `RedshiftDisplacement` | `texMap` | `scale` | `out` |
-| **V-Ray** | 原生 `displacementShader` | `displacement` | `scale` | `displacement` |
+| **V-Ray** | Native `displacementShader` | `displacement` | `scale` | `displacement` |
 
-### 4.3 转换规则
+### 4.3 Conversion Rules
 
-| 源 | 目标 | 行为 |
+| Source | Target | Behavior |
 |---|---|---|
-| Arnold | V-Ray | **跳过** — 双方共用原生 `displacementShader`（节点不变） |
-| V-Ray | Arnold | **跳过** — 双方共用原生 `displacementShader` |
-| 任意 | Redshift | 创建 `RedshiftDisplacement` 节点，连接到 SG |
-| Redshift | Arnold | 读取 `RedshiftDisplacement` 的 texMap + scale，创建原生 `displacementShader`，连接到 SG |
-| Redshift | V-Ray | 读取 `RedshiftDisplacement` 的 texMap + scale，创建原生 `displacementShader`，连接到 SG |
+| Arnold | V-Ray | **Skip** — both use native `displacementShader` (node unchanged) |
+| V-Ray | Arnold | **Skip** — both use native `displacementShader` |
+| Any | Redshift | Create `RedshiftDisplacement` node, connect to SG |
+| Redshift | Arnold | Read `RedshiftDisplacement` texMap + scale, create native `displacementShader`, connect to SG |
+| Redshift | V-Ray | Read `RedshiftDisplacement` texMap + scale, create native `displacementShader`, connect to SG |
 
-### 4.4 输出属性适配
+### 4.4 Output Attribute Adaptation
 
-不同置换节点使用不同输出属性名。转换器按优先级尝试连接：
+Different displacement nodes use different output attribute names. The converter tries connections in priority order:
 
-1. `outDisplacement`（Arnold displacementShader）
-2. `out`（RedshiftDisplacement）
-3. `outColor`（回退）
+1. `outDisplacement` (Arnold displacementShader)
+2. `out` (RedshiftDisplacement)
+3. `outColor` (fallback)
 
-### 4.5 节点命名
+### 4.5 Node Naming
 
-新置换节点命名：`{源材质名}_{渲染器缩写}Disp`
+New displacement node naming: `{source_material_name}_{renderer_short}Disp`
 
 - `M_sofa` → Redshift → `M_sofa_rsDisp`
 - `M_sofa` → Arnold/V-Ray → `M_sofa_aiDisp` / `M_sofa_vrayDisp`
 
-Arnold ↔ V-Ray 互转时不创建置换节点（跳过）。
+Arnold ↔ V-Ray conversion does not create displacement nodes (skipped).
 
 ---
 
-## 五、节点创建与 Hypershade 注册
+## 5. Node Creation & Hypershade Registration
 
-所有节点类型均使用 `cmds.shadingNode()` 创建，确保自动注册到 Hypershade：
+All node types are created using `cmds.shadingNode()` to ensure automatic Hypershade registration:
 
-| 节点类型 | shadingNode 模式 |
+| Node Type | shadingNode Mode |
 |---|---|
-| 材质 | `asShader=True` |
-| 凹凸/法线 | `asUtility=True` |
-| 颜色校正 | `asUtility=True` |
-| 置换 | `asUtility=True` |
+| Material | `asShader=True` |
+| Bump/Normal | `asUtility=True` |
+| Color Correction | `asUtility=True` |
+| Displacement | `asUtility=True` |
 
 ---
 
-## 六、旧节点处理
+## 6. Old Node Handling
 
-转换后的**材质**、**凹凸/法线节点**、**颜色校正节点**、**置换节点**均**保留在场景中**并断开与 shadingEngine 的连接，**不会删除**，便于手动对比或回滚。
-
----
-
-## 七、纹理连接兼容性
-
-所有纹理连接均通过 `_smart_connect()` 处理，按顺序尝试三种连接方式：
-
-1. **直连**：`src_plug >> dst_plug`
-2. **outColor**：`src_node.outColor >> dst_plug`（解决 float → color 类型不兼容）
-3. **outAlpha**：`src_node.outAlpha >> dst_plug`（解决 alpha → float 类型不兼容）
+Converted **materials**, **bump/normal nodes**, **color correction nodes**, and **displacement nodes** are **preserved in the scene** and disconnected from shadingEngine — **not deleted**, for manual comparison or rollback.
 
 ---
 
-## 八、批量转换
+## 7. Texture Connection Compatibility
 
-UI 支持同时批量转换多个材质：
+All texture connections are handled via `_smart_connect()`, trying three connection methods in order:
 
-1. 在 Hypershade 中选中材质或在视口中选中物体
-2. 工具自动识别每个材质的渲染器类型
-3. 已是目标类型的材质自动跳过
-4. 其余材质依次转换
-5. 转换完成后自动选中新创建的材质
+1. **Direct**: `src_plug >> dst_plug`
+2. **outColor**: `src_node.outColor >> dst_plug` (resolves float → color type incompatibility)
+3. **outAlpha**: `src_node.outAlpha >> dst_plug` (resolves alpha → float type incompatibility)
 
 ---
 
-## 九、Material Builder
+## 8. Batch Conversion
 
-在 Converter 面板的第二个标签页中集成了材质创建功能，支持从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
+UI supports batch conversion of multiple materials:
 
-### 9.1 支持功能
+1. Select materials in Hypershade or objects in viewport
+2. Tool auto-detects each material's renderer type
+3. Materials already in target type are automatically skipped
+4. Remaining materials are converted sequentially
+5. Newly created materials are automatically selected after conversion
 
-| 功能 | 说明 |
+---
+
+## 9. Material Builder
+
+Integrated in the Converter panel's second tab, supports one-click building of complete Arnold / Redshift / V-Ray PBR materials from texture paths.
+
+### 9.1 Supported Features
+
+| Feature | Description |
 |---|---|
-| 纹理路径 | 可选填入 Color、Roughness、Normal/Bump、Displacement 贴图路径 |
-| Normal/Bump 切换 | 勾选为 Normal，取消为 Bump |
-| SSS | 勾选后额外创建 sss 通道（colorCorrect + layeredTexture + ramp） |
-| Displacement | 勾选后创建置换节点链 |
-| 三种渲染器 | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
-| Create File From P2D | 从选中的 place2dTexture 节点创建 file 节点并自动连接 |
+| Texture Paths | Optional input for Color, Roughness, Normal/Bump, Displacement maps |
+| Normal/Bump Toggle | Checked = Normal, unchecked = Bump |
+| SSS | When checked, additionally creates sss channel (colorCorrect + layeredTexture + ramp) |
+| Displacement | When checked, creates displacement node chain |
+| Three Renderers | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
+| Create File From P2D | Creates file node from selected place2dTexture node and auto-connects |
 
-### 9.2 Redshift 材质前提条件
+### 9.2 Redshift Material Prerequisites
 
-创建 Redshift 材质时自动设置 `refl_brdf=1`、`coat_brdf=1`，确保与转换器使用的配置一致。
-
----
-
-## 十、Node Tools
-
-第三个标签页，提供场景中节点批量操作：
-
-- 按类型选择（材质/文件/bump/layeredTexture/CC），排除默认材质
-- 批量设置 file 节点的颜色空间
-- 自动匹配选中 file 节点的色彩空间（参考 `config/colorSpace.json`）
-- 批量重命名 Shading Engine（SG）
-
-### 10.1 自动匹配色彩空间规则
-
-匹配优先级（从高到低）：
-
-1. **文件名匹配**（最高优先）：检查文件名是否包含 `filenameKeywords` 中的关键词（不区分大小写）
-   - 例如：`wood_basecolor.jpg` 包含 `basecolor` → 匹配 `srgb` 类型
-2. **连接通道匹配**（次选）：追踪 file 节点的 `outColor` 连接，检查目标材质属性是否在 `attributeKeywords` 中
-   - 例如：file 节点连接到 `mat.roughness` → 匹配 `raw` 类型
-3. **默认类型**（最低优先）：无匹配时使用 `config/colorSpace.json` 中 `default` 指定的类型（当前为 `raw`）
-
-匹配到类型后，从该类型的 `aliases` 列表中依次尝试，选择当前 OCIO 配置中实际可用的色彩空间名称进行设置。
+Creating Redshift materials automatically sets `refl_brdf=1` and `coat_brdf=1` to ensure consistency with converter configuration.
 
 ---
 
-## 十一、Locator 工具
+## 10. Node Tools
 
-为选中物体自动创建 Layout Locator，将物体设为 Locator 的子级，并根据包围盒尺寸缩放 Locator。
+Third tab providing batch node operations:
 
-### 11.1 功能
+- Select nodes by type (material/file/bump/layeredTexture/CC), excluding default materials
+- Batch set file node color space
+- Auto match color space for selected file nodes (reference `config/colorSpace.json`)
+- Batch rename Shading Engine (SG)
 
-| 参数 | 说明 |
+### 10.1 Auto Match Color Space Rules
+
+Matching priority (high to low):
+
+1. **Filename match** (highest): Checks if filename contains keywords in `filenameKeywords` (case-insensitive)
+   - Example: `wood_basecolor.jpg` contains `basecolor` → matches `srgb` type
+2. **Channel match** (secondary): Traces file node's `outColor` connection, checks if target material attribute is in `attributeKeywords`
+   - Example: file node connected to `mat.roughness` → matches `raw` type
+3. **Default type** (lowest): When no match, uses the type specified by `default` in `config/colorSpace.json` (currently `raw`)
+
+After matching a type, iterates through the `aliases` list and sets the first color space name available in the current OCIO configuration.
+
+---
+
+## 11. Locator Tool
+
+Auto-creates Layout Locators for selected objects, sets objects as child of Locator, and scales Locator based on bounding box size.
+
+### 11.1 Features
+
+| Parameter | Description |
 |---|---|
-| Prefix | 生成 Locator 的名称前缀，默认 `loc_` |
-| Scale Multipliers | X/Y/Z 三轴独立缩放倍率，作用于包围盒最大边长 |
-| Enable Override Color | 勾选后可选择 Locator 的显示覆盖色 |
+| Prefix | Name prefix for generated Locators, default `loc_` |
+| Scale Multipliers | Per-axis (X/Y/Z) independent scale multipliers, applied to bounding box max dimension |
+| Enable Override Color | When checked, allows selecting Locator display override color |
 
-### 11.2 转换流程
+### 11.2 Flow
 
 ```
-选中物体 → 获取包围盒大小 → 创建 Locator（同名位置） → 将物体设为 Locator 子级
-→ 清空物体变换 → 设置 Locator 缩放 = 包围盒边长 × 倍率 → 可选设置覆盖色
+Select objects → Get bounding box size → Create Locator (same position) → Set object as Locator child
+→ Clear object transforms → Set Locator scale = bbox dimension × multiplier → Optionally set override color
 ```
 
-### 11.3 跳过规则
+### 11.3 Skip Rules
 
-- 如果物体已有 Locator 作为 direct shape（即本身就是 Locator），跳过
-- 每次操作包裹在 `undoInfo(openChunk=True/closeChunk)` 中，支持单步撤销
+- Objects that already have a Locator as direct shape (i.e., are Locators) are skipped
+- Each operation is wrapped in `undoInfo(openChunk=True/closeChunk)` for single-step undo
 
 ---
 
-## 十二、项目结构
+## 12. Project Structure
 
 ```
 materialConvert/
-├── config/                          # JSON 配置文件（渲染器材质/CC/bump映射）
-│   ├── material/                    # 各渲染器材质属性映射
-│   │   ├── common.json              # 通用 PBR 参数定义
+├── config/                          # JSON configuration files
+│   ├── material/                    # Renderer material attribute mappings
+│   │   ├── common.json              # Universal PBR parameter definitions
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json
 │   │   ├── RedshiftOpenPBRMaterial.json
 │   │   └── VRayMtl.json
-│   ├── bumpNormal.json              # 凹凸/法线节点映射
-│   └── colorCorrection.json         # 颜色校正节点映射
-│   ├── builder_specs.json             # Material Builder 渲染器规格
-│   └── builder_naming.json            # Material Builder 命名约定
-├── core/                            # 核心引擎
-│   ├── converter.py                 # MaterialConverter 调度器
-│   ├── converters/                  # 四个业务转换模块
-│   │   ├── attribute.py             # 属性收集与传递
-│   │   ├── bump.py                  # 凹凸/法线转换
-│   │   ├── cc.py                    # 颜色校正转换
-│   │   └── displacement.py          # 置换转换
-│   ├── config_loader.py             # JSON 配置解析
-│   ├── node_utils.py                # Maya 节点操作工具函数（模块级）
-│   ├── prerequisites.py             # 渲染器前提条件处理
-│   ├── logger.py                    # 统一日志模块
-│   └── builder_context.py           # Material Builder 共享状态与工具
-├── ui/                              # 用户界面
-│   ├── converter_ui.py              # 主窗口 (QTabWidget)
-│   ├── styles.py                    # QSS 暗色主题样式
-│   └── tabs/                        # 六个功能标签页
-│       ├── converter_tab.py         # 材质转换（含进度条）
+│   ├── bumpNormal.json              # Bump/normal node mappings
+│   └── colorCorrection.json         # Color correction node mappings
+│   ├── builder_specs.json           # Material Builder renderer specs
+│   └── builder_naming.json          # Material Builder naming conventions
+├── core/                            # Core engine
+│   ├── converter.py                 # MaterialConverter dispatcher
+│   ├── converters/                  # Business conversion modules
+│   │   ├── attribute.py             # Attribute collection & transfer
+│   │   ├── bump.py                  # Bump/normal conversion
+│   │   ├── cc.py                    # Color correction conversion
+│   │   └── displacement.py          # Displacement conversion
+│   ├── config_loader.py             # JSON config parser
+│   ├── node_utils.py                # Maya node utility functions (module-level)
+│   ├── prerequisites.py             # Renderer prerequisite handling
+│   ├── logger.py                    # Unified logging module
+│   └── builder_context.py           # Material Builder shared state & tools
+├── ui/                              # User interface
+│   ├── converter_ui.py              # Main window (QTabWidget)
+│   ├── styles.py                    # QSS dark theme styles
+│   └── tabs/                        # Six functional tabs
+│       ├── converter_tab.py         # Material conversion (with progress bar)
 │       ├── builder_tab.py           # Material Builder
 │       ├── node_tools_tab.py        # Node Tools
 │       ├── transform_tab.py         # Transform Tools
 │       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator 工具
-├── main.py                          # 入口脚本
+│       └── locator_tab.py           # Locator tool
+├── main.py                          # Entry script
 ├── docs/
-│   ├── AGENTS.md                    # AI Agent 开发指南
-│   └── CONVERSION_SPEC.md           # 本文档
-└── CHANGELOG.md                     # 变更日志
+│   ├── AGENTS.md                    # AI Agent development guide
+│   ├── CONVERSION_SPEC.md           # This document
+│   └── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
+└── CHANGELOG.md                     # Changelog
 ```
