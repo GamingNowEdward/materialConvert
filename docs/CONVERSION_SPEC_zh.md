@@ -30,37 +30,37 @@
 
 ### 1.1 完整映射表
 
-列：aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMaterial / VRayMtl  
+列：aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMaterial / RedshiftStandardMaterial / VRayMtl  
 `-` 表示该渲染器不支持此属性。
 
-| 通用属性 | aiOpenPBR | aiStd | RS Material | RS OpenPBR | VRayMtl |
-|---|---|---|---|---|---|
-| **baseColor** | baseColor | baseColor | diffuse_color | base_color | color |
-| **baseColorWeight** | baseWeight | base | diffuse_weight | base_weight | diffuseColorAmount |
-| **metallic** | baseMetalness | metalness | refl_metalness | base_metalness | metalness |
-| **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | roughnessAmount |
-| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | reflectionColorAmount |
-| **specularColor** | specularColor | specularColor | refl_color | specular_color | reflectionColor |
-| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | reflectionGlossiness |
-| **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | anisotropy |
-| **ior** | specularIOR | specularIOR | refl_ior | specular_ior | refractionIOR |
-| **transmissionWeight** | transmissionWeight | transmission | refr_weight | transmission_weight | refractionColorAmount |
-| **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refractionColor |
-| **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacityMap |
-| **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refrThinWalled |
-| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | - |
-| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | - |
-| **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | - |
-| **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | - |
-| **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coatColorAmount |
-| **coatColor** | coatColor | coatColor | coat_color | coat_color | coatColor |
-| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coatGlossiness |
-| **coatIor** | coatIOR | coatIOR | coat_ior | coat_ior | coatIor |
-| **fuzzWeight** | fuzzWeight | sheen | sheen_weight | fuzz_weight | sheenColorAmount |
-| **fuzzColor** | fuzzColor | sheenColor | sheen_color | fuzz_color | sheenColor |
-| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheenGlossiness |
-| **emissionWeight** | emissionLuminance | emission | emission_weight | emission_luminance | - |
-| **emissionColor** | emissionColor | emissionColor | emission_color | emission_color | illumColor |
+| 通用属性 | aiOpenPBR | aiStd | RS Material | RS OpenPBR | RS StdMat | VRayMtl |
+|---|---|---|---|---|---|---|
+| **baseColor** | baseColor | baseColor | diffuse_color | base_color | base_color | color |
+| **baseColorWeight** | baseWeight | base | diffuse_weight | base_weight | base_color_weight | diffuseColorAmount |
+| **metallic** | baseMetalness | metalness | refl_metalness | base_metalness | metalness | metalness |
+| **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | diffuse_roughness | roughnessAmount |
+| **specularWeight** | specularWeight | specular | refl_weight | specular_weight | refl_weight | reflectionColorAmount |
+| **specularColor** | specularColor | specularColor | refl_color | specular_color | refl_color | reflectionColor |
+| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | refl_roughness | reflectionGlossiness |
+| **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | refl_aniso | anisotropy |
+| **ior** | specularIOR | specularIOR | refl_ior | specular_ior | refl_ior | refractionIOR |
+| **transmissionWeight** | transmissionWeight | transmission | refr_weight | transmission_weight | refr_weight | refractionColorAmount |
+| **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refr_color | refractionColor |
+| **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacity_color | opacityMap |
+| **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refr_thin_walled | refrThinWalled |
+| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | - |
+| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | - |
+| **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | ms_radius | - |
+| **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
+| **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
+| **coatColor** | coatColor | coatColor | coat_color | coat_color | coat_color | coatColor |
+| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coat_roughness | coatGlossiness |
+| **coatIor** | coatIOR | coatIOR | coat_ior | coat_ior | coat_ior | coatIor |
+| **fuzzWeight** | fuzzWeight | sheen | sheen_weight | fuzz_weight | sheen_weight | sheenColorAmount |
+| **fuzzColor** | fuzzColor | sheenColor | sheen_color | fuzz_color | sheen_color | sheenColor |
+| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheen_roughness | sheenGlossiness |
+| **emissionWeight** | emissionLuminance | emission | emission_weight | emission_luminance | emission_weight | - |
+| **emissionColor** | emissionColor | emissionColor | emission_color | emission_color | emission_color | illumColor |
 
 ### 1.2 属性传递循环中跳过的属性
 
@@ -395,11 +395,13 @@ materialConvert/
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json
 │   │   ├── RedshiftOpenPBRMaterial.json
+│   │   ├── RedshiftStandardMaterial.json
 │   │   └── VRayMtl.json
 │   ├── bumpNormal.json              # 凹凸/法线节点映射
-│   └── colorCorrection.json         # 颜色校正节点映射
-│   ├── builder_specs.json             # Material Builder 渲染器规格
-│   └── builder_naming.json            # Material Builder 命名约定
+│   ├── colorCorrection.json         # 颜色校正节点映射
+│   ├── colorSpace.json              # 色彩空间自动匹配规则
+│   ├── builder_specs.json           # Material Builder 渲染器规格
+│   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
 │   ├── converters/                  # 四个业务转换模块
@@ -425,6 +427,9 @@ materialConvert/
 ├── main.py                          # 入口脚本
 ├── docs/
 │   ├── AGENTS.md                    # AI Agent 开发指南
-│   └── CONVERSION_SPEC.md           # 本文档
-└── CHANGELOG.md                     # 变更日志
+│   ├── CONVERSION_SPEC.md           # 英文版转换规格说明
+│   ├── CONVERSION_SPEC_zh.md        # 本文档
+│   └── README_zh.md                 # 中文版 README
+├── CHANGELOG.md                     # 变更日志
+└── CHANGELOG_zh.md                  # 中文版更新日志
 ```

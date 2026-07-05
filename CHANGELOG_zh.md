@@ -12,6 +12,11 @@
 - 提取 `p2d_attrs` 列表为 `builder_tab.py` 中的 `BuilderTab.P2D_ATTRS` 类常量，消除重复定义
 - `node_tools_tab.py` 中复用已有的 `self.config` 实例，消除冗余的 `ConfigLoader()` 创建
 
+### 文档更新
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：映射表补充遗漏的 `RedshiftStandardMaterial` 列
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：项目结构补充遗漏的 `RedshiftStandardMaterial.json` 和 `colorSpace.json`
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：修复项目结构树格式错误
+
 ## 2026-07-02
 
 ### 文档更新

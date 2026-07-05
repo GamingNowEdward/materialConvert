@@ -12,6 +12,11 @@
 - Extract `p2d_attrs` list as `BuilderTab.P2D_ATTRS` class constant in `builder_tab.py`, eliminating duplicate definition
 - Reuse existing `self.config` instance in `node_tools_tab.py` instead of creating redundant `ConfigLoader()` instances
 
+### Documentation
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: Add missing `RedshiftStandardMaterial` column to mapping table
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: Add missing `RedshiftStandardMaterial.json` and `colorSpace.json` to project structure
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: Fix project structure tree formatting
+
 ## 2026-07-02
 
 ### Documentation
