@@ -67,7 +67,7 @@ def collect_attribute_info(material, attr_names):
 
 def is_cc_node(node):
     node_type = pm.nodeType(node)
-    cc_types = {"colorCorrect", "aiColorCorrect", "rsColorCorrection", "VRayColorCorrection"}
+    cc_types = {"colorCorrect", "aiColorCorrect", "RedshiftColorCorrection", "VRayColorCorrection"}
     return node_type in cc_types
 
 

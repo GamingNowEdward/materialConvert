@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-05
+
+### Bug 修复
+- 修复 `node_utils.py` 中 `is_cc_node()` 的 Redshift CC 节点类型名错误（`rsColorCorrection` → `RedshiftColorCorrection`），导致 Redshift 颜色校正链检测失败
+- 修复 `cc.py` 中 `renderer_map` 缺少 V-Ray 映射（补充 `"vray": "vray"`），与 `bump.py`、`displacement.py` 保持一致
+
 ## 2026-07-02
 
 ### 文档更新
