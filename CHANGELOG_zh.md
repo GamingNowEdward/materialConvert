@@ -8,6 +8,7 @@
 
 ### 代码清理
 - 提取 `renderer_short` 映射为 `node_utils.py` 中的共享常量 `RENDERER_SHORT`，消除 `bump.py`、`cc.py`、`displacement.py` 中的重复定义
+- 提取 `config_loader.py` 中的 `_load_renderer_config` 方法，消除 `_load_bump_normal` 和 `_load_color_correction` 中的重复逻辑
 
 ## 2026-07-02
 

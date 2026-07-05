@@ -153,28 +153,21 @@ class ConfigLoader:
             self._material_configs[config.node_type] = config
 
     def _load_bump_normal(self):
-        path = os.path.join(self._CONFIG_DIR, "bumpNormal.json")
-        raw = self._read_json(path)
-
-        common_data = raw.get("common", {})
-        for renderer in raw:
-            if renderer == "common":
-                continue
-            renderer_data = dict(raw[renderer])
-            for section_name, section_defaults in common_data.items():
-                if section_name not in renderer_data:
-                    renderer_data[section_name] = {}
-                for k, v in section_defaults.items():
-                    if k not in renderer_data[section_name]:
-                        renderer_data[section_name][k] = v
-
-            self._bump_normal_configs[renderer] = BumpNormalConfig(renderer_data, renderer)
+        self._bump_normal_configs = self._load_renderer_config(
+            "bumpNormal.json", BumpNormalConfig
+        )
 
     def _load_color_correction(self):
-        path = os.path.join(self._CONFIG_DIR, "colorCorrection.json")
+        self._color_correction_configs = self._load_renderer_config(
+            "colorCorrection.json", ColorCorrectionConfig
+        )
+
+    def _load_renderer_config(self, filename, config_class):
+        path = os.path.join(self._CONFIG_DIR, filename)
         raw = self._read_json(path)
 
         common_data = raw.get("common", {})
+        result = {}
         for renderer in raw:
             if renderer == "common":
                 continue
@@ -186,9 +179,8 @@ class ConfigLoader:
                     if k not in renderer_data[section_name]:
                         renderer_data[section_name][k] = v
 
-            self._color_correction_configs[renderer] = ColorCorrectionConfig(
-                renderer_data, renderer
-            )
+            result[renderer] = config_class(renderer_data, renderer)
+        return result
 
     @staticmethod
     def _read_json(path):
