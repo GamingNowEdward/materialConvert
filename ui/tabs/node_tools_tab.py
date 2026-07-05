@@ -133,7 +133,7 @@ class NodeToolsTab:
             cmds.select(clear=True)
 
     def _select_all_bump_nodes(self):
-        bn_types = ConfigLoader().get_all_bn_types()
+        bn_types = self.config.get_all_bn_types()
         nodes = []
         for bt in bn_types:
             found = cmds.ls(type=bt)
@@ -154,7 +154,7 @@ class NodeToolsTab:
             cmds.select(clear=True)
 
     def _select_all_color_corrections(self):
-        cc_types = ConfigLoader().get_all_cc_types()
+        cc_types = self.config.get_all_cc_types()
         nodes = []
         for ct in cc_types:
             found = cmds.ls(type=ct)
