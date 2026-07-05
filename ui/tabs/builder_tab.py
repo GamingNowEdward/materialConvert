@@ -5,6 +5,9 @@ from core.config_loader import ConfigLoader
 
 class BuilderTab:
 
+    P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
+                 'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
+
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
         self.config = ConfigLoader()
@@ -133,9 +136,7 @@ class BuilderTab:
             target_path = input_paths.get(key, "")
             if target_path:
                 cmds.setAttr(f"{f}.fileTextureName", target_path, type="string")
-            p2d_attrs = ['coverage','translateFrame','rotateFrame','mirrorU','mirrorV',
-                         'stagger','wrapU','wrapV','repeatUV','offset','rotateUV','noiseUV']
-            for attr in p2d_attrs:
+            for attr in self.P2D_ATTRS:
                 self.ctx.connect(p2d, attr, f, attr)
             self.ctx.connect(p2d, "outUV", f, "uvCoord")
             self.ctx.connect(p2d, "outUvFilterSize", f, "uvFilterSize")
@@ -200,9 +201,7 @@ class BuilderTab:
             raise RuntimeError("Please select a place2dTexture node first.")
         p2d = sel[0]
         f_node = cmds.shadingNode('file', asTexture=True, isColorManaged=True)
-        p2d_attrs = ['coverage','translateFrame','rotateFrame','mirrorU','mirrorV',
-                     'stagger','wrapU','wrapV','repeatUV','offset','rotateUV','noiseUV']
-        for attr in p2d_attrs:
+        for attr in self.P2D_ATTRS:
             self.ctx.connect(p2d, attr, f_node, attr)
         self.ctx.connect(p2d, "outUV", f_node, "uvCoord")
         self.ctx.connect(p2d, "outUvFilterSize", f_node, "uvFilterSize")
