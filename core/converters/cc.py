@@ -1,6 +1,8 @@
 import pymel.core as pm
 import maya.cmds as cmds
 
+from core.node_utils import RENDERER_SHORT
+
 
 class CCConverter:
 
@@ -67,8 +69,7 @@ class CCConverter:
         if src_cc_name and src_cc_name in self._converted:
             cc_node = self._converted[src_cc_name]
         else:
-            renderer_map = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
-            renderer_short = renderer_map.get(target_renderer, target_renderer)
+            renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
             base_name = src_cc_name + "_" + renderer_short if src_cc_name else None
             cc_node = self.utils.create_cc_node(cc_config, base_name)
             self.utils.set_cc_params(cc_node, cc_entry["params"], cc_config)

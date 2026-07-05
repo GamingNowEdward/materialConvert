@@ -1,6 +1,8 @@
 import pymel.core as pm
 import maya.cmds as cmds
 
+from core.node_utils import RENDERER_SHORT
+
 
 class DisplacementConverter:
 
@@ -28,7 +30,7 @@ class DisplacementConverter:
         texture_plug = src_disp_data.get("texture_plug")
         scale_val = src_disp_data.get("scale", 1.0)
 
-        renderer_short = {"arnold": "ai", "redshift": "rs", "vray": "vray"}.get(target_renderer, target_renderer)
+        renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
 
         if is_real_type:
             base_name = source_mat.name() + "_" + renderer_short + "Disp"

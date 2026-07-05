@@ -1,6 +1,8 @@
 import pymel.core as pm
 import maya.cmds as cmds
 
+from core.node_utils import RENDERER_SHORT
+
 
 class BumpConverter:
 
@@ -285,8 +287,7 @@ class BumpConverter:
 
     def _convert_to_node(self, bn_info, target_mat, tgt_mapping,
                          target_renderer, is_normal, source_name, input_plug, log):
-        renderer_map = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
-        renderer_short = renderer_map.get(target_renderer, target_renderer)
+        renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
         bn_suffix = "_" + renderer_short + ("Nrm" if is_normal else "Bump")
         node_name = cmds.shadingNode(tgt_mapping.node_type, asUtility=True,
                                       name=source_name + bn_suffix)

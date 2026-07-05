@@ -1,6 +1,8 @@
 import pymel.core as pm
 import maya.cmds as cmds
 
+RENDERER_SHORT = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
+
 
 def get_materials_from_selection():
     materials = []
