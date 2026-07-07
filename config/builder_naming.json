@@ -1,6 +1,6 @@
 {
   "default_name": "Material",
-  "qss_prefix": "QS_",
+  "qss_prefix": "QS_M_",
   "prefix": {
     "material": "M_",
     "p2d": "p2d_",

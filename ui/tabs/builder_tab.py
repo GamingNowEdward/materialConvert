@@ -187,7 +187,7 @@ class BuilderTab:
             self.ctx.connect(lyr_disp, d_spec['lyr_src'], d_node, d_spec['in'])
             self.ctx.connect(d_node, d_spec['out'], sg_node, "displacementShader")
 
-        qss_nodes = [n for n in self.ctx._current_build_nodes if cmds.nodeType(n) != 'file']
+        qss_nodes = [n for n in self.ctx._current_build_nodes]
         if qss_nodes:
             cmds.sets(qss_nodes, name=f"{self.ctx.get_naming()['qss_prefix']}{mat_base}")
 
