@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-14
+
+### Enhancements
+- `config/colorSpace.json`: Add `commonAttributeRoles` section defining generic attribute-to-color-space-role mapping
+- `core/config_loader.py`: Add `get_expanded_attribute_keywords()` method for dynamic attribute mapping
+- `ui/tabs/node_tools_tab.py`: `_match_by_channel()` uses expanded mapping covering all renderer-specific attributes
+- Auto match color space now supports all material types without manual maintenance
+
 ## 2026-07-05
 
 ### Bug Fixes

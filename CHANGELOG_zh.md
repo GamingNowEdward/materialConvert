@@ -1,5 +1,13 @@
 # 更新日志
 
+## 2026-07-14
+
+### 功能增强
+- `config/colorSpace.json`：新增 `commonAttributeRoles` 字段，定义通用属性到颜色空间角色的映射
+- `core/config_loader.py`：新增 `get_expanded_attribute_keywords()` 方法，从所有材质配置动态构建属性映射
+- `ui/tabs/node_tools_tab.py`：`_match_by_channel()` 使用扩展映射覆盖所有渲染器专属属性
+- 自动匹配色彩空间现支持所有 `config/material/` 文件夹中的材质类型，无需手动维护
+
 ## 2026-07-05
 
 ### Bug 修复

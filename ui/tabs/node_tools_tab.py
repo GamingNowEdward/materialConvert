@@ -10,6 +10,7 @@ class NodeToolsTab:
         self.ctx = ctx
         self.config = ConfigLoader()
         self.cs_config = self.config.get_color_space_config()
+        self.expanded_keywords = self.config.get_expanded_attribute_keywords()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -254,6 +255,9 @@ class NodeToolsTab:
         conns = cmds.listConnections(f"{file_node}.outColor", plugs=True, source=False) or []
         for conn in conns:
             attr_name = conn.split(".")[-1]
+            for role, keywords in self.expanded_keywords.items():
+                if attr_name in keywords:
+                    return role
             for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
                 if attr_name in cs_data.get("attributeKeywords", []):
                     return role

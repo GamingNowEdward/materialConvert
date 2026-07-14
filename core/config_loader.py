@@ -285,3 +285,17 @@ class ConfigLoader:
 
     def get_color_space_config(self):
         return dict(self._color_space_config)
+
+    def get_expanded_attribute_keywords(self):
+        common_roles = self._color_space_config.get("commonAttributeRoles", {})
+        expanded = {role: list(keywords) for role, keywords in common_roles.items()}
+
+        for node_type, mat_config in self._material_configs.items():
+            for common_attr, maya_attr in mat_config.attr_map.items():
+                if not maya_attr:
+                    continue
+                for role, common_attrs in common_roles.items():
+                    if common_attr in common_attrs and maya_attr not in expanded[role]:
+                        expanded[role].append(maya_attr)
+
+        return expanded
