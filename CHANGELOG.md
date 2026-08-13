@@ -3,7 +3,6 @@
 ## 2026-08-13
 
 ### Enhancements
-- `launch.py` (new): Single-line launch script for easy clipboard execution
 - `copy_launch.bat` (new): Double-click to copy Maya launch command to clipboard, eliminating manual path configuration
 - `README.md` / `README_zh.md` / `AGENTS.md`: Add "Option 3: Use bat file" installation method
 

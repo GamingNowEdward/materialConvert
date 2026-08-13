@@ -3,7 +3,6 @@
 ## 2026-08-13
 
 ### 功能增强
-- `launch.py`（新建）：单行启动脚本，便于剪贴板执行
 - `copy_launch.bat`（新建）：双击复制 Maya 启动命令到剪贴板，无需手动配置路径
 - `README.md` / `README_zh.md` / `AGENTS.md`：新增"方式三：使用 bat 文件"安装方式
 
