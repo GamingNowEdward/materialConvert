@@ -24,6 +24,10 @@ sys.path.insert(0, r"你的路径\materialConvert")
 exec(open(r"你的路径\materialConvert\main.py").read())
 ```
 
+**方式三：使用 bat 文件（最简单）**
+
+双击运行 `copy_launch.bat`，启动命令会自动复制到剪贴板，直接在 Maya Script Editor 中粘贴即可。
+
 **支持版本**: Maya 2024+
 **依赖**: [PyMEL](https://help.autodesk.com/view/MAYAUL/2027/CHS/?guid=GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4)（随 Maya 自带，确认已安装于 Maya 环境中）
 

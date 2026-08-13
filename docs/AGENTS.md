@@ -20,6 +20,10 @@ sys.path.insert(0, r"你的路径\materialConvert")
 exec(open(r"你的路径\materialConvert\main.py").read())
 ```
 
+**方式三：使用 bat 文件（最简单）**
+
+双击运行 `copy_launch.bat`，启动命令会自动复制到剪贴板，直接在 Maya Script Editor 中粘贴即可。
+
 本项目**零外部依赖**，不需要 pip install。分发给他人时只需拷贝文件夹并告诉对方改 shelf 按钮路径即可。
 
 如果修改代码后没生效，关掉窗口重新点击按钮即可。
