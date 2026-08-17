@@ -45,6 +45,7 @@ class ColorCorrectionConfig:
         self.hue = color_data.get("hue", "")
         self.saturation = color_data.get("saturation", "")
         self.hue_range = color_data.get("hue_range", None)
+        self.hue_center = color_data.get("hue_center", 0)
 
 
 class MaterialConfig:

@@ -74,14 +74,30 @@ def is_cc_node(node):
     return node_type in cc_types
 
 
-def _normalize_hue(value, src_range):
-    lo, hi = src_range
-    return (value - lo) / (hi - lo) * 360.0
+def _hue_to_offset(value, cc_config):
+    """渲染器 hue 值 → 通用偏移角 [-180, 180](0 = 无变化)。"""
+    if not cc_config.hue_range:
+        return value
+    lo, hi = cc_config.hue_range
+    if lo == -hi:
+        return value * (180.0 / hi)
+    center = cc_config.hue_center
+    offset = value - center
+    if offset > 180.0:
+        offset -= 360.0
+    elif offset < -180.0:
+        offset += 360.0
+    return offset
 
 
-def _denormalize_hue(value, dst_range):
-    lo, hi = dst_range
-    return lo + (value / 360.0) * (hi - lo)
+def _offset_to_hue(offset, cc_config):
+    """通用偏移角 [-180, 180] → 渲染器 hue 值。"""
+    if not cc_config.hue_range:
+        return offset
+    lo, hi = cc_config.hue_range
+    if lo == -hi:
+        return offset * (hi / 180.0)
+    return (offset + cc_config.hue_center) % 360.0
 
 
 def collect_cc_chain_params(cc_node, cc_config):
@@ -94,7 +110,7 @@ def collect_cc_chain_params(cc_node, cc_config):
             try:
                 val = cmds.getAttr(f"{cc_node}.{attr_name}")
                 if common_name == "hue" and val is not None and cc_config.hue_range:
-                    val = _normalize_hue(val, cc_config.hue_range)
+                    val = _hue_to_offset(val, cc_config)
                 params[common_name] = val
             except Exception:
                 params[common_name] = None
@@ -134,7 +150,7 @@ def set_cc_params(cc_node, params, cc_config):
         if val is not None:
             try:
                 if common_name == "hue" and cc_config.hue_range:
-                    val = _denormalize_hue(val, cc_config.hue_range)
+                    val = _offset_to_hue(val, cc_config)
                 cmds.setAttr(f"{cc_node}.{target_attr}", val)
             except Exception:
                 cmds.warning(f"set_cc_params: failed to set {target_attr} on {cc_node}")

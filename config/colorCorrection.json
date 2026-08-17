@@ -24,7 +24,8 @@
     "color": {
       "hue": "hueShift",
       "saturation": "satGain",
-      "hue_range": [0, 360]
+      "hue_range": [0, 360],
+      "hue_center": 180
     }
   },
   "arnold": {
@@ -41,7 +42,8 @@
     "color": {
       "hue": "hueShift",
       "saturation": "saturation",
-      "hue_range": [-1, 1]
+      "hue_range": [-1, 1],
+      "hue_center": 0
     }
   },
   "redshift": {
@@ -58,7 +60,8 @@
     "color": {
       "hue": "hue",
       "saturation": "saturation",
-      "hue_range": [0, 360]
+      "hue_range": [0, 360],
+      "hue_center": 0
     }
   },
   "vray": {
@@ -75,7 +78,8 @@
     "color": {
       "hue": "hue_shift",
       "saturation": "saturation",
-      "hue_range": [-180, 180]
+      "hue_range": [-180, 180],
+      "hue_center": 0
     }
   }
 }
