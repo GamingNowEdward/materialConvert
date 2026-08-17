@@ -48,7 +48,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
-- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords}，自动匹配 file 节点色彩空间）
+- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords} + commonAttributeRoles 动态扩展；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名）
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：

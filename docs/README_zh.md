@@ -52,7 +52,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 ### Node Tools
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - **Set File Color Space**：批量设置 file 节点颜色空间
-- **Auto Match Selected**：根据文件名关键词和连接通道自动匹配色彩空间（参考 `config/colorSpace.json`）
+- **Auto Match Selected**：自动匹配色彩空间——追踪 file 全部下游连接（单通道/outAlpha/中间节点），属性名规范化匹配（参考 `config/colorSpace.json`）
 - **Color Management**：批量设置 file 节点的 ignoreColorSpaceFileRules
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 

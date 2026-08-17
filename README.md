@@ -52,7 +52,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 ### Node Tools
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
 - **Set File Color Space**: Batch set color space on selected file nodes
-- **Auto Match Selected**: Automatically match color space based on filename keywords and connection channels (reference `config/colorSpace.json`)
+- **Auto Match Selected**: Automatically match color space by tracing all downstream connections (single-channel/outAlpha/intermediate nodes) with normalized attribute keywords (reference `config/colorSpace.json`)
 - **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
 - **Rename Shading Engine**: Batch rename SG to match material names
 

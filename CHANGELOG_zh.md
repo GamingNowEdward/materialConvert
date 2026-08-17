@@ -20,6 +20,9 @@
 - `core/converters/cc.py`：跨渲染器转换时保持源材质 CC 链——共享中间节点（layeredTexture）场景下，源属性改接回原 CC，不再被目标渲染器 CC 污染
 - Hue 映射：`config/colorCorrection.json` 各渲染器新增 `hue_center`；`core/node_utils.py` 将 hue 转换为通用偏移角 [-180, 180]（`0` = 无变化）——修复 Redshift `hue=0` 被映射为 Arnold `hueShift=-1`（应为 0）的错误
 
+### 功能增强
+- 自动色彩空间匹配（`ui/tabs/node_tools_tab.py`、`core/config_loader.py`）：通道匹配改为 BFS 追踪 file 节点**全部下游连接**（单通道 `outColorR/G/B`、`outAlpha`、穿越 colorCorrect/layeredTexture/multiplyDivide/bump 等中间节点），不再只查 `outColor`；属性名匹配前规范化（小写、去除 `_`/`-`）；追踪时跳过 Maya 默认渲染列表容器
+
 ### 文档
 - `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`：移除已删除面板、更新 Builder 配置来源、pymel → cmds、项目结构
 

@@ -20,6 +20,9 @@
 - `core/converters/cc.py`: preserve source material CC chain during cross-renderer conversion — when the intermediate node (layeredTexture) is shared, the source attribute is reconnected to the original CC instead of being polluted with the target-renderer CC
 - Hue mapping: `config/colorCorrection.json` adds `hue_center` per renderer; `core/node_utils.py` converts hue to a universal offset angle [-180, 180] (`0` = no change) — fixes Redshift `hue=0` mapping to Arnold `hueShift=-1` instead of `0`
 
+### Enhancements
+- Auto color space matching (`ui/tabs/node_tools_tab.py`, `core/config_loader.py`): channel matching now BFS-traces **all** downstream connections (single-channel `outColorR/G/B`, `outAlpha`, intermediate nodes like colorCorrect/layeredTexture/multiplyDivide/bump) instead of only `outColor`; attribute names are normalized (lowercase, `_`/`-` removed) before matching; Maya default render-list containers are skipped during tracing
+
 ### Documentation
 - `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`: remove removed panels, update Builder config source, pymel → cmds, project structure
 

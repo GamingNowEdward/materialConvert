@@ -377,8 +377,11 @@ Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
 
 1. **文件名匹配**（最高优先）：检查文件名是否包含 `filenameKeywords` 中的关键词（不区分大小写）
    - 例如：`wood_basecolor.jpg` 包含 `basecolor` → 匹配 `srgb` 类型
-2. **连接通道匹配**（次选）：追踪 file 节点的 `outColor` 连接，检查目标材质属性是否在 `attributeKeywords` 中
-   - 例如：file 节点连接到 `mat.roughness` → 匹配 `raw` 类型
+2. **通道匹配**（次选）：BFS 追踪 file 节点的**全部下游连接**——包括单通道插头（`outColorR/G/B`）、`outAlpha` 输出，并穿越中间节点（colorCorrect、layeredTexture、multiplyDivide、bump/法线）——对链末端命中的材质属性名与属性关键字匹配
+   - 属性名**规范化后**比较（小写、去除 `_`/`-`）：`baseColor`、`base_color`、`basecolor` 视为同一
+   - 关键字池来自 `commonAttributeRoles`，并经 `config/material/*.json` 动态扩展出各渲染器实际属性名（`get_expanded_attribute_keywords()`），另有静态 `attributeKeywords` 兜底
+   - 追踪时跳过 Maya 默认渲染列表容器（`defaultTextureList` 等）
+   - 例如：file → `multiplyDivide` → `mat.metalness` 匹配 `raw`；file → `colorCorrect` → `layeredTexture` → `mat.baseColor` 匹配 `srgb`
 3. **默认类型**（最低优先）：无匹配时使用 `config/colorSpace.json` 中 `default` 指定的类型（当前为 `raw`）
 
 匹配到类型后，从该类型的 `aliases` 列表中依次尝试，选择当前 OCIO 配置中实际可用的色彩空间名称进行设置。
