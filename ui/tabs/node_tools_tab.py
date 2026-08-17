@@ -1,7 +1,7 @@
 from ui import QtWidgets, QtCore, QtGui, cmds
 import os
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
-from core.config_loader import ConfigLoader
+from core.config_loader import ConfigLoader, normalize_keyword
 
 
 class NodeToolsTab:
@@ -11,6 +11,10 @@ class NodeToolsTab:
         self.config = ConfigLoader()
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
+        self._norm_attr_keywords = {
+            role: [normalize_keyword(k) for k in cs_data.get("attributeKeywords", [])]
+            for role, cs_data in self.cs_config.get("colorSpaces", {}).items()
+        }
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -251,15 +255,55 @@ class NodeToolsTab:
                     return role
         return None
 
+    @staticmethod
+    def _is_material_node(node):
+        try:
+            return bool(cmds.listConnections(f"{node}.outColor", type="shadingEngine"))
+        except Exception:
+            return False
+
+    _INTERNAL_TRACE_NODES = {
+        "defaultTextureList1", "defaultRenderUtilityList1",
+        "defaultShaderList1", "defaultColorMgtGlobals",
+    }
+
+    def _trace_channel_targets(self, file_node, max_depth=4):
+        """BFS 追踪 file 节点的全部输出终点,返回命中材质的属性名列表。
+
+        覆盖单通道连接(outColorR/G/B)、outAlpha 输出与中间节点
+        (cc/layeredTexture/multiplyDivide/bump 等)穿越。
+        Maya 默认渲染列表容器(defaultTextureList 等)会被跳过,避免污染追踪。
+        """
+        targets = []
+        visited = {file_node}
+        queue = [(file_node, 0)]
+
+        while queue:
+            node, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+            for dest in (cmds.listConnections(node, plugs=True, destination=True) or []):
+                if "." not in dest:
+                    continue
+                dnode, attr_path = dest.split(".", 1)
+                if dnode in self._INTERNAL_TRACE_NODES:
+                    continue
+                if self._is_material_node(dnode):
+                    targets.append(attr_path.rsplit(".", 1)[-1])
+                elif dnode not in visited:
+                    visited.add(dnode)
+                    queue.append((dnode, depth + 1))
+
+        return targets
+
     def _match_by_channel(self, file_node):
-        conns = cmds.listConnections(f"{file_node}.outColor", plugs=True, source=False) or []
-        for conn in conns:
-            attr_name = conn.split(".")[-1]
+        for attr_name in self._trace_channel_targets(file_node):
+            n_attr = normalize_keyword(attr_name)
             for role, keywords in self.expanded_keywords.items():
-                if attr_name in keywords:
+                if n_attr in keywords:
                     return role
-            for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
-                if attr_name in cs_data.get("attributeKeywords", []):
+            for role, keywords in self._norm_attr_keywords.items():
+                if n_attr in keywords:
                     return role
         return None
 

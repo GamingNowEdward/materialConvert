@@ -1,6 +1,11 @@
 import json
 import os
 
+
+def normalize_keyword(kw):
+    """规范化关键字:小写 + 去除下划线/中划线,用于颜色空间属性名匹配。"""
+    return kw.lower().replace("_", "").replace("-", "")
+
 class NodeMapping:
     def __init__(self, data, renderer):
         self.renderer = renderer
@@ -284,14 +289,15 @@ class ConfigLoader:
 
     def get_expanded_attribute_keywords(self):
         common_roles = self._color_space_config.get("commonAttributeRoles", {})
-        expanded = {role: list(keywords) for role, keywords in common_roles.items()}
+        expanded = {role: [normalize_keyword(k) for k in keywords]
+                    for role, keywords in common_roles.items()}
 
         for node_type, mat_config in self._material_configs.items():
             for common_attr, maya_attr in mat_config.attr_map.items():
                 if not maya_attr:
                     continue
                 for role, common_attrs in common_roles.items():
-                    if common_attr in common_attrs and maya_attr not in expanded[role]:
-                        expanded[role].append(maya_attr)
+                    if common_attr in common_attrs and normalize_keyword(maya_attr) not in expanded[role]:
+                        expanded[role].append(normalize_keyword(maya_attr))
 
         return expanded
