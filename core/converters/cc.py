@@ -82,7 +82,9 @@ class CCConverter:
 
         cc_out_dests = cc_entry.get("cc_out_dests", [])
         cc_out_dests = [d for d in cc_out_dests if not self.config.get_material_config(cmds.nodeType(d.split(".")[0]))]
+
         if cc_out_dests:
+            self._restore_shared_source_chain(cc_entry)
             for dest in cc_out_dests:
                 try:
                     cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", dest, force=True)
@@ -95,3 +97,28 @@ class CCConverter:
                 cmds.warning(f"CCConverter: failed to connect {cc_node} to {target_plug}")
 
         log.append(f"  Color correction converted: {cc_node}")
+
+    def _restore_shared_source_chain(self, cc_entry):
+        """原 CC 被新 CC 挤出后,若中间节点与源材质共享,把源材质属性改接回原 CC,避免源链被污染。"""
+        src_cc_name = cc_entry.get("cc_node_name", "")
+        output_plug = cc_entry.get("output_plug")
+        if not src_cc_name or not output_plug:
+            return
+
+        src_renderer = self.config.identify_cc_renderer(cmds.nodeType(src_cc_name))
+        if not src_renderer:
+            return
+        src_cfg = self.config.get_color_correction_config(src_renderer)
+        if not src_cfg or not src_cfg.target_connection:
+            return
+
+        cc_out_nodes = {d.split(".")[0] for d in cc_entry.get("cc_out_dests", [])}
+        for dest_plug in (cmds.listConnections(output_plug, plugs=True, destination=True) or []):
+            dest_node = dest_plug.split(".")[0]
+            if dest_node in cc_out_nodes:
+                continue
+            if self.config.get_material_config(cmds.nodeType(dest_node)):
+                try:
+                    cmds.connectAttr(f"{src_cc_name}.{src_cfg.target_connection}", dest_plug, force=True)
+                except Exception:
+                    cmds.warning(f"CCConverter: failed to restore source chain to {dest_plug}")
