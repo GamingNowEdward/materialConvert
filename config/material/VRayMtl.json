@@ -45,7 +45,7 @@
     "coatWeight": "coatColorAmount",
     "coatColor": "coatColor",
     "coatRoughness": "coatGlossiness",
-    "coatIor": "coatIor"
+    "coatIor": "coatIOR"
   },
   "fuzz": {
     "fuzzWeight": "sheenColorAmount",

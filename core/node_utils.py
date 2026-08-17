@@ -58,6 +58,8 @@ def collect_attribute_info(material, attr_names):
         else:
             try:
                 value = cmds.getAttr(plug)
+                if isinstance(value, list) and value and isinstance(value[0], (tuple, list)):
+                    value = value[0]
             except Exception:
                 value = None
 
