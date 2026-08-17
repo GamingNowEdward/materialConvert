@@ -2,6 +2,7 @@
   "material": {
     "node_type": "aiStandardSurface",
     "target_connection": "surfaceShader",
+    "plugin": "mtoa",
     "short_name": "aiStd",
     "uiPanel_display_name": "Arnold Standard Surface",
     "renderer": "arnold"
@@ -52,6 +53,9 @@
   "displacement": {
     "node_type": "displacementShader",
     "displacementScale": "scale",
-    "displacementTexture": "displacement"
+    "displacementTexture": "displacement",
+    "file_source": "outAlpha",
+    "lyr_src": "outAlpha",
+    "output": "displacement"
   }
 }

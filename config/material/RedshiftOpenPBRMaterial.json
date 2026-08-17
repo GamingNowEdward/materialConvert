@@ -2,6 +2,7 @@
   "material": {
     "node_type": "RedshiftOpenPBRMaterial",
     "target_connection": "surfaceShader",
+    "plugin": "redshift4maya",
     "short_name": "rsPBR",
     "uiPanel_display_name": "Redshift OpenPBR",
     "renderer": "redshift"
@@ -52,6 +53,9 @@
   "displacement": {
     "node_type": "RedshiftDisplacement",
     "displacementScale": "scale",
-    "displacementTexture": "texMap"
+    "displacementTexture": "texMap",
+    "file_source": "outAlpha",
+    "lyr_src": "outColor",
+    "output": "out"
   }
 }

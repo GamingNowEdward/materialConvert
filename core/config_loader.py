@@ -14,6 +14,8 @@ class NodeMapping:
         self.isNormal_value = data.get("isNormal_value", None)
         self.input_type = data.get("input_type", "")
         self.input_type_value = data.get("input_type_value", None)
+        self.file_source = data.get("file_source", "outColor")
+        self.default_scale = data.get("default_scale", None)
 
 
 class BumpNormalConfig:
@@ -54,6 +56,7 @@ class MaterialConfig:
         self.short_name = mat_data.get("short_name", "")
         self.uiPanel_display_name = mat_data.get("uiPanel_display_name", self.node_type)
         self.renderer = mat_data.get("renderer", "unknown")
+        self.plugin = mat_data.get("plugin", "")
 
         self.attr_map = {}
         self.prerequisites = {}
@@ -89,6 +92,9 @@ class MaterialConfig:
         self.displacement_node_type = disp_data.get("node_type", "")
         self.displacement_scale = disp_data.get("displacementScale", "")
         self.displacement_texture = disp_data.get("displacementTexture", "")
+        self.displacement_file_source = disp_data.get("file_source", "outAlpha")
+        self.displacement_lyr_src = disp_data.get("lyr_src", "outAlpha")
+        self.displacement_output = disp_data.get("output", "displacement")
 
     def get_maya_attr(self, common_attr):
         return self.attr_map.get(common_attr, "")
@@ -112,7 +118,6 @@ class ConfigLoader:
         self._common_attrs = {}
         self._bump_normal_configs = {}
         self._color_correction_configs = {}
-        self._builder_specs = {}
         self._builder_naming = {}
         self._color_weight_pairs = []
         self._color_space_config = {}
@@ -123,7 +128,6 @@ class ConfigLoader:
         self._load_materials()
         self._load_bump_normal()
         self._load_color_correction()
-        self._load_builder_specs()
         self._load_builder_naming()
         self._load_color_space()
 
@@ -229,9 +233,6 @@ class ConfigLoader:
     def get_color_correction_config(self, renderer):
         return self._color_correction_configs.get(renderer)
 
-    def get_builder_spec(self, renderer):
-        return self._builder_specs.get(renderer)
-
     def get_builder_naming(self):
         return dict(self._builder_naming)
 
@@ -240,12 +241,6 @@ class ConfigLoader:
         if not os.path.exists(path):
             return
         self._builder_naming = self._read_json(path)
-
-    def _load_builder_specs(self):
-        path = os.path.join(self._CONFIG_DIR, "builder_specs.json")
-        if not os.path.exists(path):
-            return
-        self._builder_specs = self._read_json(path)
 
     def identify_cc_renderer(self, node_type):
         for renderer, cc in self._color_correction_configs.items():
