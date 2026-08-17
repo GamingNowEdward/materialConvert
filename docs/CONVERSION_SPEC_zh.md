@@ -76,8 +76,8 @@
 
 - **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
 - **Alpha Is Luminance**：属性传递完成后，扫描目标材质所有连接，若发现使用 `outAlpha` 的连接，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过）
-- **数值**：直接复制（float/int）
-- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float（如 V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`），自动回退取第一个通道值
+- **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
+- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
@@ -296,9 +296,9 @@ Arnold ↔ V-Ray 互转时不创建置换节点（跳过）。
 
 所有纹理连接均通过 `_smart_connect()` 处理，按顺序尝试三种连接方式：
 
-1. **直连**：`src_plug >> dst_plug`
-2. **outColor**：`src_node.outColor >> dst_plug`（解决 float → color 类型不兼容）
-3. **outAlpha**：`src_node.outAlpha >> dst_plug`（解决 alpha → float 类型不兼容）
+1. **直连**：`cmds.connectAttr(src_plug, dst_plug, force=True)`
+2. **outColor**：`src_node.outColor → dst_plug`（解决 float → color 类型不兼容）
+3. **outAlpha**：`src_node.outAlpha → dst_plug`（解决 alpha → float 类型不兼容）
 
 ---
 
@@ -316,22 +316,30 @@ UI 支持同时批量转换多个材质：
 
 ## 九、Material Builder
 
-在 Converter 面板的第二个标签页中集成了材质创建功能，支持从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
+在 Converter 面板的第二个标签页中集成，从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
 
 ### 9.1 支持功能
 
 | 功能 | 说明 |
 |---|---|
+| 材质类型下拉框 | 列出 `config/material/*.json` 中的**全部**材质——新增 JSON 即自动成为可构建类型 |
 | 纹理路径 | 可选填入 Color、Roughness、Normal/Bump、Displacement 贴图路径 |
 | Normal/Bump 切换 | 勾选为 Normal，取消为 Bump |
 | SSS | 勾选后额外创建 sss 通道（colorCorrect + layeredTexture + ramp） |
 | Displacement | 勾选后创建置换节点链 |
-| 三种渲染器 | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
+| 加入快速选择集 | 勾选后将所有构建节点包进 `QS_M_*` 集合 |
 | Create File From P2D | 从选中的 place2dTexture 节点创建 file 节点并自动连接 |
 
-### 9.2 Redshift 材质前提条件
+### 9.2 配置来源
 
-创建 Redshift 材质时自动设置 `refl_brdf=1`、`coat_brdf=1`，确保与转换器使用的配置一致。
+Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
+
+- 材质节点类型 / 属性映射 / 插件：`config/material/*.json`（`node_type`、`plugin`、各分组映射）
+- CC 节点：`config/colorCorrection.json`
+- 凹凸/法线节点：`config/bumpNormal.json`
+- 置换链：材质 JSON 的 `displacement` 块
+- 命名约定：`config/builder_naming.json`
+- 材质前提条件（`useRoughness`、`refl_brdf` 等）自动从 JSON 应用
 
 ---
 
@@ -358,33 +366,7 @@ UI 支持同时批量转换多个材质：
 
 ---
 
-## 十一、Locator 工具
-
-为选中物体自动创建 Layout Locator，将物体设为 Locator 的子级，并根据包围盒尺寸缩放 Locator。
-
-### 11.1 功能
-
-| 参数 | 说明 |
-|---|---|
-| Prefix | 生成 Locator 的名称前缀，默认 `loc_` |
-| Scale Multipliers | X/Y/Z 三轴独立缩放倍率，作用于包围盒最大边长 |
-| Enable Override Color | 勾选后可选择 Locator 的显示覆盖色 |
-
-### 11.2 转换流程
-
-```
-选中物体 → 获取包围盒大小 → 创建 Locator（同名位置） → 将物体设为 Locator 子级
-→ 清空物体变换 → 设置 Locator 缩放 = 包围盒边长 × 倍率 → 可选设置覆盖色
-```
-
-### 11.3 跳过规则
-
-- 如果物体已有 Locator 作为 direct shape（即本身就是 Locator），跳过
-- 每次操作包裹在 `undoInfo(openChunk=True/closeChunk)` 中，支持单步撤销
-
----
-
-## 十二、项目结构
+## 十一、项目结构
 
 ```
 materialConvert/
@@ -400,7 +382,6 @@ materialConvert/
 │   ├── bumpNormal.json              # 凹凸/法线节点映射
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
-│   ├── builder_specs.json           # Material Builder 渲染器规格
 │   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
@@ -413,17 +394,15 @@ materialConvert/
 │   ├── node_utils.py                # Maya 节点操作工具函数（模块级）
 │   ├── prerequisites.py             # 渲染器前提条件处理
 │   ├── logger.py                    # 统一日志模块
-│   └── builder_context.py           # Material Builder 共享状态与工具
+│   ├── builder_context.py           # Material Builder 共享状态与工具
+│   └── material_builder.py          # Material Builder 核心逻辑（配置驱动）
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题样式
-│   └── tabs/                        # 六个功能标签页
+│   └── tabs/                        # 三个功能标签页
 │       ├── converter_tab.py         # 材质转换（含进度条）
 │       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator 工具
+│       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # 入口脚本
 ├── docs/
 │   ├── AGENTS.md                    # AI Agent 开发指南

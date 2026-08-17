@@ -29,7 +29,7 @@ exec(open(r"your_path\materialConvert\main.py").read())
 Double-click `copy_launch.bat` to copy the launch command to clipboard, then paste directly into Maya Script Editor.
 
 **Supported**: Maya 2024+
-**Requires**: [PyMEL](https://help.autodesk.com/view/MAYAUL/2027/ENU/?guid=GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4) (included with Maya, ensure it is installed in your Maya environment)
+**Requires**: none (zero external dependencies, pure `maya.cmds` API)
 
 ## Features
 
@@ -45,7 +45,8 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Supports Color / Roughness / Normal / Bump / Displacement channels
 - SSS channel support (colorCorrect + layeredTexture + ramp)
 - Displacement node chain support
-- Renderer buttons dynamically generated from config
+- Material type dropdown driven by `config/material/*.json` — new materials appear automatically
+- Optional "Add To Quick Select Set" toggle
 - Create File From P2D: create file node from selected place2dTexture
 
 ### Node Tools
@@ -54,29 +55,6 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - **Auto Match Selected**: Automatically match color space based on filename keywords and connection channels (reference `config/colorSpace.json`)
 - **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
 - **Rename Shading Engine**: Batch rename SG to match material names
-
-### Transform Tools
-- **Align To Floor**: Move objects so lowest point touches Y=0
-- **Axis Alignment**: Align to X/Y/Z min/max bounds
-- **Center Pivots**: Center pivot points on selected objects
-- **World Space Location**: Move objects to specified world coordinates
-- **Freeze Translations**: Reset translation values to zero
-- **Freeze Rotations**: Reset rotation values to zero
-- **Freeze Scale**: Reset scale values to one
-- **Freeze All**: Reset all transforms at once
-- **Apply All Pipeline**: Center pivots → Set location → Floor align → Y-min align → Freeze all
-
-### Attr Modifier
-- Batch modify attribute values on selected nodes
-- Supports Boolean, Float, Integer, and String data types
-- Automatically checks both transform and shape nodes
-
-### Locator
-- Auto-create Layout Locator for selected objects
-- Scale Locator based on bounding box dimensions
-- Per-axis (X/Y/Z) independent scale multipliers
-- Optional display override color
-- Prefix support for naming convention
 
 ## Architecture
 
@@ -108,7 +86,6 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
-│   ├── builder_specs.json           # Material Builder renderer specs
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
@@ -121,17 +98,15 @@ materialConvert/
 │   ├── node_utils.py                # Maya node utility functions
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
-│   └── builder_context.py           # Material Builder shared state
+│   ├── builder_context.py           # Material Builder shared state
+│   └── material_builder.py          # Material Builder core logic
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme
-│   └── tabs/                        # Six functional tabs
+│   └── tabs/                        # Three functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator tool
+│       └── node_tools_tab.py        # Node Tools
 ├── docs/                            # Documentation
 │   ├── CONVERSION_SPEC.md           # Full conversion specification
 │   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明

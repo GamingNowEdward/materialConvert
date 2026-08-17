@@ -1,5 +1,24 @@
 # 更新日志
 
+## 2026-08-17
+
+### 移除
+- `ui/tabs/transform_tab.py`、`attr_modifier_tab.py`、`locator_tab.py`（及其标签页）：移除 Transform Tools / Attr Modifier / Locator 三个面板
+
+### 重构
+- **Builder 配置统一到 Convert 体系**：删除 `config/builder_specs.json`；Builder 渲染器规格改从 `config/material/*.json`（`node_type`/`plugin`/属性映射）+ `bumpNormal.json` + `colorCorrection.json` + 材质 JSON 的 `displacement` 块读取
+- 新增 `core/material_builder.py`：构建逻辑从 `ui/tabs/builder_tab.py` 下沉到 core，完全配置驱动
+- `ui/tabs/builder_tab.py`：材质类型下拉框由全部材质 JSON 驱动（新增材质自动出现）；全宽 BUILD 按钮；可选"加入快速选择集"开关
+- `config/material/*.json`：新增 `plugin` 字段；displacement 块扩展 `file_source`/`lyr_src`/`output`；修正 `VRayMtl` subsurface 映射（`ssColor` → `translucencyColor`，此版本 VRayMtl 无 `ssColor` 属性）
+- `config/bumpNormal.json`：为 Builder 新增 `file_source`/`default_scale`
+- **pymel 全面迁移至 `maya.cmds`**：`core/node_utils.py`、`core/prerequisites.py`、`core/converter.py`、`core/converters/*`（attribute/bump/cc/displacement）、`ui/tabs/converter_tab.py` —— Maya 2027 起不再支持 pymel；plug 一律改为 `"node.attr"` 字符串
+
+### 缺陷修复
+- `core/converters/attribute.py`：float 值设置到 `float3` 目标属性时自动广播为 (v, v, v)（如 Arnold `opacity`、V-Ray `opacityMap`、Redshift `ms_radius`）
+
+### 文档
+- `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`：移除已删除面板、更新 Builder 配置来源、pymel → cmds、项目结构
+
 ## 2026-08-13
 
 ### 功能增强

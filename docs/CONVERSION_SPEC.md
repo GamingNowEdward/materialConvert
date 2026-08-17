@@ -76,8 +76,8 @@ These universal attributes are **not** processed in the main transfer loop — t
 
 - **Texture connections**: Migrated via `_smart_connect()` — tries direct connection first, falls back to `outColor` then `outAlpha` for type incompatibility
 - **Alpha Is Luminance**: After attribute transfer, scans all target material connections; if `outAlpha` is used, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift)
-- **Numeric values**: Copied directly (float/int)
-- **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float (e.g., V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`), falls back to first channel value
+- **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
+- **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
 ### 1.4 Black Color Auto-Zeroing
@@ -296,9 +296,9 @@ Converted **materials**, **bump/normal nodes**, **color correction nodes**, and 
 
 All texture connections are handled via `_smart_connect()`, trying three connection methods in order:
 
-1. **Direct**: `src_plug >> dst_plug`
-2. **outColor**: `src_node.outColor >> dst_plug` (resolves float → color type incompatibility)
-3. **outAlpha**: `src_node.outAlpha >> dst_plug` (resolves alpha → float type incompatibility)
+1. **Direct**: `cmds.connectAttr(src_plug, dst_plug, force=True)`
+2. **outColor**: `src_node.outColor → dst_plug` (resolves float → color type incompatibility)
+3. **outAlpha**: `src_node.outAlpha → dst_plug` (resolves alpha → float type incompatibility)
 
 ---
 
@@ -316,22 +316,30 @@ UI supports batch conversion of multiple materials:
 
 ## 9. Material Builder
 
-Integrated in the Converter panel's second tab, supports one-click building of complete Arnold / Redshift / V-Ray PBR materials from texture paths.
+Integrated in the Converter panel's second tab, builds complete Arnold / Redshift / V-Ray PBR materials from texture paths.
 
 ### 9.1 Supported Features
 
 | Feature | Description |
 |---|---|
+| Material Type Dropdown | Lists **all** materials from `config/material/*.json` — adding a JSON file automatically adds a buildable type |
 | Texture Paths | Optional input for Color, Roughness, Normal/Bump, Displacement maps |
 | Normal/Bump Toggle | Checked = Normal, unchecked = Bump |
 | SSS | When checked, additionally creates sss channel (colorCorrect + layeredTexture + ramp) |
 | Displacement | When checked, creates displacement node chain |
-| Three Renderers | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
+| Add To Quick Select Set | When checked, wraps all built nodes in a `QS_M_*` selection set |
 | Create File From P2D | Creates file node from selected place2dTexture node and auto-connects |
 
-### 9.2 Redshift Material Prerequisites
+### 9.2 Config Source
 
-Creating Redshift materials automatically sets `refl_brdf=1` and `coat_brdf=1` to ensure consistency with converter configuration.
+The Builder reuses the **Convert configuration system** — no separate renderer spec file:
+
+- Material node type / attribute mappings / plugin: `config/material/*.json` (`node_type`, `plugin`, section mappings)
+- CC node: `config/colorCorrection.json`
+- Bump/Normal node: `config/bumpNormal.json`
+- Displacement chain: material JSON `displacement` block
+- Naming conventions: `config/builder_naming.json`
+- Material prerequisites (`useRoughness`, `refl_brdf`, etc.) are applied automatically from JSON
 
 ---
 
@@ -358,33 +366,7 @@ After matching a type, iterates through the `aliases` list and sets the first co
 
 ---
 
-## 11. Locator Tool
-
-Auto-creates Layout Locators for selected objects, sets objects as child of Locator, and scales Locator based on bounding box size.
-
-### 11.1 Features
-
-| Parameter | Description |
-|---|---|
-| Prefix | Name prefix for generated Locators, default `loc_` |
-| Scale Multipliers | Per-axis (X/Y/Z) independent scale multipliers, applied to bounding box max dimension |
-| Enable Override Color | When checked, allows selecting Locator display override color |
-
-### 11.2 Flow
-
-```
-Select objects → Get bounding box size → Create Locator (same position) → Set object as Locator child
-→ Clear object transforms → Set Locator scale = bbox dimension × multiplier → Optionally set override color
-```
-
-### 11.3 Skip Rules
-
-- Objects that already have a Locator as direct shape (i.e., are Locators) are skipped
-- Each operation is wrapped in `undoInfo(openChunk=True/closeChunk)` for single-step undo
-
----
-
-## 12. Project Structure
+## 11. Project Structure
 
 ```
 materialConvert/
@@ -400,7 +382,6 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
-│   ├── builder_specs.json           # Material Builder renderer specs
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
@@ -413,17 +394,15 @@ materialConvert/
 │   ├── node_utils.py                # Maya node utility functions (module-level)
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
-│   └── builder_context.py           # Material Builder shared state & tools
+│   ├── builder_context.py           # Material Builder shared state & tools
+│   └── material_builder.py          # Material Builder core logic (config-driven)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme styles
-│   └── tabs/                        # Six functional tabs
+│   └── tabs/                        # Three functional tabs
 │       ├── converter_tab.py         # Material conversion (with progress bar)
 │       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator tool
+│       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # Entry script
 ├── docs/
 │   ├── AGENTS.md                    # AI Agent development guide

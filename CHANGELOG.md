@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-17
+
+### Removed
+- `ui/tabs/transform_tab.py`, `attr_modifier_tab.py`, `locator_tab.py` (and their tabs): Remove Transform Tools / Attr Modifier / Locator panels
+
+### Refactoring
+- **Unified Builder config into Convert pipeline**: delete `config/builder_specs.json`; Builder now reads renderer specs from `config/material/*.json` (`node_type`/`plugin`/attribute maps) + `bumpNormal.json` + `colorCorrection.json` + material JSON `displacement` blocks
+- New `core/material_builder.py`: build logic moved from `ui/tabs/builder_tab.py` into core, fully config-driven
+- `ui/tabs/builder_tab.py`: material type dropdown driven by all material JSONs (new materials appear automatically); full-width BUILD button; optional "Add To Quick Select Set" toggle
+- `config/material/*.json`: add `plugin` field; displacement block extended with `file_source`/`lyr_src`/`output`; `VRayMtl` subsurface fixed (`ssColor` → `translucencyColor`, this version has no `ssColor` attribute)
+- `config/bumpNormal.json`: add `file_source`/`default_scale` for Builder
+- **Migrated pymel to `maya.cmds`** across `core/node_utils.py`, `core/prerequisites.py`, `core/converter.py`, `core/converters/*` (attribute/bump/cc/displacement), `ui/tabs/converter_tab.py` — pymel is no longer supported from Maya 2027; plugs are now plain `"node.attr"` strings
+
+### Bug Fixes
+- `core/converters/attribute.py`: float value → `float3` target attribute now broadcasts to `(v, v, v)` (e.g., Arnold `opacity`, V-Ray `opacityMap`, Redshift `ms_radius`)
+
+### Documentation
+- `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`: remove removed panels, update Builder config source, pymel → cmds, project structure
+
 ## 2026-08-13
 
 ### Enhancements

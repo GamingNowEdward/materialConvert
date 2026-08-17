@@ -29,7 +29,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 双击运行 `copy_launch.bat`，启动命令会自动复制到剪贴板，直接在 Maya Script Editor 中粘贴即可。
 
 **支持版本**: Maya 2024+
-**依赖**: [PyMEL](https://help.autodesk.com/view/MAYAUL/2027/CHS/?guid=GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4)（随 Maya 自带，确认已安装于 Maya 环境中）
+**依赖**: 无（零外部依赖，纯 `maya.cmds` API）
 
 ## 功能
 
@@ -45,7 +45,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 支持 Color / Roughness / Normal / Bump / Displacement 通道
 - SSS 通道支持（colorCorrect + layeredTexture + ramp）
 - 置换节点链支持
-- 渲染器按钮从配置动态生成
+- 材质类型下拉框由 `config/material/*.json` 驱动——新增材质自动出现
+- 可选"加入快速选择集"开关
 - Create File From P2D：从选中的 place2dTexture 节点创建 file 节点
 
 ### Node Tools
@@ -54,29 +55,6 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **Auto Match Selected**：根据文件名关键词和连接通道自动匹配色彩空间（参考 `config/colorSpace.json`）
 - **Color Management**：批量设置 file 节点的 ignoreColorSpaceFileRules
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
-
-### Transform Tools
-- **Align To Floor**：将物体最低点对齐到 Y=0
-- **Axis Alignment**：对齐到 X/Y/Z 轴的 min/max 边界
-- **Center Pivots**：居中选中物体的轴心点
-- **World Space Location**：将物体移动到指定世界坐标
-- **Freeze Translations**：重置平移值为零
-- **Freeze Rotations**：重置旋转值为零
-- **Freeze Scale**：重置缩放值为一
-- **Freeze All**：一次性重置所有变换
-- **Apply All Pipeline**：居中轴心 → 设置位置 → 地面对齐 → Y轴最小对齐 → 冻结全部
-
-### Attr Modifier
-- 批量修改选中节点的指定属性值
-- 支持 Boolean、Float、Integer、String 四种数据类型
-- 自动检查 transform 和 shape 节点
-
-### Locator
-- 为选中物体自动创建 Layout Locator
-- 根据包围盒尺寸缩放 Locator
-- X/Y/Z 三轴独立缩放倍率
-- 可选显示覆盖色
-- 支持前缀命名
 
 ## 架构
 
@@ -108,7 +86,6 @@ materialConvert/
 │   ├── bumpNormal.json              # 凹凸/法线节点映射
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
-│   ├── builder_specs.json           # Material Builder 渲染器规格
 │   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
@@ -121,17 +98,15 @@ materialConvert/
 │   ├── node_utils.py                # Maya 节点工具函数
 │   ├── prerequisites.py             # 渲染器前提条件处理
 │   ├── logger.py                    # 统一日志模块
-│   └── builder_context.py           # Material Builder 共享状态
+│   ├── builder_context.py           # Material Builder 共享状态
+│   └── material_builder.py          # Material Builder 核心逻辑
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题
-│   └── tabs/                        # 六个功能标签页
+│   └── tabs/                        # 三个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator 工具
+│       └── node_tools_tab.py        # Node Tools
 ├── docs/                            # 文档
 │   ├── CONVERSION_SPEC.md           # 转换规格说明（英文）
 │   ├── CONVERSION_SPEC_zh.md        # 转换规格说明（中文）

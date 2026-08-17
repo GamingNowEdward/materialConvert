@@ -39,15 +39,15 @@ exec(open(r"你的路径\materialConvert\main.py").read())
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
-  - `locator_tab.py` — Layout Locator 创建（包围盒缩放 + 覆盖色）
 - 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`
+- **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，支持回调函数，UI 层注册回调更新日志面板
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，6 个标签页）
+- 界面：`ui/converter_ui.py`（QTabWidget，3 个标签页）
 - 样式：`ui/styles.py`（QSS 暗色主题）
-- Builder：`core/builder_context.py`（`BuilderContext` 状态管理 + 工具方法）
-- Builder 配置：`config/builder_specs.json`（渲染器规格） + `config/builder_naming.json`（命名约定）
+- Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
+- Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords}，自动匹配 file 节点色彩空间）
 
 ### 统一导入
@@ -79,12 +79,12 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 
 ### 节点创建
 **必须使用 `cmds.shadingNode(asShader=True)` 或 `shadingNode(asUtility=True)`。**  
-禁止使用 `pm.createNode()` — 它不会注册到 Hypershade，会导致"转换成功但 Hypershade 里看不到"的 bug。
+禁止使用 `cmds.createNode()` — 它不会注册到 Hypershade，会导致"转换成功但 Hypershade 里看不到"的 bug。
 
 ### JSON node_type 必须与 Maya 精确一致
 Maya 节点类型名区分大小写。添加前必须验证：
 ```python
-n = pm.createNode("RedshiftOpenPBRMaterial")  # 测试确切的类型名
+n = cmds.createNode("RedshiftOpenPBRMaterial")  # 测试确切的类型名（验证后删除）
 ```
 如果 Maya 警告 "Unrecognized node type"，说明 JSON 中的 key 写错了。
 
@@ -108,17 +108,18 @@ renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为
 1. 直接在 `C:\opencode\materialConvert\` 下编辑代码
 2. 在 Maya Script Editor 中重新 `exec()` 加载
 3. 如果模块缓存问题持续存在，关闭窗口后重新运行
-4. 无测试框架 — 在 Hypershade 中手动验证，或编写诊断脚本
+4. 无测试框架 — 在 Hypershade 中手动验证；也可复用 `C:\Users\morgan\AppData\Local\Temp\opencode\` 下的 `builder_verify.py` / `converter_verify.py` 验证脚本（需要 Maya commandPort 7001）
 
 ## 常见陷阱
 
 | 症状 | 根因 |
 |---|---|
 | 转换没有任何反应 | JSON 的 `node_type` 与 Maya 实际节点类型名不匹配 |
-| 新节点在 Hypershade 中不可见 | 使用了 `pm.createNode` 而非 `cmds.shadingNode` |
+| 新节点在 Hypershade 中不可见 | 使用了 `cmds.createNode` 而非 `cmds.shadingNode` |
 | CC 节点检测不到 | CC 前面有中间节点 — 使用 `listHistory` 搜索，而非直连检查 |
 | 凹凸和法线混淆 | 共享类型节点（`bump2d` / `RedshiftBumpMap`）需要检查 `inputType`/`bumpInterp` |
 | V-Ray 凹凸类型属性设置失败 | 属性名是 `bumpMapType`，不是 `bumpType` |
 | `outAlpha` → `input` 连接失败 | 类型不兼容：float → color。使用 `smart_connect` 回退到 `outColor` |
 | float3 值设置到 float 属性报错 | 源属性为颜色（float3）但目标为标量（float）— 已自动回退取第一个通道 |
+| float 值设置到 float3 属性报错 | 目标属性为颜色（float3）但源为标量（float）— 已自动广播为 (v,v,v) |
 | 材质转换后消失 | ShadingEngine 未重新绑定。检查 SG 替换逻辑 |
