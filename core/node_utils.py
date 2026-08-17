@@ -1,4 +1,3 @@
-import pymel.core as pm
 import maya.cmds as cmds
 
 RENDERER_SHORT = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
@@ -7,35 +6,37 @@ RENDERER_SHORT = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
 def get_materials_from_selection():
     materials = []
     seen = set()
-    selection = pm.ls(sl=True)
+    selection = cmds.ls(sl=True) or []
 
     for node in selection:
-        if node.hasAttr("outColor") and node.name() not in seen:
-            seen.add(node.name())
-            materials.append(node)
+        try:
+            if cmds.attributeQuery("outColor", node=node, exists=True) and node not in seen:
+                seen.add(node)
+                materials.append(node)
+        except Exception:
+            pass
 
     if not materials:
-        shapes = pm.ls(sl=True, dag=True, shapes=True, noIntermediate=True)
+        shapes = cmds.ls(sl=True, dag=True, shapes=True, noIntermediate=True) or []
         for shape in shapes:
-            sgs = pm.listConnections(shape, type="shadingEngine")
+            sgs = cmds.listConnections(shape, type="shadingEngine") or []
             if not sgs:
                 continue
             for sg in sgs:
-                mats = sg.surfaceShader.inputs()
-                if mats:
-                    for mat_node in mats:
-                        if mat_node.name() not in seen:
-                            seen.add(mat_node.name())
-                            materials.append(mat_node)
+                mats = cmds.listConnections(f"{sg}.surfaceShader", source=True, destination=False) or []
+                for mat_node in mats:
+                    if mat_node not in seen:
+                        seen.add(mat_node)
+                        materials.append(mat_node)
 
     if not materials:
-        pm.warning("No materials found on selection.")
+        cmds.warning("No materials found on selection.")
 
     return materials
 
 
 def identify_node_type(material):
-    return pm.nodeType(material)
+    return cmds.nodeType(material)
 
 
 def collect_attribute_info(material, attr_names):
@@ -43,22 +44,20 @@ def collect_attribute_info(material, attr_names):
     for attr_name in attr_names:
         value = None
         connection = None
-        plug = None
+        plug = f"{material}.{attr_name}"
 
-        try:
-            plug = material.attr(attr_name)
-        except Exception:
+        if not cmds.objExists(plug):
             info[attr_name] = {"value": None, "connection": None, "plug": None}
             continue
 
-        connections = plug.connections(plugs=True, source=True)
+        connections = cmds.listConnections(plug, plugs=True, source=True) or []
         if connections:
             src_plug = connections[0]
-            src_node = src_plug.node()
+            src_node = src_plug.split(".")[0]
             connection = {"node": src_node, "plug": src_plug}
         else:
             try:
-                value = plug.get()
+                value = cmds.getAttr(plug)
             except Exception:
                 value = None
 
@@ -68,7 +67,7 @@ def collect_attribute_info(material, attr_names):
 
 
 def is_cc_node(node):
-    node_type = pm.nodeType(node)
+    node_type = cmds.nodeType(node)
     cc_types = {"colorCorrect", "aiColorCorrect", "RedshiftColorCorrection", "VRayColorCorrection"}
     return node_type in cc_types
 
@@ -91,7 +90,7 @@ def collect_cc_chain_params(cc_node, cc_config):
                                     ("saturation", cc_config.saturation)]:
         if attr_name:
             try:
-                val = cc_node.attr(attr_name).get()
+                val = cmds.getAttr(f"{cc_node}.{attr_name}")
                 if common_name == "hue" and val is not None and cc_config.hue_range:
                     val = _normalize_hue(val, cc_config.hue_range)
                 params[common_name] = val
@@ -101,7 +100,7 @@ def collect_cc_chain_params(cc_node, cc_config):
     input_plug = None
     if cc_config.source_connection:
         try:
-            conns = cc_node.attr(cc_config.source_connection).connections(plugs=True, source=True)
+            conns = cmds.listConnections(f"{cc_node}.{cc_config.source_connection}", plugs=True, source=True) or []
             if conns:
                 input_plug = conns[0]
         except Exception:
@@ -114,8 +113,7 @@ def create_cc_node(cc_config, base_name=None):
     kwargs = {"asUtility": True}
     if base_name:
         kwargs["name"] = base_name
-    node_name = cmds.shadingNode(cc_config.node_type, **kwargs)
-    return pm.PyNode(node_name)
+    return cmds.shadingNode(cc_config.node_type, **kwargs)
 
 
 def set_cc_params(cc_node, params, cc_config):
@@ -135,30 +133,36 @@ def set_cc_params(cc_node, params, cc_config):
             try:
                 if common_name == "hue" and cc_config.hue_range:
                     val = _denormalize_hue(val, cc_config.hue_range)
-                cc_node.attr(target_attr).set(val)
+                cmds.setAttr(f"{cc_node}.{target_attr}", val)
             except Exception:
-                pm.warning(f"set_cc_params: failed to set {target_attr} on {cc_node.name()}")
+                cmds.warning(f"set_cc_params: failed to set {target_attr} on {cc_node}")
 
 
 def create_target_material(node_type, base_name):
-    node_name = cmds.shadingNode(node_type, asShader=True, name=base_name)
-    return pm.PyNode(node_name)
+    return cmds.shadingNode(node_type, asShader=True, name=base_name)
 
 
 def smart_connect(src_plug, dst_plug):
+    if not src_plug or not dst_plug:
+        return False
     try:
-        src_plug >> dst_plug
-        return True
-    except Exception:
-        pass
-    src_node = src_plug.node()
-    try:
-        src_node.outColor >> dst_plug
-        return True
+        if cmds.isConnected(src_plug, dst_plug):
+            return True
     except Exception:
         pass
     try:
-        src_node.outAlpha >> dst_plug
+        cmds.connectAttr(src_plug, dst_plug, force=True)
+        return True
+    except Exception:
+        pass
+    src_node = src_plug.split(".")[0]
+    try:
+        cmds.connectAttr(f"{src_node}.outColor", dst_plug, force=True)
+        return True
+    except Exception:
+        pass
+    try:
+        cmds.connectAttr(f"{src_node}.outAlpha", dst_plug, force=True)
         return True
     except Exception:
         pass
@@ -169,13 +173,13 @@ def transfer_connection_to_plug(src_plug, dst_plug):
     if src_plug is None or dst_plug is None:
         return False
     try:
-        connections = src_plug.connections(plugs=True, source=True)
+        connections = cmds.listConnections(src_plug, plugs=True, source=True) or []
         if connections:
             for conn in connections:
-                conn // dst_plug
+                cmds.disconnectAttr(conn, dst_plug)
             return True
     except Exception:
-        pm.warning(f"transfer_connection_to_plug: failed to transfer connection to {dst_plug}")
+        cmds.warning(f"transfer_connection_to_plug: failed to transfer connection to {dst_plug}")
     return False
 
 
@@ -183,10 +187,10 @@ def connect_plug_to_plug(src_plug, dst_plug):
     if src_plug is None or dst_plug is None:
         return False
     try:
-        src_plug >> dst_plug
+        cmds.connectAttr(src_plug, dst_plug, force=True)
         return True
     except Exception:
-        pm.warning(f"connect_plug_to_plug: failed to connect {src_plug} to {dst_plug}")
+        cmds.warning(f"connect_plug_to_plug: failed to connect {src_plug} to {dst_plug}")
         return False
 
 
@@ -194,14 +198,14 @@ def delete_node_safe(node):
     if node is None:
         return
     try:
-        pm.delete(node)
+        cmds.delete(node)
     except Exception:
-        pm.warning(f"delete_node_safe: failed to delete {node}")
+        cmds.warning(f"delete_node_safe: failed to delete {node}")
 
 
 def get_connected_node(plug):
     try:
-        conns = plug.connections(plugs=True, source=True)
+        conns = cmds.listConnections(plug, plugs=True, source=True) or []
         if conns:
             return conns[0]
     except Exception:
@@ -211,7 +215,7 @@ def get_connected_node(plug):
 
 def get_shading_engine(material):
     try:
-        sgs = material.outColor.connections(type="shadingEngine")
+        sgs = cmds.listConnections(f"{material}.outColor", type="shadingEngine") or []
         if sgs:
             return sgs[0]
     except Exception:
@@ -221,7 +225,7 @@ def get_shading_engine(material):
 
 def get_displacement_node_from_sg(shading_engine):
     try:
-        conns = shading_engine.displacementShader.connections(plugs=False, source=True)
+        conns = cmds.listConnections(f"{shading_engine}.displacementShader", source=True, destination=False) or []
         if conns:
             return conns[0]
     except Exception:

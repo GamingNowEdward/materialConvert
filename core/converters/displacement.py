@@ -1,4 +1,3 @@
-import pymel.core as pm
 import maya.cmds as cmds
 
 from core.node_utils import RENDERER_SHORT
@@ -33,42 +32,41 @@ class DisplacementConverter:
         renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
 
         if is_real_type:
-            base_name = source_mat.name() + "_" + renderer_short + "Disp"
-            node_name = cmds.shadingNode(target_config.displacement_node_type, asUtility=True, name=base_name)
-            disp_node = pm.PyNode(node_name)
+            base_name = source_mat + "_" + renderer_short + "Disp"
+            disp_node = cmds.shadingNode(target_config.displacement_node_type, asUtility=True, name=base_name)
 
             if texture_plug and target_config.displacement_texture:
-                self.utils.smart_connect(texture_plug, disp_node.attr(target_config.displacement_texture))
+                self.utils.smart_connect(texture_plug, f"{disp_node}.{target_config.displacement_texture}")
 
             if target_config.displacement_scale and scale_val is not None:
                 try:
-                    disp_node.attr(target_config.displacement_scale).set(scale_val)
+                    cmds.setAttr(f"{disp_node}.{target_config.displacement_scale}", scale_val)
                 except Exception:
-                    pm.warning(f"DisplacementConverter: failed to set scale on {disp_node.name()}")
+                    cmds.warning(f"DisplacementConverter: failed to set scale on {disp_node}")
 
             try:
                 for out_attr in ["outDisplacement", "out", "outColor"]:
-                    if pm.objExists(f"{disp_node.name()}.{out_attr}"):
-                        disp_node.attr(out_attr) >> sg.displacementShader
+                    if cmds.objExists(f"{disp_node}.{out_attr}"):
+                        cmds.connectAttr(f"{disp_node}.{out_attr}", f"{sg}.displacementShader", force=True)
                         break
             except Exception:
-                pm.warning(f"DisplacementConverter: failed to connect {disp_node.name()} to SG")
+                cmds.warning(f"DisplacementConverter: failed to connect {disp_node} to SG")
 
             log.append(f"  Displacement: converted to {target_config.displacement_node_type}")
         else:
-            base_name = source_mat.name() + "_" + renderer_short + "Disp"
-            disp_node = pm.PyNode(cmds.shadingNode("displacementShader", asUtility=True, name=base_name))
+            base_name = source_mat + "_" + renderer_short + "Disp"
+            disp_node = cmds.shadingNode("displacementShader", asUtility=True, name=base_name)
 
             if texture_plug:
-                self.utils.smart_connect(texture_plug, disp_node.displacement)
+                self.utils.smart_connect(texture_plug, f"{disp_node}.displacement")
 
             if scale_val is not None:
                 try:
-                    disp_node.scale.set(scale_val)
+                    cmds.setAttr(f"{disp_node}.scale", scale_val)
                 except Exception:
-                    pm.warning(f"DisplacementConverter: failed to set scale on {disp_node.name()}")
+                    cmds.warning(f"DisplacementConverter: failed to set scale on {disp_node}")
 
-            disp_node.displacement >> sg.displacementShader
+            cmds.connectAttr(f"{disp_node}.displacement", f"{sg}.displacementShader", force=True)
             log.append("  Displacement: converted to displacementShader")
 
     def _collect(self, source_mat, sg, source_config):
@@ -85,14 +83,14 @@ class DisplacementConverter:
         scale_val = 1.0
 
         try:
-            conns = source_mat.attr(disp_texture).connections(plugs=True, source=True)
+            conns = cmds.listConnections(f"{source_mat}.{disp_texture}", plugs=True, source=True) or []
             if conns:
                 texture_plug = conns[0]
         except Exception:
             pass
 
         try:
-            scale_val = source_mat.attr(disp_scale).get()
+            scale_val = cmds.getAttr(f"{source_mat}.{disp_scale}")
         except Exception:
             pass
 
@@ -111,7 +109,8 @@ class DisplacementConverter:
 
         if source_config.displacement_texture:
             try:
-                conns = disp_node.attr(source_config.displacement_texture).connections(plugs=True, source=True)
+                conns = cmds.listConnections(f"{disp_node}.{source_config.displacement_texture}",
+                                             plugs=True, source=True) or []
                 if conns:
                     texture_plug = conns[0]
             except Exception:
@@ -119,7 +118,7 @@ class DisplacementConverter:
 
         if source_config.displacement_scale:
             try:
-                scale_val = disp_node.attr(source_config.displacement_scale).get()
+                scale_val = cmds.getAttr(f"{disp_node}.{source_config.displacement_scale}")
             except Exception:
                 pass
 
