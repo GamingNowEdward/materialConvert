@@ -122,4 +122,6 @@ renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为
 | `outAlpha` → `input` 连接失败 | 类型不兼容：float → color。使用 `smart_connect` 回退到 `outColor` |
 | float3 值设置到 float 属性报错 | 源属性为颜色（float3）但目标为标量（float）— 已自动回退取第一个通道 |
 | float 值设置到 float3 属性报错 | 目标属性为颜色（float3）但源为标量（float）— 已自动广播为 (v,v,v) |
+| 转换后源材质链中出现目标渲染器 CC 节点 | 共享中间节点被新 CC 接管 — 已自动把源材质属性改接回原 CC，源链保持完整 |
+| Redshift hue=0 转 Arnold 得到 -1 | 各渲染器 hue 中性点语义不同 — 已按 `hue_center` 偏移角换算（Arnold `hueShift=0`） |
 | 材质转换后消失 | ShadingEngine 未重新绑定。检查 SG 替换逻辑 |

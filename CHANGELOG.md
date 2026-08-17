@@ -15,6 +15,10 @@
 
 ### Bug Fixes
 - `core/converters/attribute.py`: float value → `float3` target attribute now broadcasts to `(v, v, v)` (e.g., Arnold `opacity`, V-Ray `opacityMap`, Redshift `ms_radius`)
+- `core/node_utils.py`: unwrap `cmds.getAttr()` nested list format `[(1,1,1)] → (1,1,1)`, restoring color value transfer and black-color auto-zeroing (pymel migration regression)
+- `config/material/VRayMtl.json`: fix `coatIor` → `coatIOR` (attribute name case error, coat IOR was never transferred)
+- `core/converters/cc.py`: preserve source material CC chain during cross-renderer conversion — when the intermediate node (layeredTexture) is shared, the source attribute is reconnected to the original CC instead of being polluted with the target-renderer CC
+- Hue mapping: `config/colorCorrection.json` adds `hue_center` per renderer; `core/node_utils.py` converts hue to a universal offset angle [-180, 180] (`0` = no change) — fixes Redshift `hue=0` mapping to Arnold `hueShift=-1` instead of `0`
 
 ### Documentation
 - `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`: remove removed panels, update Builder config source, pymel → cmds, project structure

@@ -178,15 +178,27 @@ Source CC node → [Source config] → Universal format {gamma, contrast, gain, 
 | **Redshift** | `RedshiftColorCorrection` | `input` | `outColor` | `hue` | [0, 360] |
 | **V-Ray** | `VRayColorCorrection` | `texture_map` | `outColor` | `hue_shift` | [-180, 180] |
 
-### 3.3 Hue Range Normalization
+### 3.3 Hue Normalization
 
-All hue values are normalized to **0-360** as the universal format:
+All hue values are converted to a **universal offset angle [-180, 180]** (`0` = no change), based on each renderer's neutral point (`hue_center` in `config/colorCorrection.json`):
 
-| Source Range | → Universal (0-360) | Universal → Target Range |
-|---|---|---|
-| Arnold [-1, 1] | `(v + 1) / 2 * 360` | → Arnold: `-1 + v/360 * 2` |
-| V-Ray [-180, 180] | `(v + 180) / 360 * 360` | → V-Ray: `-180 + v/360 * 360` |
-| Maya/Redshift [0, 360] | Pass-through | Pass-through |
+| Renderer | Attribute | Range | Neutral (no change) | → Universal offset |
+|---|---|---|---|---|
+| **Maya** | `colorCorrect.hueShift` | [0, 360] | 180 | `v - 180` |
+| **Arnold** | `aiColorCorrect.hueShift` | [-1, 1] | 0 (offset type) | `v * 180` |
+| **Redshift** | `ColorCorrection.hue` | [0, 360] | 0 | `v` (wrapped to [-180, 180]) |
+| **V-Ray** | `hue_shift` | [-180, 180] | 0 (offset type) | `v` |
+
+Universal offset → target value:
+
+| Target | Conversion |
+|---|---|
+| Maya | `(offset + 180) % 360` |
+| Arnold | `offset / 180` |
+| Redshift | `offset % 360` |
+| V-Ray | `offset` |
+
+Examples: Redshift `hue=0` (no change) → Arnold `hueShift=0`; Redshift `hue=90` → Arnold `hueShift=0.5`; Redshift `hue=270` → Arnold `hueShift=-0.5`.
 
 ### 3.4 CC Upstream Detection
 
@@ -211,6 +223,13 @@ New CC is inserted at the same position:
 
 ```
 file → newCC → layeredTexture → material
+```
+
+When the intermediate node is **shared with the source material** (source attribute still connected to `layeredTexture.outColor`), the source attribute is reconnected back to the original CC output before the new CC takes over the intermediate node input — the **source material chain is never polluted** with target-renderer nodes:
+
+```
+file → originalCC → source material      (source chain preserved)
+file → newCC → layeredTexture → target material
 ```
 
 Without intermediate nodes (CC directly connected to material), new CC connects directly to target material attribute.

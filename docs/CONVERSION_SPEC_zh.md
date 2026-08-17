@@ -178,15 +178,27 @@
 | **Redshift** | `RedshiftColorCorrection` | `input` | `outColor` | `hue` | [0, 360] |
 | **V-Ray** | `VRayColorCorrection` | `texture_map` | `outColor` | `hue_shift` | [-180, 180] |
 
-### 3.3 Hue 范围归一化
+### 3.3 Hue 归一化
 
-所有 hue 值统一归一化到 **0-360** 作为通用格式：
+所有 hue 值统一转换为**通用偏移角 [-180, 180]**(`0` = 无变化),基于各渲染器的中性点(`config/colorCorrection.json` 中的 `hue_center`)：
 
-| 源范围 | → 通用 (0-360) | 通用 → 目标范围 |
-|---|---|---|
-| Arnold [-1, 1] | `(v + 1) / 2 * 360` | → Arnold: `-1 + v/360 * 2` |
-| V-Ray [-180, 180] | `(v + 180) / 360 * 360` | → V-Ray: `-180 + v/360 * 360` |
-| Maya/Redshift [0, 360] | 直通 | 直通 |
+| 渲染器 | 属性 | 范围 | 中性点（无变化） | → 通用偏移角 |
+|---|---|---|---|---|
+| **Maya** | `colorCorrect.hueShift` | [0, 360] | 180 | `v - 180` |
+| **Arnold** | `aiColorCorrect.hueShift` | [-1, 1] | 0（偏移型） | `v * 180` |
+| **Redshift** | `ColorCorrection.hue` | [0, 360] | 0 | `v`（折回 [-180, 180]） |
+| **V-Ray** | `hue_shift` | [-180, 180] | 0（偏移型） | `v` |
+
+通用偏移角 → 目标值：
+
+| 目标 | 换算 |
+|---|---|
+| Maya | `(offset + 180) % 360` |
+| Arnold | `offset / 180` |
+| Redshift | `offset % 360` |
+| V-Ray | `offset` |
+
+示例：Redshift `hue=0`（无变化）→ Arnold `hueShift=0`；Redshift `hue=90` → Arnold `hueShift=0.5`；Redshift `hue=270` → Arnold `hueShift=-0.5`。
 
 ### 3.4 CC 上游检测
 
@@ -211,6 +223,13 @@ file → CC → layeredTexture → 材质
 
 ```
 file → 新CC → layeredTexture → 材质
+```
+
+当中间节点**与源材质共享**（源材质属性仍连接 `layeredTexture.outColor`）时，新 CC 接管中间节点输入之前，先把源材质属性改接回原 CC 输出——**源材质链永不被目标渲染器节点污染**：
+
+```
+file → 原CC → 源材质        （源链保持完整）
+file → 新CC → layeredTexture → 目标材质
 ```
 
 无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性。
