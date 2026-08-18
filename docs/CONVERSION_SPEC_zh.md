@@ -403,6 +403,16 @@ Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
 
 匹配到类型后，从该类型的 `aliases` 列表中依次尝试，选择当前 OCIO 配置中实际可用的色彩空间名称进行设置。
 
+### 10.2 歧义匹配处理
+
+当文件名匹配与通道匹配**都命中但返回角色不同**时，该 file 节点被判定为**歧义**并**跳过自动设置**（色彩空间保持不变）：
+
+- 节点保留在选中集（`cmds.select(..., add=True)`），方便手动复核
+- Script Editor 打印冲突详情，例如：
+  `[歧义] C:\tex\my_metalness_color.png (fileNode): filename→srgb vs channel→raw, 已跳过, 请手动处理`
+- 典型场景：文件名含 `color` 字样（如 `my_metalness_color.png`）经子串匹配命中 `srgb`，而连接通道（`metalness`）解析为 `raw`
+- 无歧义的节点仍按正常优先级（文件名 → 通道 → 默认）自动匹配
+
 ---
 
 ## 十一、项目结构

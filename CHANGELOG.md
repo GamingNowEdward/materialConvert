@@ -14,6 +14,7 @@
 ### Changed
 - Tab order in main window: Converter → Material Builder → Batch Builder → Node Tools
 - Replaced the isolated "Unparsed Files" panel with an in-table `UNPARSED` status and a `Materials to Build` preview list
+- Auto Match Selected (`ui/tabs/node_tools_tab.py`): when filename match and channel match both succeed but return different roles, the file node is treated as ambiguous — skipped (color space unchanged), kept selected, and the conflict is printed to Script Editor for manual review
 
 ## 2026-08-17
 

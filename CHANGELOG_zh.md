@@ -14,6 +14,7 @@
 ### 变更
 - 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
 - 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
+- Auto Match Selected（`ui/tabs/node_tools_tab.py`）：当文件名匹配与通道匹配均命中但返回角色不同时，该 file 节点判定为歧义——跳过自动设置（色彩空间不变）、保留选中，并在 Script Editor 打印冲突详情供手动复核
 
 ## 2026-08-17
 

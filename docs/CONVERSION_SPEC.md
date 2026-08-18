@@ -403,6 +403,16 @@ Matching priority (high to low):
 
 After matching a type, iterates through the `aliases` list and sets the first color space name available in the current OCIO configuration.
 
+### 10.2 Ambiguous Match Handling
+
+When both filename match and channel match succeed **but return different roles**, the file node is treated as **ambiguous** and is **skipped** (color space left unchanged):
+
+- The node is kept in the selection (`cmds.select(..., add=True)`) so it can be reviewed manually
+- Script Editor prints the conflict, e.g.:
+  `[歧义] C:\tex\my_metalness_color.png (fileNode): filename→srgb vs channel→raw, 已跳过, 请手动处理`
+- Typical case: filenames containing `color` (e.g. `my_metalness_color.png`) match `srgb` by substring while the connected channel (`metalness`) resolves to `raw`
+- Unambiguous nodes are still auto-matched normally (filename → channel → default)
+
 ---
 
 ## 11. Project Structure
