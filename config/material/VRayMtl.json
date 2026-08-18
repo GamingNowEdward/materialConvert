@@ -8,6 +8,11 @@
         "attribute": "useRoughness",
         "value": 1
       }
+        ,
+        "reflection_color": {
+          "attribute": "reflectionColor",
+          "value": [1, 1, 1]
+        }
     },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",

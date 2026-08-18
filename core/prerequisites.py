@@ -18,7 +18,10 @@ def _apply_single_prereq(material, prereq_info):
         prereq_value = prereq_info.get("value", None)
         if prereq_attr and prereq_value is not None:
             try:
-                cmds.setAttr(f"{material}.{prereq_attr}", prereq_value)
+                if isinstance(prereq_value, (list, tuple)) and len(prereq_value):
+                    cmds.setAttr(f"{material}.{prereq_attr}", *prereq_value)
+                else:
+                    cmds.setAttr(f"{material}.{prereq_attr}", prereq_value)
             except Exception:
                 cmds.warning(f"prerequisites: failed to set {prereq_attr}={prereq_value} on {material}")
 
