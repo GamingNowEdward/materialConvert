@@ -22,17 +22,6 @@
                 "sRGB Encoded Rec.709 (sRGB)"
             ],
 
-            "filenameKeywords": [
-                "basecolor",
-                "base_color",
-                "albedo",
-                "diffuse",
-                "color",
-                "emission",
-                "sss",
-                "subsurface"
-            ],
-
             "attributeKeywords": [
                 "baseColor",
                 "diffuseColor",
@@ -52,21 +41,6 @@
                 "Raw",
                 "Non-Color",
                 "Data"
-            ],
-
-            "filenameKeywords": [
-                "roughness",
-                "rough",
-                "metallic",
-                "metal",
-                "normal",
-                "nrm",
-                "bump",
-                "displacement",
-                "disp",
-                "opacity",
-                "ao",
-                "ambient"
             ],
 
             "attributeKeywords": [

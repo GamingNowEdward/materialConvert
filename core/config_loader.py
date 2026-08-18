@@ -127,6 +127,7 @@ class ConfigLoader:
         self._builder_naming = {}
         self._color_weight_pairs = []
         self._color_space_config = {}
+        self._texture_channels = {}
         self._load_all()
 
     def _load_all(self):
@@ -136,6 +137,7 @@ class ConfigLoader:
         self._load_color_correction()
         self._load_builder_naming()
         self._load_color_space()
+        self._load_texture_channels()
 
     def _load_common(self):
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
@@ -283,6 +285,27 @@ class ConfigLoader:
         if not os.path.exists(path):
             return
         self._color_space_config = self._read_json(path)
+
+    def _load_texture_channels(self):
+        path = os.path.join(self._CONFIG_DIR, "texture_channels.json")
+        if not os.path.exists(path):
+            return
+        self._texture_channels = self._read_json(path)
+
+    def get_filename_role_keywords(self):
+        """从 texture_channels.json 构建 文件名关键词 → 颜色空间角色 的映射。
+
+        通道 type 为 "color" 归入 srgb,其余(float/normal/bump/displacement)归入 raw。
+        短别名(长度 < 5)会被过滤,避免子串误判(如 "col" 命中 "school")。
+        """
+        roles = {"srgb": [], "raw": []}
+        for channel_data in self._texture_channels.get("channels", {}).values():
+            role = "srgb" if channel_data.get("type") == "color" else "raw"
+            for alias in channel_data.get("aliases", []):
+                kw = normalize_keyword(alias)
+                if len(kw) >= 5 and kw not in roles[role]:
+                    roles[role].append(kw)
+        return roles
 
     def get_color_space_config(self):
         return dict(self._color_space_config)

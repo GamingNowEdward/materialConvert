@@ -11,6 +11,7 @@ class NodeToolsTab:
         self.config = ConfigLoader()
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
+        self._filename_role_keywords = self.config.get_filename_role_keywords()
         self._norm_attr_keywords = {
             role: [normalize_keyword(k) for k in cs_data.get("attributeKeywords", [])]
             for role, cs_data in self.cs_config.get("colorSpaces", {}).items()
@@ -248,9 +249,9 @@ class NodeToolsTab:
         path = cmds.getAttr(f"{file_node}.fileTextureName")
         if not path:
             return None
-        filename = os.path.basename(path).lower()
-        for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
-            for kw in cs_data.get("filenameKeywords", []):
+        filename = os.path.basename(path).lower().replace("_", "").replace("-", "")
+        for role, keywords in self._filename_role_keywords.items():
+            for kw in keywords:
                 if kw in filename:
                     return role
         return None
