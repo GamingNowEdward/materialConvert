@@ -12,10 +12,6 @@ class NodeToolsTab:
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
         self._filename_role_keywords = self.config.get_filename_role_keywords()
-        self._norm_attr_keywords = {
-            role: [normalize_keyword(k) for k in cs_data.get("attributeKeywords", [])]
-            for role, cs_data in self.cs_config.get("colorSpaces", {}).items()
-        }
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -301,9 +297,6 @@ class NodeToolsTab:
         for attr_name in self._trace_channel_targets(file_node):
             n_attr = normalize_keyword(attr_name)
             for role, keywords in self.expanded_keywords.items():
-                if n_attr in keywords:
-                    return role
-            for role, keywords in self._norm_attr_keywords.items():
                 if n_attr in keywords:
                     return role
         return None

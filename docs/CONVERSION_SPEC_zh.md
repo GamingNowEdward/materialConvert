@@ -392,11 +392,11 @@ Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
 
 匹配优先级（从高到低）：
 
-1. **文件名匹配**（最高优先）：检查文件名是否包含 `filenameKeywords` 中的关键词（不区分大小写）
+1. **文件名匹配**（最高优先）：检查文件名是否包含 `config/texture_channels.json` 中的关键词（不区分大小写；匹配前移除 `_`/`-`）——关键词按通道 `type` 分组：`color` 通道归入 `srgb`，其余（float/normal/bump/displacement）归入 `raw`；短别名（< 5 字符）会被过滤，避免子串误判
    - 例如：`wood_basecolor.jpg` 包含 `basecolor` → 匹配 `srgb` 类型
 2. **通道匹配**（次选）：BFS 追踪 file 节点的**全部下游连接**——包括单通道插头（`outColorR/G/B`）、`outAlpha` 输出，并穿越中间节点（colorCorrect、layeredTexture、multiplyDivide、bump/法线）——对链末端命中的材质属性名与属性关键字匹配
    - 属性名**规范化后**比较（小写、去除 `_`/`-`）：`baseColor`、`base_color`、`basecolor` 视为同一
-   - 关键字池来自 `commonAttributeRoles`，并经 `config/material/*.json` 动态扩展出各渲染器实际属性名（`get_expanded_attribute_keywords()`），另有静态 `attributeKeywords` 兜底
+   - 关键字池唯一来源为 `commonAttributeRoles`，并经 `config/material/*.json` 动态扩展出各渲染器实际属性名（`get_expanded_attribute_keywords()`）；`commonAttributeRoles` 的键对齐 `config/material/common.json` 规范名（如 `metallic`、`normal_bump`、`transmissionColor`、`displacementTexture`），确保各渲染器专属属性全部被覆盖
    - 追踪时跳过 Maya 默认渲染列表容器（`defaultTextureList` 等）
    - 例如：file → `multiplyDivide` → `mat.metalness` 匹配 `raw`；file → `colorCorrect` → `layeredTexture` → `mat.baseColor` 匹配 `srgb`
 3. **默认类型**（最低优先）：无匹配时使用 `config/colorSpace.json` 中 `default` 指定的类型（当前为 `raw`）

@@ -392,11 +392,11 @@ Fourth tab providing batch node operations:
 
 Matching priority (high to low):
 
-1. **Filename match** (highest): Checks if filename contains keywords in `filenameKeywords` (case-insensitive)
+1. **Filename match** (highest): Checks if filename contains keywords from `config/texture_channels.json` (case-insensitive; `_`/`-` stripped before matching) — keywords are grouped by channel `type`: `color` channels → `srgb`, others (float/normal/bump/displacement) → `raw`; short aliases (< 5 chars) are filtered out to avoid substring false-positives
    - Example: `wood_basecolor.jpg` contains `basecolor` → matches `srgb` type
 2. **Channel match** (secondary): BFS-traces **all** downstream connections of the file node — including single-channel plugs (`outColorR/G/B`), `outAlpha`, and traversal through intermediate nodes (colorCorrect, layeredTexture, multiplyDivide, bump/normal) — and checks the material attribute names reached at chain ends against the attribute keywords
    - Attribute names are **normalized** before matching (lowercase, `_`/`-` removed): `baseColor`, `base_color`, `basecolor` are equivalent
-   - Keyword pool comes from `commonAttributeRoles` dynamically expanded with every renderer's actual attribute names from `config/material/*.json` (via `get_expanded_attribute_keywords()`), plus static `attributeKeywords` as fallback
+   - Keyword pool comes from `commonAttributeRoles` (single source) dynamically expanded with every renderer's actual attribute names from `config/material/*.json` (via `get_expanded_attribute_keywords()`); `commonAttributeRoles` keys align with `config/material/common.json` canonical names (e.g. `metallic`, `normal_bump`, `transmissionColor`, `displacementTexture`) so all renderer-specific attributes are covered automatically
    - Maya default render-list containers (`defaultTextureList` etc.) are skipped during tracing
    - Example: file → `multiplyDivide` → `mat.metalness` matches `raw`; file → `colorCorrect` → `layeredTexture` → `mat.baseColor` matches `srgb`
 3. **Default type** (lowest): When no match, uses the type specified by `default` in `config/colorSpace.json` (currently `raw`)

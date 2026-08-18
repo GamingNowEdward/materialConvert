@@ -15,6 +15,8 @@
 - 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
 - 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
 - Auto Match Selected（`ui/tabs/node_tools_tab.py`）：当文件名匹配与通道匹配均命中但返回角色不同时，该 file 节点判定为歧义——跳过自动设置（色彩空间不变）、保留选中，并在 Script Editor 打印冲突详情供手动复核
+- 文件名色彩空间关键词改为以 `config/texture_channels.json` 为**唯一来源**（按通道 `type` 分组：color → srgb、其余 → raw；过滤 < 5 字符短别名）；删除 `config/colorSpace.json` 中的 `filenameKeywords`
+- 通道匹配关键词统一：`config/colorSpace.json` 的 `commonAttributeRoles` 成为唯一来源，键对齐 `common.json` 规范名（`metallic`、`normal_bump`、`transmissionColor`、`displacementTexture`）；删除 `colorSpaces.{role}.attributeKeywords` 与 `node_tools_tab.py` 的 `_norm_attr_keywords` 兜底——修复此前从未被匹配的渲染器专属属性（`bump_input`、`baseMetalness`、`texMap`、`refr_color` 等），透射链现正确归类为 `srgb`
 
 ## 2026-08-17
 

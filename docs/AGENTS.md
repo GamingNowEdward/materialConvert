@@ -50,7 +50,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
 - Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（把扫描结果转成 `MaterialBuilder` 可用的短 key）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `builder_key` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）；文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
-- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords} + commonAttributeRoles 动态扩展；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名）
+- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：

@@ -15,6 +15,8 @@
 - Tab order in main window: Converter → Material Builder → Batch Builder → Node Tools
 - Replaced the isolated "Unparsed Files" panel with an in-table `UNPARSED` status and a `Materials to Build` preview list
 - Auto Match Selected (`ui/tabs/node_tools_tab.py`): when filename match and channel match both succeed but return different roles, the file node is treated as ambiguous — skipped (color space unchanged), kept selected, and the conflict is printed to Script Editor for manual review
+- Filename color-space keywords now come from `config/texture_channels.json` as the **single source** (grouped by channel `type`: color → srgb, others → raw; aliases < 5 chars filtered); `filenameKeywords` removed from `config/colorSpace.json`
+- Channel-match keywords unified: `commonAttributeRoles` in `config/colorSpace.json` is now the single source, aligned with `common.json` canonical names (`metallic`, `normal_bump`, `transmissionColor`, `displacementTexture`); removed `colorSpaces.{role}.attributeKeywords` and the `_norm_attr_keywords` fallback in `node_tools_tab.py` — fixes renderer-specific attributes that were never matched (`bump_input`, `baseMetalness`, `texMap`, `refr_color` etc.), transmission chains now correctly resolve to `srgb`
 
 ## 2026-08-17
 
