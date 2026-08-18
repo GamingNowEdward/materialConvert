@@ -121,11 +121,15 @@ materialConvert/
 │       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── docs/                            # 文档
+│   ├── AGENTS.md                    # AI Agent 开发指南
 │   ├── CONVERSION_SPEC.md           # 转换规格说明（英文）
 │   ├── CONVERSION_SPEC_zh.md        # 转换规格说明（中文）
 │   └── README_zh.md                 # 本文件
 ├── main.py                          # 入口脚本
-└── CHANGELOG.md                     # 变更日志
+├── copy_launch.bat                  # 双击复制启动命令
+├── LICENSE
+├── CHANGELOG.md                     # 变更日志
+└── CHANGELOG_zh.md                  # 中文版更新日志
 ```
 
 ## 文档

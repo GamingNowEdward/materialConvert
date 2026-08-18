@@ -101,7 +101,7 @@ n = cmds.createNode("RedshiftOpenPBRMaterial")  # 测试确切的类型名（验
 
 ### `renderer_map` 命名约定
 ```python
-renderer_map = {"arnold": "ai", "redshift": "rs"}  # 仅在需要缩写时使用
+renderer_map = {"arnold": "ai", "redshift": "rs", "vray": "vray"}  # 仅在需要缩写时使用
 renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为原名
 ```
 

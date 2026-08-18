@@ -48,8 +48,8 @@
 | **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refr_color | refractionColor |
 | **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacity_color | opacityMap |
 | **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refr_thin_walled | refrThinWalled |
-| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | - |
-| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | - |
+| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | translucencyAmount |
+| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | translucencyColor |
 | **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | ms_radius | - |
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
@@ -117,7 +117,6 @@
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
 | VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
-| VRayMtl（默认反射） | `reflectionColorAmount` | `1` |
 
 ---
 
@@ -337,7 +336,7 @@ UI 支持同时批量转换多个材质：
 
 ## 九、Material Builder
 
-在 Converter 面板的第二个标签页中集成，从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
+独立的第二个主标签页，从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
 
 ### 9.1 支持功能
 
@@ -457,6 +456,8 @@ materialConvert/
 │       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # 入口脚本
+├── copy_launch.bat                  # 双击复制启动命令
+├── LICENSE
 ├── docs/
 │   ├── AGENTS.md                    # AI Agent 开发指南
 │   ├── CONVERSION_SPEC.md           # 英文版转换规格说明

@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 2026-08-19
 
 ### 新增
 - 新增 **Batch Builder（批量构建）** 标签页（`ui/tabs/batch_builder_tab.py`）：目录扫描、按文件名解析通道、已解析/未解析合并表格（Status 可排序）、Materials to Build 待创建材质预览
@@ -17,6 +17,11 @@
 - Auto Match Selected（`ui/tabs/node_tools_tab.py`）：当文件名匹配与通道匹配均命中但返回角色不同时，该 file 节点判定为歧义——跳过自动设置（色彩空间不变）、保留选中，并在 Script Editor 打印冲突详情供手动复核
 - 文件名色彩空间关键词改为以 `config/texture_channels.json` 为**唯一来源**（按通道 `type` 分组：color → srgb、其余 → raw；过滤 < 5 字符短别名）；删除 `config/colorSpace.json` 中的 `filenameKeywords`
 - 通道匹配关键词统一：`config/colorSpace.json` 的 `commonAttributeRoles` 成为唯一来源，键对齐 `common.json` 规范名（`metallic`、`normal_bump`、`transmissionColor`、`displacementTexture`）；删除 `colorSpaces.{role}.attributeKeywords` 与 `node_tools_tab.py` 的 `_norm_attr_keywords` 兜底——修复此前从未被匹配的渲染器专属属性（`bump_input`、`baseMetalness`、`texMap`、`refr_color` 等），透射链现正确归类为 `srgb`
+
+### 文档
+- `README.md` / `README_zh.md`：项目结构补全遗漏文件（`docs/AGENTS.md`、`CHANGELOG_zh.md`、`copy_launch.bat`、`LICENSE`）
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：修正 VRayMtl subsurface 映射（`subsurfaceWeight` → `translucencyAmount`、`subsurfaceColor` → `translucencyColor`，而非 `-`）；删除不存在的 `reflectionColorAmount` 前提条件；修正 Builder 位置描述（"Converter 面板的第二个标签页" → "独立的第二个主标签页"）；项目结构补全 `copy_launch.bat` 和 `LICENSE`
+- `AGENTS.md`：`renderer_map` 示例补充 `"vray": "vray"`
 
 ## 2026-08-17
 

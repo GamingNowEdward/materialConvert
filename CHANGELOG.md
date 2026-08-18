@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-08-19
 
 ### Added
 - New **Batch Builder** tab (`ui/tabs/batch_builder_tab.py`) with directory scanning, filename-driven channel parsing, merged parsed/unparsed table (sortable Status), and `Materials to Build` preview list
@@ -17,6 +17,11 @@
 - Auto Match Selected (`ui/tabs/node_tools_tab.py`): when filename match and channel match both succeed but return different roles, the file node is treated as ambiguous — skipped (color space unchanged), kept selected, and the conflict is printed to Script Editor for manual review
 - Filename color-space keywords now come from `config/texture_channels.json` as the **single source** (grouped by channel `type`: color → srgb, others → raw; aliases < 5 chars filtered); `filenameKeywords` removed from `config/colorSpace.json`
 - Channel-match keywords unified: `commonAttributeRoles` in `config/colorSpace.json` is now the single source, aligned with `common.json` canonical names (`metallic`, `normal_bump`, `transmissionColor`, `displacementTexture`); removed `colorSpaces.{role}.attributeKeywords` and the `_norm_attr_keywords` fallback in `node_tools_tab.py` — fixes renderer-specific attributes that were never matched (`bump_input`, `baseMetalness`, `texMap`, `refr_color` etc.), transmission chains now correctly resolve to `srgb`
+
+### Documentation
+- `README.md` / `README_zh.md`: add missing files to project structure (`docs/AGENTS.md`, `CHANGELOG_zh.md`, `copy_launch.bat`, `LICENSE`)
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: fix VRayMtl subsurface mapping (`subsurfaceWeight` → `translucencyAmount`, `subsurfaceColor` → `translucencyColor` instead of `-`); remove non-existent `reflectionColorAmount` prerequisite; fix Builder description from "Converter panel's second tab" to "dedicated second tab"; add missing `copy_launch.bat` and `LICENSE` to project structure
+- `AGENTS.md`: add missing `"vray": "vray"` to `renderer_map` example
 
 ## 2026-08-17
 

@@ -48,8 +48,8 @@ Columns: aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMater
 | **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refr_color | refractionColor |
 | **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacity_color | opacityMap |
 | **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refr_thin_walled | refrThinWalled |
-| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | - |
-| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | - |
+| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | translucencyAmount |
+| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | translucencyColor |
 | **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | ms_radius | - |
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
@@ -117,7 +117,6 @@ Automatically set before attribute transfer:
 | RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
 | VRayMtl (roughness) | `useRoughness` | `1` |
 | VRayMtl (default reflection) | `reflectionColor` | `[1, 1, 1]` |
-| VRayMtl (default reflection) | `reflectionColorAmount` | `1` |
 
 ---
 
@@ -337,7 +336,7 @@ UI supports batch conversion of multiple materials:
 
 ## 9. Material Builder
 
-Integrated in the Converter panel's second tab, builds complete Arnold / Redshift / V-Ray PBR materials from texture paths.
+Dedicated second tab in the main window, builds complete Arnold / Redshift / V-Ray PBR materials from texture paths.
 
 ### 9.1 Supported Features
 
@@ -457,6 +456,8 @@ materialConvert/
 │       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # Entry script
+├── copy_launch.bat                  # Double-click to copy launch command
+├── LICENSE
 ├── docs/
 │   ├── AGENTS.md                    # AI Agent development guide
 │   ├── CONVERSION_SPEC.md           # This document
