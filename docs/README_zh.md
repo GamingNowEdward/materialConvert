@@ -74,6 +74,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 ### 核心设计原则
 - **配置驱动**：所有渲染器映射定义在 JSON 文件中，Python 代码中零硬编码属性名
+- **CC 节点类型配置驱动**：颜色校正节点识别直接读取 `config/colorCorrection.json` 定义的节点类型；新增已配置的 CC 节点类型无需维护 Python 类型列表
 - **易于扩展**：新增渲染器支持 = 在 `config/material/` 添加 JSON 文件，无需改代码
 - **模块化转换器**：4 个独立模块分别处理属性传递、凹凸/法线、颜色校正、置换
 - **统一导入**：PySide 版本探测集中在 `ui/__init__.py`
@@ -85,7 +86,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 materialConvert/
 ├── config/                          # JSON 配置文件
 │   ├── material/                    # 渲染器材质属性映射
-│   │   ├── common.json              # 通用 PBR 参数
+│   │   ├── common.json              # 通用 PBR 参数及 Builder 通道别名
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json

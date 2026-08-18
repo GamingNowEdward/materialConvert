@@ -104,17 +104,21 @@ class BuilderTab:
         use_nrm = self.cb_nrm.isChecked()
         use_sss = self.cb_sss.isChecked()
         use_disp = self.cb_disp.isChecked()
+        aliases = self.config.get_channel_common_attrs()
 
         input_paths = {
-            'color': self.ctx.clean_path(self.path_inputs['color'].text()),
-            'rough': self.ctx.clean_path(self.path_inputs['rough'].text()),
-            'nrm': self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            'bump': self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            'disp': self.ctx.clean_path(self.path_inputs['disp'].text())
+            aliases['color']: self.ctx.clean_path(self.path_inputs['color'].text()),
+            aliases['rough']: self.ctx.clean_path(self.path_inputs['rough'].text()),
+            aliases['nrm']: self.ctx.clean_path(self.path_inputs['nrm'].text()),
+            aliases['disp']: self.ctx.clean_path(self.path_inputs['disp'].text()),
+        }
+        channel_options = {
+            aliases['nrm']: {'mode': 'normal' if use_nrm else 'bump'},
         }
 
         return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_sss, use_disp,
-                                  use_qss=self.cb_qss.isChecked())
+                                  use_qss=self.cb_qss.isChecked(),
+                                  channel_options=channel_options)
 
     @qt_maya_logger
     def _create_file_from_p2d(self):

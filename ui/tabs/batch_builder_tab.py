@@ -164,7 +164,7 @@ class BatchBuilderTab:
         )
         for conflict in conflicts:
             self._log(
-                f"Conflict: {conflict['material']} / {conflict['builder_key']} -> "
+                f"Conflict: {conflict['material']} / {conflict['common_attr']} -> "
                 f"{conflict['existing']} vs {conflict['new']}"
             )
 
@@ -173,7 +173,7 @@ class BatchBuilderTab:
         self.table.setRowCount(0)
 
         for material in self.scan_result["materials"]:
-            for builder_key, data in material["channels"].items():
+            for common_attr, data in material["channels"].items():
                 row = self.table.rowCount()
                 self.table.insertRow(row)
 

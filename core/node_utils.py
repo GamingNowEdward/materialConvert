@@ -68,10 +68,16 @@ def collect_attribute_info(material, attr_names):
     return info
 
 
-def is_cc_node(node):
-    node_type = cmds.nodeType(node)
-    cc_types = {"colorCorrect", "aiColorCorrect", "RedshiftColorCorrection", "VRayColorCorrection"}
-    return node_type in cc_types
+def is_cc_node(node, config):
+    """Return whether *node* is a configured color-correction node.
+
+    The supported types come from ``colorCorrection.json`` through
+    ``ConfigLoader`` so renderer extensions do not require a code edit here.
+    """
+    try:
+        return cmds.nodeType(node) in config.get_all_cc_types()
+    except Exception:
+        return False
 
 
 def _hue_to_offset(value, cc_config):

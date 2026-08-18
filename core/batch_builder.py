@@ -4,30 +4,9 @@ from core.material_builder import MaterialBuilder
 
 class BatchBuilder:
 
-    # texture_channels.json builder_key -> MaterialBuilder short key
-    COMMON_TO_SHORT = {
-        "baseColor": "color",
-        "specularRoughness": "rough",
-        "metallic": "metallic",
-        "normal_bump": None,  # depends on normal/bump mode
-        "displacementTexture": "disp",
-        "opacity": "opacity",
-        "emissionColor": "emission",
-        "transmissionColor": "transmission",
-        "fuzzColor": "sheen",
-        "subsurfaceColor": "sss",
-        "specularColor": "reflection",
-    }
-
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
         self.builder = MaterialBuilder(ctx)
-
-    @classmethod
-    def _short_key(cls, builder_key, options):
-        if builder_key == "normal_bump":
-            return "nrm" if options.get("mode") == "normal" else "bump"
-        return cls.COMMON_TO_SHORT.get(builder_key, builder_key)
 
     def build_material(self, node_type, material, use_full_chain=True, use_qss=True):
         """Build one material from a scanner material dict.
@@ -35,7 +14,7 @@ class BatchBuilder:
         material = {
             "name": str,
             "channels": {
-                builder_key: {
+                common_attr: {
                     "channel": str,
                     "path": str,
                     "options": dict,
@@ -46,16 +25,13 @@ class BatchBuilder:
         input_paths = {}
         channel_options = {}
 
-        for builder_key, data in material.get("channels", {}).items():
-            short_key = self._short_key(builder_key, data.get("options", {}))
-            if not short_key:
-                continue
-            input_paths[short_key] = data["path"]
+        for common_attr, data in material.get("channels", {}).items():
+            input_paths[common_attr] = data["path"]
             if data.get("options"):
-                channel_options[short_key] = dict(data["options"])
+                channel_options[common_attr] = dict(data["options"])
 
-        use_disp = "disp" in input_paths
-        use_sss = "sss" in input_paths
+        use_disp = "displacementTexture" in input_paths
+        use_sss = "subsurfaceColor" in input_paths
 
         return self.builder.build(
             node_type,

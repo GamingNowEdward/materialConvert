@@ -126,6 +126,7 @@ class ConfigLoader:
         self._color_correction_configs = {}
         self._builder_naming = {}
         self._color_weight_pairs = []
+        self._channel_common_attrs = {}
         self._color_space_config = {}
         self._texture_channels = {}
         self._load_all()
@@ -143,9 +144,12 @@ class ConfigLoader:
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
         raw = self._read_json(path)
         self._color_weight_pairs = raw.get("color_weight_pairs", [])
+        self._channel_common_attrs = raw.get("builder_aliases", {})
 
         common_attr_groups = {}
         for group_name, group_data in raw.items():
+            if group_name == "builder_aliases":
+                continue
             if isinstance(group_data, dict):
                 common_attr_groups[group_name] = list(group_data.keys())
 
@@ -214,6 +218,15 @@ class ConfigLoader:
 
     def get_color_weight_pairs(self):
         return list(self._color_weight_pairs)
+
+    def get_channel_common_attrs(self):
+        return dict(self._channel_common_attrs)
+
+    def get_weight_attr_for_common_attr(self, common_attr):
+        for color_attr, weight_attr in self._color_weight_pairs:
+            if color_attr == common_attr:
+                return weight_attr
+        return ""
 
     def get_common_attrs(self):
         return list(self._common_attrs)

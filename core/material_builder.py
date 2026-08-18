@@ -10,34 +10,47 @@ class MaterialBuilder:
     P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
                  'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
 
-    CHANNEL_COMMON_ATTRS = {
-        "color": "baseColor",
-        "rough": "specularRoughness",
-        "sss": "subsurfaceColor",
-        "metallic": "metallic",
-        "opacity": "opacity",
-        "emission": "emissionColor",
-        "transmission": "transmissionColor",
-        "sheen": "fuzzColor",
-        "translucency": "subsurfaceColor",
-        "scattering": "subsurfaceColor",
-        "reflection": "specularColor",
-        "nrm": "normal_bump",
-        "bump": "normal_bump",
-    }
-
-    WEIGHT_ATTRS = {
-        "emission": "emissionWeight",
-        "transmission": "transmissionWeight",
-        "sheen": "fuzzWeight",
-        "sss": "subsurfaceWeight",
-        "reflection": "specularWeight",
-    }
-
-
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
         self.config = ConfigLoader()
+
+    def _resolve_common_attr(self, key):
+        if not key:
+            return ""
+
+        alias_map = self.config.get_channel_common_attrs()
+        normalized_key = key.replace("_", "").replace("-", "").lower()
+        common_attr = (alias_map.get(key)
+                       or alias_map.get(key.lower())
+                       or alias_map.get(normalized_key))
+        if common_attr:
+            return common_attr
+        if key in self.config.get_common_attrs():
+            return key
+        raise ValueError(f"Unknown Builder channel: {key}")
+
+    def _resolve_weight_attr(self, common_attr):
+        if not common_attr:
+            return ""
+        return self.config.get_weight_attr_for_common_attr(common_attr)
+
+    def _normalize_channels(self, input_paths, channel_options):
+        """Normalize optional compact aliases at the Builder boundary.
+
+        Batch Builder already supplies canonical common attributes.  The
+        canonical manual Builder UI also supplies them, while callers that
+        use compact aliases such as ``color`` and ``rough`` remain supported
+        without leaking those aliases into build logic.
+        """
+        normalized_paths = {}
+        for key, path in (input_paths or {}).items():
+            normalized_paths[self._resolve_common_attr(key)] = path
+
+        normalized_options = {}
+        for key, options in (channel_options or {}).items():
+            normalized_options[self._resolve_common_attr(key)] = dict(options)
+
+        return normalized_paths, normalized_options
 
     def build(self, node_type, base_name, input_paths, use_nrm=True, use_sss=False, use_disp=False,
               use_qss=True, use_full_chain=True, channel_options=None):
@@ -59,11 +72,16 @@ class MaterialBuilder:
 
         p2d = self.ctx.create_node('place2dTexture', 'p2d', base_name)
 
-        def make_tex(key, is_alpha=False, invert=False):
-            f = self.ctx.create_node('file', 'file', base_name, key, 'texture')
+        channel_options = channel_options or {}
+        input_paths, channel_options = self._normalize_channels(input_paths, channel_options)
+
+        def make_tex(common_attr, name_key=None, is_alpha=False, invert=False):
+            f = self.ctx.create_node(
+                'file', 'file', base_name, name_key or common_attr, 'texture'
+            )
             if is_alpha:
                 cmds.setAttr(f"{f}.alphaIsLuminance", 1)
-            path = input_paths.get(key, "")
+            path = input_paths.get(common_attr, "")
             if path:
                 cmds.setAttr(f"{f}.fileTextureName", path, type="string")
             if invert and cmds.attributeQuery("invert", node=f, exists=True):
@@ -74,7 +92,6 @@ class MaterialBuilder:
             self.ctx.connect(p2d, "outUvFilterSize", f, "uvFilterSize")
             return f
 
-        channel_options = channel_options or {}
         self._build_color_chain_new(m_node, renderer, base_name, make_tex, mat_config,
                                     use_sss, use_full_chain, input_paths)
         self._build_rough_chain_new(m_node, base_name, make_tex, mat_config,
@@ -91,7 +108,7 @@ class MaterialBuilder:
                                      use_full_chain, input_paths)
         self._build_bump_normal_new(m_node, renderer, base_name, make_tex, mat_config,
                                     use_nrm, channel_options, input_paths)
-        if use_disp or input_paths.get("disp"):
+        if use_disp or input_paths.get("displacementTexture"):
             self._build_displacement_new(m_node, sg_node, base_name, make_tex, mat_config,
                                          use_full_chain)
 
@@ -106,102 +123,22 @@ class MaterialBuilder:
         from core.prerequisites import apply_prerequisites
         apply_prerequisites(m_node, mat_config)
 
-    def _build_color_chain(self, m_node, renderer, base_name, make_tex, mat_config, use_sss):
-        cc_config = self.config.get_color_correction_config(renderer)
-        if not cc_config or not cc_config.node_type:
-            return
-
-        tex_color = make_tex('color')
-        for ch in (['color', 'sss'] if use_sss else ['color']):
-            attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS[ch])
-            if not attr_name:
-                continue
-            cc = self.ctx.create_node(cc_config.node_type, 'cc', base_name, ch)
-            lyr = self.ctx.build_layered_node(base_name, ch)
-            self.ctx.connect(tex_color, "outColor", cc, cc_config.source_connection)
-            self.ctx.connect(cc, cc_config.target_connection, lyr, "inputs[1].color")
-            self.ctx.connect(lyr, "outColor", m_node, attr_name)
-            if ch == 'sss' and cmds.attributeQuery('ssOn', node=m_node, exists=True):
-                cmds.setAttr(f"{m_node}.ssOn", 1)
-
-    def _build_rough_chain(self, m_node, base_name, make_tex, mat_config):
-        rough_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['rough'])
-        if not rough_attr:
-            return
-        tex_rough = make_tex('rough', True)
-        ramp = self.ctx.create_node('ramp', 'ramp', base_name, 'rough', 'texture')
-        self.ctx.connect(tex_rough, "outAlpha", ramp, "vCoord")
-        self.ctx.connect(ramp, "outAlpha", m_node, rough_attr)
-
-    def _build_bump_normal(self, m_node, renderer, base_name, make_tex, mat_config, use_nrm):
-        bn_config = self.config.get_bump_normal_config(renderer)
-        if not bn_config:
-            return
-
-        nb_key = 'nrm' if use_nrm else 'bump'
-        mapping = bn_config.normal if use_nrm else bn_config.bump
-        if not mapping:
-            return
-
-        target_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS[nb_key])
-        if not target_attr:
-            return
-
-        tex_nb = make_tex(nb_key, not use_nrm)
-
-        if mapping.is_material_attribute:
-            if mapping.input:
-                self.ctx.connect(tex_nb, mapping.file_source, m_node, mapping.input)
-            if mapping.scale and mapping.default_scale is not None:
-                if cmds.attributeQuery(mapping.scale, node=m_node, exists=True):
-                    cmds.setAttr(f"{m_node}.{mapping.scale}", mapping.default_scale)
-            if mapping.input_type and mapping.input_type_value is not None:
-                if cmds.attributeQuery(mapping.input_type, node=m_node, exists=True):
-                    cmds.setAttr(f"{m_node}.{mapping.input_type}", mapping.input_type_value)
-            return
-
-        bn_node = self.ctx.create_node(mapping.node_type, nb_key, base_name)
-        if mapping.scale and mapping.default_scale is not None:
-            cmds.setAttr(f"{bn_node}.{mapping.scale}", mapping.default_scale)
-        if mapping.isNormal and mapping.isNormal_value is not None:
-            cmds.setAttr(f"{bn_node}.{mapping.isNormal}", mapping.isNormal_value)
-        if mapping.source_connection:
-            self.ctx.connect(tex_nb, mapping.file_source, bn_node, mapping.source_connection)
-        if mapping.target_connection:
-            self.ctx.connect(bn_node, mapping.target_connection, m_node, target_attr)
-
-    def _build_displacement(self, m_node, sg_node, base_name, make_tex, mat_config):
-        disp_type = mat_config.displacement_node_type
-        disp_in = mat_config.displacement_texture
-        if not disp_type or not disp_in:
-            return
-
-        tex_disp = make_tex('disp', True)
-        lyr_disp = self.ctx.build_layered_node(base_name, 'disp', layers=2)
-        for rgb in 'RGB':
-            self.ctx.connect(tex_disp, mat_config.displacement_file_source, lyr_disp, f"inputs[1].color{rgb}")
-        d_node = self.ctx.create_node(disp_type, 'disp', base_name, as_type='shader')
-        self.ctx.connect(lyr_disp, mat_config.displacement_lyr_src, d_node, disp_in)
-        self.ctx.connect(d_node, mat_config.displacement_output, sg_node, "displacementShader")
-
-
-    # ── New Batch/Extended Builder Methods ─────────────────────────
-
-    def _connect_color_channel(self, m_node, renderer, base_name, ch, attr_name, tex,
+    def _connect_color_channel(self, m_node, renderer, base_name, name_key, common_attr,
+                               attr_name, tex,
                                use_full_chain, cc_config, mat_config):
         if use_full_chain and cc_config and cc_config.node_type:
-            cc = self.ctx.create_node(cc_config.node_type, 'cc', base_name, ch)
-            lyr = self.ctx.build_layered_node(base_name, ch)
+            cc = self.ctx.create_node(cc_config.node_type, 'cc', base_name, name_key)
+            lyr = self.ctx.build_layered_node(base_name, name_key)
             self.ctx.connect(tex, "outColor", cc, cc_config.source_connection)
             self.ctx.connect(cc, cc_config.target_connection, lyr, "inputs[1].color")
             self.ctx.connect(lyr, "outColor", m_node, attr_name)
         else:
             self.ctx.connect(tex, "outColor", m_node, attr_name)
 
-        if ch == 'sss' and cmds.attributeQuery('ssOn', node=m_node, exists=True):
+        if common_attr == 'subsurfaceColor' and cmds.attributeQuery('ssOn', node=m_node, exists=True):
             cmds.setAttr(f"{m_node}.ssOn", 1)
 
-        weight_common = self.WEIGHT_ATTRS.get(ch)
+        weight_common = self._resolve_weight_attr(common_attr)
         if weight_common:
             weight_attr = mat_config.get_maya_attr(weight_common)
             if weight_attr and cmds.attributeQuery(weight_attr, node=m_node, exists=True):
@@ -212,43 +149,43 @@ class MaterialBuilder:
         cc_config = self.config.get_color_correction_config(renderer)
 
         tex_color = None
-        # Builder Tab always includes a 'color' key, so this keeps old behavior.
+        # Builder Tab always includes a Base Color field, so this keeps old behavior.
         # Batch Builder omits it when there is no BaseColor texture.
-        if 'color' in input_paths:
-            tex_color = make_tex('color')
-            color_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['color'])
+        if 'baseColor' in input_paths:
+            tex_color = make_tex('baseColor', 'color')
+            color_attr = mat_config.get_maya_attr('baseColor')
             if color_attr:
                 self._connect_color_channel(
-                    m_node, renderer, base_name, 'color', color_attr, tex_color,
+                    m_node, renderer, base_name, 'color', 'baseColor', color_attr, tex_color,
                     use_full_chain, cc_config, mat_config,
                 )
 
         # SSS: either the legacy use_sss flag or a dedicated sss path.
-        if use_sss or 'sss' in input_paths:
-            sss_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['sss'])
+        if use_sss or 'subsurfaceColor' in input_paths:
+            sss_attr = mat_config.get_maya_attr('subsurfaceColor')
             if sss_attr:
-                if 'sss' in input_paths:
-                    tex_sss = make_tex('sss')
+                if 'subsurfaceColor' in input_paths:
+                    tex_sss = make_tex('subsurfaceColor', 'sss')
                 elif tex_color is not None:
                     tex_sss = tex_color
                 else:
                     tex_sss = None
                 if tex_sss is not None:
                     self._connect_color_channel(
-                        m_node, renderer, base_name, 'sss', sss_attr, tex_sss,
+                        m_node, renderer, base_name, 'sss', 'subsurfaceColor', sss_attr, tex_sss,
                         use_full_chain, cc_config, mat_config,
                     )
 
     def _build_rough_chain_new(self, m_node, base_name, make_tex, mat_config,
                                use_full_chain, channel_options, input_paths):
-        if 'rough' not in input_paths:
+        if 'specularRoughness' not in input_paths:
             return
-        rough_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['rough'])
+        rough_attr = mat_config.get_maya_attr('specularRoughness')
         if not rough_attr:
             return
 
-        invert = channel_options.get('rough', {}).get('invert', False)
-        tex_rough = make_tex('rough', True, invert=invert)
+        invert = channel_options.get('specularRoughness', {}).get('invert', False)
+        tex_rough = make_tex('specularRoughness', 'rough', is_alpha=True, invert=invert)
 
         if use_full_chain:
             ramp = self.ctx.create_node('ramp', 'ramp', base_name, 'rough', 'texture')
@@ -260,74 +197,74 @@ class MaterialBuilder:
     def _build_metallic_chain(self, m_node, base_name, make_tex, mat_config, input_paths):
         if 'metallic' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['metallic'])
+        attr_name = mat_config.get_maya_attr('metallic')
         if not attr_name:
             return
-        tex = make_tex('metallic', True)
+        tex = make_tex('metallic', is_alpha=True)
         node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}")
 
     def _build_opacity_chain(self, m_node, base_name, make_tex, mat_config, input_paths):
         if 'opacity' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['opacity'])
+        attr_name = mat_config.get_maya_attr('opacity')
         if not attr_name:
             return
-        tex = make_tex('opacity', True)
+        tex = make_tex('opacity', is_alpha=True)
         node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}")
 
     def _build_emission_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                               use_full_chain, input_paths):
-        if 'emission' not in input_paths:
+        if 'emissionColor' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['emission'])
+        attr_name = mat_config.get_maya_attr('emissionColor')
         if not attr_name:
             return
-        tex = make_tex('emission')
+        tex = make_tex('emissionColor', 'emission')
         cc_config = self.config.get_color_correction_config(renderer)
         self._connect_color_channel(
-            m_node, renderer, base_name, 'emission', attr_name, tex,
+            m_node, renderer, base_name, 'emission', 'emissionColor', attr_name, tex,
             use_full_chain, cc_config, mat_config,
         )
 
     def _build_transmission_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                                   use_full_chain, input_paths):
-        if 'transmission' not in input_paths:
+        if 'transmissionColor' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['transmission'])
+        attr_name = mat_config.get_maya_attr('transmissionColor')
         if not attr_name:
             return
-        tex = make_tex('transmission')
+        tex = make_tex('transmissionColor', 'transmission')
         cc_config = self.config.get_color_correction_config(renderer)
         self._connect_color_channel(
-            m_node, renderer, base_name, 'transmission', attr_name, tex,
+            m_node, renderer, base_name, 'transmission', 'transmissionColor', attr_name, tex,
             use_full_chain, cc_config, mat_config,
         )
 
     def _build_sheen_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                            use_full_chain, input_paths):
-        if 'sheen' not in input_paths:
+        if 'fuzzColor' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['sheen'])
+        attr_name = mat_config.get_maya_attr('fuzzColor')
         if not attr_name:
             return
-        tex = make_tex('sheen')
+        tex = make_tex('fuzzColor', 'sheen')
         cc_config = self.config.get_color_correction_config(renderer)
         self._connect_color_channel(
-            m_node, renderer, base_name, 'sheen', attr_name, tex,
+            m_node, renderer, base_name, 'sheen', 'fuzzColor', attr_name, tex,
             use_full_chain, cc_config, mat_config,
         )
 
     def _build_reflection_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                                 use_full_chain, input_paths):
-        if 'reflection' not in input_paths:
+        if 'specularColor' not in input_paths:
             return
-        attr_name = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS['reflection'])
+        attr_name = mat_config.get_maya_attr('specularColor')
         if not attr_name:
             return
-        tex = make_tex('reflection')
+        tex = make_tex('specularColor', 'reflection')
         cc_config = self.config.get_color_correction_config(renderer)
         self._connect_color_channel(
-            m_node, renderer, base_name, 'reflection', attr_name, tex,
+            m_node, renderer, base_name, 'reflection', 'specularColor', attr_name, tex,
             use_full_chain, cc_config, mat_config,
         )
 
@@ -339,8 +276,7 @@ class MaterialBuilder:
 
         # Priority: per-channel option from scanner, then legacy use_nrm flag.
         mode = (
-            channel_options.get('nrm', {}).get('mode')
-            or channel_options.get('bump', {}).get('mode')
+            channel_options.get('normal_bump', {}).get('mode')
             or ('normal' if use_nrm else 'bump')
         )
         is_normal = mode == 'normal'
@@ -349,18 +285,14 @@ class MaterialBuilder:
         if not mapping:
             return
 
-        target_attr = mat_config.get_maya_attr(self.CHANNEL_COMMON_ATTRS[nb_key])
+        target_attr = mat_config.get_maya_attr('normal_bump')
         if not target_attr:
             return
 
-        # Use the key that actually has a path; fall back to the other key.
-        tex_key = nb_key
-        if tex_key not in input_paths:
-            tex_key = 'bump' if is_normal else 'nrm'
-        if tex_key not in input_paths:
+        if 'normal_bump' not in input_paths:
             return
 
-        tex_nb = make_tex(tex_key, not is_normal)
+        tex_nb = make_tex('normal_bump', nb_key, is_alpha=not is_normal)
 
         if mapping.is_material_attribute:
             if mapping.input:
@@ -390,7 +322,7 @@ class MaterialBuilder:
         if not disp_type or not disp_in:
             return
 
-        tex_disp = make_tex('disp', True)
+        tex_disp = make_tex('displacementTexture', 'disp', is_alpha=True)
         d_node = self.ctx.create_node(disp_type, 'disp', base_name, as_type='shader')
 
         if use_full_chain:

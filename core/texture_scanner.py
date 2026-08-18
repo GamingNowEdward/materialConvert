@@ -114,7 +114,10 @@ class TextureScanner:
             if channel_type in ("normal", "bump"):
                 options["mode"] = channel_type
 
-            return channel_name, channel_data["builder_key"], base_name, options
+            common_attr = channel_data.get("common_attr")
+            if not common_attr:
+                continue
+            return channel_name, common_attr, base_name, options
 
         return None
 
@@ -127,7 +130,7 @@ class TextureScanner:
                     {
                         "name": str,
                         "channels": {
-                            builder_key: {
+                        common_attr: {
                                 "channel": str,
                                 "path": str,
                                 "options": dict,
@@ -161,7 +164,7 @@ class TextureScanner:
                 unparsed.append(full_path)
                 continue
 
-            channel_name, builder_key, base_name, options = parsed
+            channel_name, common_attr, base_name, options = parsed
 
             material = materials.setdefault(
                 base_name,
@@ -171,18 +174,18 @@ class TextureScanner:
                 },
             )
 
-            if builder_key in material["channels"]:
+            if common_attr in material["channels"]:
                 conflicts.append(
                     {
                         "material": base_name,
-                        "builder_key": builder_key,
-                        "existing": material["channels"][builder_key]["path"],
+                        "common_attr": common_attr,
+                        "existing": material["channels"][common_attr]["path"],
                         "new": full_path,
                     }
                 )
                 continue
 
-            material["channels"][builder_key] = {
+            material["channels"][common_attr] = {
                 "channel": channel_name,
                 "path": full_path,
                 "options": options,

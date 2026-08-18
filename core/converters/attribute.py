@@ -120,7 +120,8 @@ class AttributeConverter:
             if cc_entry:
                 self.cc_converter.transfer(cc_entry, target_plug, target_renderer, log)
                 chain_plug = cc_entry.get("output_plug")
-                if chain_plug and not self.utils.is_cc_node(chain_plug.split(".")[0]):
+                if chain_plug and not self.utils.is_cc_node(
+                        chain_plug.split(".")[0], self.config):
                     self.utils.smart_connect(chain_plug, target_plug)
             else:
                 src_conn_plug = connection.get("plug")

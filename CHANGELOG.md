@@ -12,6 +12,10 @@
 - `config/builder_naming.json`: shorter suffix abbreviations for new builder channels
 
 ### Changed
+- `texture_channels.json` now uses `common_attr` for the canonical `common.json` attribute name
+- Batch Builder now passes canonical common attributes directly to Material Builder; removed the `COMMON_ATTR_TO_SHORT` conversion table while preserving existing node naming
+- Builder channel aliases now live in `config/material/common.json` (`builder_aliases`), and color-channel weight attributes are derived from `color_weight_pairs`; removed duplicate mappings from `MaterialBuilder`
+- Color-correction node type detection is now driven by `config/colorCorrection.json`; adding a configured CC node type no longer requires updating a hardcoded Python type list
 - Tab order in main window: Converter → Material Builder → Batch Builder → Node Tools
 - Replaced the isolated "Unparsed Files" panel with an in-table `UNPARSED` status and a `Materials to Build` preview list
 - Auto Match Selected (`ui/tabs/node_tools_tab.py`): when filename match and channel match both succeed but return different roles, the file node is treated as ambiguous — skipped (color space unchanged), kept selected, and the conflict is printed to Script Editor for manual review

@@ -4,7 +4,7 @@
 
 ### 新增
 - 新增 **Batch Builder（批量构建）** 标签页（`ui/tabs/batch_builder_tab.py`）：目录扫描、按文件名解析通道、已解析/未解析合并表格（Status 可排序）、Materials to Build 待创建材质预览
-- 新增 `config/texture_channels.json`：文件名关键词 → 通道规则，`builder_key` 复用 `common.json` 的通道名，并补充常见 PBR 后缀（Poly Haven / ambientCG / Quixel / Substance / Unity / Unreal 预设）
+- 新增 `config/texture_channels.json`：文件名关键词 → 通道规则，`common_attr` 复用 `common.json` 的通道名，并补充常见 PBR 后缀（Poly Haven / ambientCG / Quixel / Substance / Unity / Unreal 预设）
 - 新增 `core/texture_scanner.py`：非递归目录扫描，长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）
 - 新增 `core/batch_builder.py`：把扫描结果转换为 `MaterialBuilder` 短 key 并编排批量构建
 - `MaterialBuilder` 扩展通道：Metallic / Opacity / Emission / Transmission / Reflection / Sheen / SSS / Glossiness（通过 `file.invert` 自动反相）；新增 `use_full_chain` 参数支持简单直连
@@ -12,6 +12,10 @@
 - `config/builder_naming.json`：新增更短的通道后缀缩写
 
 ### 变更
+- `texture_channels.json` 使用 `common_attr` 表示规范的 `common.json` 属性名
+- Batch Builder 现在将通用属性名直接传入 Material Builder；移除 `COMMON_ATTR_TO_SHORT` 转换表，同时保持现有节点命名不变
+- Builder 通道别名改由 `config/material/common.json` 的 `builder_aliases` 统一维护，颜色通道权重属性从 `color_weight_pairs` 推导；移除 `MaterialBuilder` 内的重复映射
+- 颜色校正节点类型识别改由 `config/colorCorrection.json` 驱动；新增已配置的 CC 节点类型不再需要维护 Python 硬编码类型列表
 - 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
 - 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
 - Auto Match Selected（`ui/tabs/node_tools_tab.py`）：当文件名匹配与通道匹配均命中但返回角色不同时，该 file 节点判定为歧义——跳过自动设置（色彩空间不变）、保留选中，并在 Script Editor 打印冲突详情供手动复核

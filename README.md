@@ -74,6 +74,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 
 ### Key Design Principles
 - **Config-driven**: All renderer mappings defined in JSON files, zero hardcoded attribute names in Python code
+- **Config-driven CC types**: Color-correction node detection reads the node types defined in `config/colorCorrection.json`; adding a configured CC type requires no Python type-list update
 - **Easy extension**: Adding new renderer support = add JSON file in `config/material/`, no code changes needed
 - **Modular converters**: 4 independent modules handle attribute transfer, bump/normal, color correction, and displacement
 - **Unified imports**: PySide version detection centralized in `ui/__init__.py`
@@ -85,7 +86,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 materialConvert/
 ├── config/                          # JSON configuration files
 │   ├── material/                    # Renderer material attribute mappings
-│   │   ├── common.json              # Universal PBR parameters
+│   │   ├── common.json              # Universal PBR parameters and Builder channel aliases
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json

@@ -4,18 +4,18 @@
     "BaseColor": {
       "aliases": ["basecolor", "basecolour", "basemap", "albedo", "albedomap",
                     "diffuse", "diffusemap", "diff", "color", "colormap", "col", "base", "dif"],
-      "builder_key": "baseColor",
+      "common_attr": "baseColor",
       "type": "color"
     },
     "Roughness": {
       "aliases": ["roughness", "roughnessmap", "roughmap", "rough", "rgh", "rghmap"],
-      "builder_key": "specularRoughness",
+      "common_attr": "specularRoughness",
       "type": "float",
       "use_alpha": true
     },
     "Glossiness": {
       "aliases": ["glossiness", "glossinessmap", "glossmap", "glossy", "gloss", "glos"],
-      "builder_key": "specularRoughness",
+      "common_attr": "specularRoughness",
       "type": "float",
       "use_alpha": true,
       "invert": true
@@ -23,7 +23,7 @@
     "Metallic": {
       "aliases": ["metallic", "metallicmap", "metalness", "metalnessmap",
                     "metalmap", "metmap"],
-      "builder_key": "metallic",
+      "common_attr": "metallic",
       "type": "float",
       "use_alpha": true
     },
@@ -31,25 +31,25 @@
       "aliases": ["normal", "normalmap", "normalgl", "normaldx", "normalmapgl",
                     "normalmapdx", "nrm", "nrml", "nrmgl", "nrmdx",
                     "norgl", "nordx", "nmap"],
-      "builder_key": "normal_bump",
+      "common_attr": "normal_bump",
       "type": "normal"
     },
     "Bump": {
       "aliases": ["bump", "bumpmap", "bumpgl", "bumpdx", "bmp", "bmpmap"],
-      "builder_key": "normal_bump",
+      "common_attr": "normal_bump",
       "type": "bump"
     },
     "Displacement": {
       "aliases": ["displacement", "displacementmap", "displace", "dispmap", "disp",
                     "heightmap", "height", "depth", "depthmap"],
-      "builder_key": "displacementTexture",
+      "common_attr": "displacementTexture",
       "type": "displacement",
       "use_alpha": true
     },
     "Opacity": {
       "aliases": ["opacity", "opacitymap", "alpha", "alphamap", "transparency",
                     "transparencymap", "opac", "cutout", "cutoutmap"],
-      "builder_key": "opacity",
+      "common_attr": "opacity",
       "type": "float",
       "use_alpha": true
     },
@@ -57,37 +57,37 @@
       "aliases": ["transmission", "transmissionmap", "transmissioncolor", "trans",
                     "transmap", "refraction", "refractionmap", "refractioncolor",
                     "refract", "refr"],
-      "builder_key": "transmissionColor",
+      "common_attr": "transmissionColor",
       "type": "color"
     },
     "Reflection": {
       "aliases": ["reflection", "reflectionmap", "reflectioncolor", "reflect",
                     "reflectmap", "refl", "specular", "specularmap", "specularcolor",
                     "specmap", "speccolor", "spec"],
-      "builder_key": "specularColor",
+      "common_attr": "specularColor",
       "type": "color"
     },
     "SheenColor": {
       "aliases": ["sheencolor", "sheen", "sheenmap", "fuzz", "fuzzcolor", "fuzzmap"],
-      "builder_key": "fuzzColor",
+      "common_attr": "fuzzColor",
       "type": "color"
     },
     "TranslucencyColor": {
       "aliases": ["translucencycolor", "translucency", "translucencymap"],
-      "builder_key": "subsurfaceColor",
+      "common_attr": "subsurfaceColor",
       "type": "color"
     },
     "ScatteringColor": {
       "aliases": ["scatteringcolor", "scattering", "scatteringmap", "scatter",
                     "sss", "sssmap", "subsurface", "subsurfacecolor", "subsurfacemap"],
-      "builder_key": "subsurfaceColor",
+      "common_attr": "subsurfaceColor",
       "type": "color"
     },
     "Emission": {
       "aliases": ["emission", "emissionmap", "emissive", "emissivemap", "emit",
                     "illumination", "illuminationmap", "illum", "glow", "glowmap",
                     "selfillum", "luminance"],
-      "builder_key": "emissionColor",
+      "common_attr": "emissionColor",
       "type": "color"
     }
   }
