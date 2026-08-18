@@ -315,13 +315,17 @@ class NodeToolsTab:
 
         default_role = self.cs_config.get("default", "raw")
         count = 0
+        suspicious = []
 
         for f in selected:
-            role = self._match_by_filename(f)
-            if not role:
-                role = self._match_by_channel(f)
-            if not role:
-                role = default_role
+            role_fn = self._match_by_filename(f)
+            role_chan = self._match_by_channel(f)
+
+            if role_fn and role_chan and role_fn != role_chan:
+                suspicious.append(f)
+                continue
+
+            role = role_fn or role_chan or default_role
 
             if self._set_color_space(f, role):
                 count += 1
@@ -329,4 +333,13 @@ class NodeToolsTab:
             else:
                 cmds.warning(f"{f}: no matching color space found for role '{role}'")
 
-        print(f"Auto matched color space on {count}/{len(selected)} file node(s).")
+        if suspicious:
+            cmds.select(suspicious, add=True)
+            for f in suspicious:
+                path = cmds.getAttr(f"{f}.fileTextureName") or ""
+                print(f"[歧义] {path} ({f}): filename→{self._match_by_filename(f)} "
+                      f"vs channel→{self._match_by_channel(f)}, 已跳过, 请手动处理")
+            print(f"Auto matched color space on {count}/{len(selected)} file node(s); "
+                  f"{len(suspicious)} ambiguous node(s) selected for manual review.")
+        else:
+            print(f"Auto matched color space on {count}/{len(selected)} file node(s).")
