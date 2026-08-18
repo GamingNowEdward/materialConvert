@@ -116,6 +116,8 @@ Automatically set before attribute transfer:
 | RedshiftMaterial | `coat_brdf` | `1` |
 | RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
 | VRayMtl (roughness) | `useRoughness` | `1` |
+| VRayMtl (default reflection) | `reflectionColor` | `[1, 1, 1]` |
+| VRayMtl (default reflection) | `reflectionColorAmount` | `1` |
 
 ---
 
@@ -342,12 +344,15 @@ Integrated in the Converter panel's second tab, builds complete Arnold / Redshif
 | Feature | Description |
 |---|---|
 | Material Type Dropdown | Lists **all** materials from `config/material/*.json` — adding a JSON file automatically adds a buildable type |
-| Texture Paths | Optional input for Color, Roughness, Normal/Bump, Displacement maps |
+| Texture Paths | Optional input for Color, Roughness/Glossiness, Metallic, Normal/Bump, Displacement, Opacity, Transmission, Reflection, Sheen, SSS, Emission maps |
 | Normal/Bump Toggle | Checked = Normal, unchecked = Bump |
 | SSS | When checked, additionally creates sss channel (colorCorrect + layeredTexture + ramp) |
 | Displacement | When checked, creates displacement node chain |
 | Add To Quick Select Set | When checked, wraps all built nodes in a `QS_M_*` selection set |
 | Create File From P2D | Creates file node from selected place2dTexture node and auto-connects |
+| Full Pipeline Mode | When enabled, color channels use `colorCorrect + layeredTexture` and roughness uses `ramp`; when disabled, textures connect directly (Normal/Bump still create bump/normal nodes) |
+| Glossiness | Treated as inverted roughness via the file node's `invert` attribute |
+
 
 ### 9.2 Config Source
 
@@ -360,11 +365,23 @@ The Builder reuses the **Convert configuration system** — no separate renderer
 - Naming conventions: `config/builder_naming.json`
 - Material prerequisites (`useRoughness`, `refl_brdf`, etc.) are applied automatically from JSON
 
+### 9.3 Batch Builder
+
+A dedicated tab that builds many materials from a texture directory:
+
+1. `core/texture_scanner.py` scans a directory (non-recursive) using `config/texture_channels.json`
+2. Filenames are normalized (lowercase, `-`/space → `_`), then channels are matched longest-alias-first with token / underscore-tolerant matching
+3. `core/batch_builder.py` converts parsed channels into `MaterialBuilder` short keys and calls `MaterialBuilder.build()`
+4. The UI shows parsed + unparsed rows in one table (sortable `Status` column) and a `Materials to Build` preview list with per-material channel counts
+5. Options include target material type, Full Pipeline toggle, and Add To Quick Select Set
+6. Unparsed files are display-only and never built
+
+
 ---
 
 ## 10. Node Tools
 
-Third tab providing batch node operations:
+Fourth tab providing batch node operations:
 
 - Select nodes by type (material/file/bump/layeredTexture/CC), excluding default materials
 - Batch set file node color space
@@ -404,6 +421,7 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
+│   ├── texture_channels.json       # Batch Builder filename-to-channel rules
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
@@ -417,13 +435,16 @@ materialConvert/
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
 │   ├── builder_context.py           # Material Builder shared state & tools
+│   ├── texture_scanner.py           # Directory scanning / filename-to-channel parsing
+│   ├── batch_builder.py             # Batch build orchestration
 │   └── material_builder.py          # Material Builder core logic (config-driven)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme styles
-│   └── tabs/                        # Three functional tabs
+│   └── tabs/                        # Four functional tabs
 │       ├── converter_tab.py         # Material conversion (with progress bar)
 │       ├── builder_tab.py           # Material Builder
+│       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # Entry script
 ├── docs/

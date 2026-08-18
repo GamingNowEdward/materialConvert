@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- New **Batch Builder** tab (`ui/tabs/batch_builder_tab.py`) with directory scanning, filename-driven channel parsing, merged parsed/unparsed table (sortable Status), and `Materials to Build` preview list
+- `config/texture_channels.json`: filename keyword → channel rules driven by `common.json` builder keys, including common PBR suffixes (Poly Haven / ambientCG / Quixel / Substance / Unity / Unreal presets)
+- `core/texture_scanner.py`: non-recursive directory scanning, longest-alias-first matching, token + underscore-tolerant substring matching
+- `core/batch_builder.py`: converts scanner output into `MaterialBuilder` short keys and orchestrates batch builds
+- `MaterialBuilder` extended channels: Metallic, Opacity, Emission, Transmission, Reflection, Sheen, SSS, and Glossiness (inverted via `file.invert`); new `use_full_chain` option for simple direct connections
+- VRayMtl prerequisites now support color/list values (e.g. `reflectionColor: [1, 1, 1]`) via `core/prerequisites.py`
+- `config/builder_naming.json`: shorter suffix abbreviations for new builder channels
+
+### Changed
+- Tab order in main window: Converter → Material Builder → Batch Builder → Node Tools
+- Replaced the isolated "Unparsed Files" panel with an in-table `UNPARSED` status and a `Materials to Build` preview list
+
 ## 2026-08-17
 
 ### Removed

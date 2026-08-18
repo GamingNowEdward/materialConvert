@@ -42,12 +42,21 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 ### Material Builder
 - 从纹理路径一键构建完整 PBR 材质
-- 支持 Color / Roughness / Normal / Bump / Displacement 通道
+- 支持 Color / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission 通道
 - SSS 通道支持（colorCorrect + layeredTexture + ramp）
 - 置换节点链支持
 - 材质类型下拉框由 `config/material/*.json` 驱动——新增材质自动出现
 - 可选"加入快速选择集"开关
 - Create File From P2D：从选中的 place2dTexture 节点创建 file 节点
+
+### Batch Builder
+- 选择目录并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）
+- 将贴图分组为材质，并预览将要创建的材质列表（Materials to Build）
+- 已解析通道与未解析文件合并展示在同一个表格，Status 列支持排序
+- 批量构建全部 / 选中材质到任意支持的渲染器
+- 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp）或简单直连
+- 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
+
 
 ### Node Tools
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
@@ -86,6 +95,7 @@ materialConvert/
 │   ├── bumpNormal.json              # 凹凸/法线节点映射
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
+│   ├── texture_channels.json       # Batch Builder 文件名→通道规则
 │   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
@@ -99,13 +109,16 @@ materialConvert/
 │   ├── prerequisites.py             # 渲染器前提条件处理
 │   ├── logger.py                    # 统一日志模块
 │   ├── builder_context.py           # Material Builder 共享状态
+│   ├── texture_scanner.py           # 目录扫描 / 文件名→通道解析
+│   ├── batch_builder.py             # 批量构建编排
 │   └── material_builder.py          # Material Builder 核心逻辑
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题
-│   └── tabs/                        # 三个功能标签页
+│   └── tabs/                        # 四个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
+│       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── docs/                            # 文档
 │   ├── CONVERSION_SPEC.md           # 转换规格说明（英文）

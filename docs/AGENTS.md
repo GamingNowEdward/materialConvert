@@ -44,10 +44,12 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，支持回调函数，UI 层注册回调更新日志面板
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，3 个标签页）
+- 界面：`ui/converter_ui.py`（QTabWidget，4 个标签页）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
+- Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（把扫描结果转成 `MaterialBuilder` 可用的短 key）+ `ui/tabs/batch_builder_tab.py`（面板）
+- 通道规则：`config/texture_channels.json` — `builder_key` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）；文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.{aliases/filenameKeywords/attributeKeywords} + commonAttributeRoles 动态扩展；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名）
 
 ### 统一导入

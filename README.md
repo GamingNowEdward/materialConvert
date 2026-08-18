@@ -42,12 +42,21 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 ### Material Builder
 - One-click build complete PBR materials from texture paths
-- Supports Color / Roughness / Normal / Bump / Displacement channels
+- Supports Color / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission channels
 - SSS channel support (colorCorrect + layeredTexture + ramp)
 - Displacement node chain support
 - Material type dropdown driven by `config/material/*.json` — new materials appear automatically
 - Optional "Add To Quick Select Set" toggle
 - Create File From P2D: create file node from selected place2dTexture
+
+### Batch Builder
+- Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
+- Group textures into materials and preview which materials will be created (`Materials to Build`)
+- Show parsed channels and unparsed files in one table with a sortable Status column
+- Batch build all / selected materials to any supported renderer
+- Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp) or simple direct connection
+- Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
+
 
 ### Node Tools
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
@@ -86,6 +95,7 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
+│   ├── texture_channels.json       # Batch Builder filename-to-channel rules
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
@@ -99,13 +109,16 @@ materialConvert/
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
 │   ├── builder_context.py           # Material Builder shared state
+│   ├── texture_scanner.py           # Directory scanning / filename-to-channel parsing
+│   ├── batch_builder.py             # Batch build orchestration
 │   └── material_builder.py          # Material Builder core logic
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme
-│   └── tabs/                        # Three functional tabs
+│   └── tabs/                        # Four functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
+│       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── docs/                            # Documentation
 │   ├── CONVERSION_SPEC.md           # Full conversion specification

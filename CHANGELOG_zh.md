@@ -1,5 +1,20 @@
 # 更新日志
 
+## 未发布
+
+### 新增
+- 新增 **Batch Builder（批量构建）** 标签页（`ui/tabs/batch_builder_tab.py`）：目录扫描、按文件名解析通道、已解析/未解析合并表格（Status 可排序）、Materials to Build 待创建材质预览
+- 新增 `config/texture_channels.json`：文件名关键词 → 通道规则，`builder_key` 复用 `common.json` 的通道名，并补充常见 PBR 后缀（Poly Haven / ambientCG / Quixel / Substance / Unity / Unreal 预设）
+- 新增 `core/texture_scanner.py`：非递归目录扫描，长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）
+- 新增 `core/batch_builder.py`：把扫描结果转换为 `MaterialBuilder` 短 key 并编排批量构建
+- `MaterialBuilder` 扩展通道：Metallic / Opacity / Emission / Transmission / Reflection / Sheen / SSS / Glossiness（通过 `file.invert` 自动反相）；新增 `use_full_chain` 参数支持简单直连
+- VRayMtl 的 prerequisites 现在支持颜色/列表值（如 `reflectionColor: [1, 1, 1]`），通过 `core/prerequisites.py` 实现
+- `config/builder_naming.json`：新增更短的通道后缀缩写
+
+### 变更
+- 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
+- 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
+
 ## 2026-08-17
 
 ### 移除

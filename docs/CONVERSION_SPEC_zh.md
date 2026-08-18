@@ -116,6 +116,8 @@
 | RedshiftMaterial | `coat_brdf` | `1` |
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
+| VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
+| VRayMtl（默认反射） | `reflectionColorAmount` | `1` |
 
 ---
 
@@ -342,12 +344,15 @@ UI 支持同时批量转换多个材质：
 | 功能 | 说明 |
 |---|---|
 | 材质类型下拉框 | 列出 `config/material/*.json` 中的**全部**材质——新增 JSON 即自动成为可构建类型 |
-| 纹理路径 | 可选填入 Color、Roughness、Normal/Bump、Displacement 贴图路径 |
+| 纹理路径 | 可选填入 Color、Roughness/Glossiness、Metallic、Normal/Bump、Displacement、Opacity、Transmission、Reflection、Sheen、SSS、Emission 贴图路径 |
 | Normal/Bump 切换 | 勾选为 Normal，取消为 Bump |
 | SSS | 勾选后额外创建 sss 通道（colorCorrect + layeredTexture + ramp） |
 | Displacement | 勾选后创建置换节点链 |
 | 加入快速选择集 | 勾选后将所有构建节点包进 `QS_M_*` 集合 |
 | Create File From P2D | 从选中的 place2dTexture 节点创建 file 节点并自动连接 |
+| 完整流程开关 | 启用时颜色通道使用 `colorCorrect + layeredTexture`、Roughness 使用 `ramp`；关闭时贴图直接连接（Normal/Bump 仍会创建凹凸/法线节点） |
+| Glossiness | 作为 Roughness 处理，并通过 file 节点的 `invert` 属性自动反相 |
+
 
 ### 9.2 配置来源
 
@@ -360,11 +365,23 @@ Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
 - 命名约定：`config/builder_naming.json`
 - 材质前提条件（`useRoughness`、`refl_brdf` 等）自动从 JSON 应用
 
+### 9.3 Batch Builder（批量构建）
+
+独立的标签页，从贴图目录构建多个材质：
+
+1. `core/texture_scanner.py` 使用 `config/texture_channels.json` 扫描目录（不递归）
+2. 文件名归一化（小写、`-`/空格 → `_`）后，按「长别名优先 + token 匹配 / 忽略下划线子串」解析通道
+3. `core/batch_builder.py` 把解析结果转换为 `MaterialBuilder` 短 key 并调用 `MaterialBuilder.build()`
+4. UI 用同一个表格展示已解析 + 未解析行（Status 列可排序），并提供 Materials to Build 待创建材质预览（含通道数量）
+5. 可选项：目标材质类型、完整流程开关、加入快速选择集
+6. 未解析文件仅展示，不参与构建
+
+
 ---
 
 ## 十、Node Tools
 
-第三个标签页，提供场景中节点批量操作：
+第四个标签页，提供场景中节点批量操作：
 
 - 按类型选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - 批量设置 file 节点的颜色空间
@@ -404,6 +421,7 @@ materialConvert/
 │   ├── bumpNormal.json              # 凹凸/法线节点映射
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
+│   ├── texture_channels.json       # Batch Builder 文件名→通道规则
 │   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
@@ -417,13 +435,16 @@ materialConvert/
 │   ├── prerequisites.py             # 渲染器前提条件处理
 │   ├── logger.py                    # 统一日志模块
 │   ├── builder_context.py           # Material Builder 共享状态与工具
+│   ├── texture_scanner.py           # 目录扫描 / 文件名→通道解析
+│   ├── batch_builder.py             # 批量构建编排
 │   └── material_builder.py          # Material Builder 核心逻辑（配置驱动）
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题样式
-│   └── tabs/                        # 三个功能标签页
+│   └── tabs/                        # 四个功能标签页
 │       ├── converter_tab.py         # 材质转换（含进度条）
 │       ├── builder_tab.py           # Material Builder
+│       ├── batch_builder_tab.py    # Batch Builder
 │       └── node_tools_tab.py        # Node Tools
 ├── main.py                          # 入口脚本
 ├── docs/
