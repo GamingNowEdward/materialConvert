@@ -15,7 +15,6 @@
 - 移除 Builder 别名层：手动 Builder、Batch Builder 与 `MaterialBuilder` 现在都直接使用规范通用属性名；`builder_aliases` 不再存在于 `config/material/common.json`
 - `texture_channels.json` 使用 `common_attr` 表示规范的 `common.json` 属性名
 - Batch Builder 现在将通用属性名直接传入 Material Builder；移除 `COMMON_ATTR_TO_SHORT` 转换表，同时保持现有节点命名不变
-- Builder 通道别名改由 `config/material/common.json` 的 `builder_aliases` 统一维护，颜色通道权重属性从 `color_weight_pairs` 推导；移除 `MaterialBuilder` 内的重复映射
 - 颜色校正节点类型识别改由 `config/colorCorrection.json` 驱动；新增已配置的 CC 节点类型不再需要维护 Python 硬编码类型列表
 - 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
 - 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
