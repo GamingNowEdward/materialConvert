@@ -9,14 +9,17 @@
 ### Changed
 - `core/config_loader.py`: add public `get_all_bn_configs()` / `get_all_cc_configs()` getters
 - Main window now has 5 tabs: Converter → Material Builder → Batch Builder → Node Tools → Debug
+- Main window refactored from `QDialog` to `QMainWindow` so the title bar shows minimize/maximize buttons and the close button works reliably in Maya 2027 (PySide6/Qt6)
 
 ### Fixed
 - `core/config_validator.py`: plugin detection now uses `pluginInfo(loaded)` + `loadPlugin` (previously `pluginInfo(exists)` returned false for installed-but-not-loaded plugins, wrongly skipping entire installed renderer groups); installed-but-unloaded plugins are now auto-loaded before validation
 - `core/config_validator.py`: the `displacementShader` sentinel `node_type` is now created and its attributes validated (previously all skipped); removed the `COMMON_PLACEHOLDERS` false positive — explicitly defined real attributes (e.g. `RedshiftBumpMap.scale`, `aiNormalMap.input`) are no longer mis-skipped as common placeholders
+- `ui/styles.py`: main window background rule now targets `QMainWindow` (previously `QDialog`), restoring the dark `#232323` background after the window refactor
 
 ### Documentation
 - `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: trimmed to conversion-only content (removed Material Builder / Batch Builder / Node Tools / Debug / Project Structure sections that overlapped with README); keeps main material attributes, bump/normal, color correction, displacement, node creation, old-node handling, texture connection compatibility, and batch conversion
 - `README.md` / `README_zh.md`: added jump links to both `CONVERSION_SPEC` language versions at the top
+- `README.md` / `docs/README_zh.md` / `docs/AGENTS.md`: main window description updated to `QMainWindow` + `QTabWidget`; `docs/AGENTS.md` import example for `converter_ui.py` corrected to `from ui import QtWidgets, shiboken`
 
 ## 2026-08-19
 

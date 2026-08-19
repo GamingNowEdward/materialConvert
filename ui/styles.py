@@ -1,5 +1,5 @@
 FULL_STYLESHEET = """
-QDialog { background-color: #232323; }
+QMainWindow, QDialog { background-color: #232323; }
 QLabel { color: #DCDCDC; font-family: 'Segoe UI'; }
 QCheckBox { color: #DCDCDC; }
 QCheckBox::indicator:unchecked { border: 1px solid #555; background-color: #151515; }

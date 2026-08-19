@@ -1,4 +1,4 @@
-from ui import QtWidgets, QtCore, shiboken
+from ui import QtWidgets, shiboken
 from core.builder_context import BuilderContext
 from ui.styles import FULL_STYLESHEET
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, DebugTab)
@@ -14,7 +14,7 @@ def _maya_main_window():
     return None
 
 
-class ConverterWindow(QtWidgets.QDialog):
+class ConverterWindow(QtWidgets.QMainWindow):
 
     WINDOW_NAME = "pbrConverterWindow"
     WINDOW_TITLE = "Material Builder & Converter"
@@ -35,7 +35,6 @@ class ConverterWindow(QtWidgets.QDialog):
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
         self.setMinimumSize(960, 800)
-        self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint)
 
         self._build_ui()
         self._apply_style()
@@ -44,7 +43,8 @@ class ConverterWindow(QtWidgets.QDialog):
         self.setStyleSheet(FULL_STYLESHEET)
 
     def _build_ui(self):
-        main_layout = QtWidgets.QVBoxLayout(self)
+        central = QtWidgets.QWidget()
+        main_layout = QtWidgets.QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
@@ -57,6 +57,8 @@ class ConverterWindow(QtWidgets.QDialog):
         self.tab_widget.addTab(self.batch_builder_tab.build_ui(), "  Batch Builder  ")
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
         self.tab_widget.addTab(self.debug_tab.build_ui(), "  Debug  ")
+
+        self.setCentralWidget(central)
 
 
 def show():

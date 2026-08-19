@@ -45,7 +45,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，支持回调函数，UI 层注册回调更新日志面板
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，5 个标签页）
+- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
@@ -60,7 +60,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
 ```python
 from ui import QtWidgets, QtCore, QtGui, cmds       # tabs
-from ui import QtWidgets, QtCore, QtGui, shiboken    # converter_ui.py
+from ui import QtWidgets, shiboken    # converter_ui.py
 ```
 PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一行 import。
 

@@ -123,7 +123,7 @@ materialConvert/
 │   ├── material_builder.py          # Material Builder core logic
 │   └── config_validator.py          # JSON config validation (Debug tab)
 ├── ui/                              # User interface
-│   ├── converter_ui.py              # Main window (QTabWidget)
+│   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget)
 │   ├── styles.py                    # QSS dark theme
 │   └── tabs/                        # Five functional tabs
 │       ├── converter_tab.py         # Material conversion

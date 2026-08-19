@@ -9,14 +9,17 @@
 ### 变更
 - `core/config_loader.py`：新增 `get_all_bn_configs()` / `get_all_cc_configs()` 公开 getter
 - 主窗口标签页增至 5 个：Converter → Material Builder → Batch Builder → Node Tools → Debug
+- 主窗口由 `QDialog` 重构为 `QMainWindow`，标题栏恢复最小化/最大化按钮，并修复 Maya 2027（PySide6/Qt6）下关闭按钮失灵
 
 ### 修复
 - `core/config_validator.py`：插件检测改用 `pluginInfo(loaded)` + `loadPlugin`（此前 `pluginInfo(exists)` 对已安装但未加载的插件误判为 not found，导致已安装渲染器被整组跳过）；已安装但未加载的插件现在会先自动加载再校验
 - `core/config_validator.py`：`displacementShader` 哨兵 `node_type` 现在会创建节点并实际校验其属性（此前全部跳过）；移除 `COMMON_PLACEHOLDERS` 误判——显式定义的真实属性（如 `RedshiftBumpMap.scale`、`aiNormalMap.input`）不再被误判为 common 占位符跳过
+- `ui/styles.py`：主窗口背景规则改为作用于 `QMainWindow`（原为 `QDialog`），重构后恢复暗色 `#232323` 背景
 
 ### 文档
 - `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：精简为仅转换相关内容（移除 Material Builder / Batch Builder / Node Tools / Debug / 项目结构章节，与 README 重叠部分删除），只保留主材质属性、凹凸/法线、颜色校正、置换、节点创建、旧节点处理、纹理连接兼容性、批量转换
 - `README.md` / `README_zh.md`：顶部新增两个 `CONVERSION_SPEC` 语言的跳转链接
+- `README.md` / `docs/README_zh.md` / `docs/AGENTS.md`：主窗口描述更新为 `QMainWindow` + `QTabWidget`；`docs/AGENTS.md` 中 `converter_ui.py` 的导入示例修正为 `from ui import QtWidgets, shiboken`
 
 ## 2026-08-19
 
