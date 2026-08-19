@@ -12,8 +12,5 @@ class Logger:
         if self._callback:
             self._callback(message, error=error)
 
-    def get_lines(self):
-        return list(self._lines)
-
     def clear(self):
         self._lines.clear()

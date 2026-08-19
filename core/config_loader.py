@@ -1,6 +1,11 @@
 import json
 import os
 
+
+def normalize_keyword(kw):
+    """Normalize keyword: lowercase and strip underscores/dashes, used for matching colorspace attribute names."""
+    return kw.lower().replace("_", "").replace("-", "")
+
 class NodeMapping:
     def __init__(self, data, renderer):
         self.renderer = renderer
@@ -10,10 +15,12 @@ class NodeMapping:
         self.source_connection = data.get("source_connection", "")
         self.scale = data.get("scale", "")
         self.input = data.get("input", "")
-        self.isNormal = data.get("isNormal", "")
-        self.isNormal_value = data.get("isNormal_value", None)
+        self.is_normal = data.get("is_normal", "")
+        self.is_normal_value = data.get("is_normal_value", None)
         self.input_type = data.get("input_type", "")
         self.input_type_value = data.get("input_type_value", None)
+        self.file_source = data.get("file_source", "outColor")
+        self.default_scale = data.get("default_scale", None)
 
 
 class BumpNormalConfig:
@@ -43,6 +50,7 @@ class ColorCorrectionConfig:
         self.hue = color_data.get("hue", "")
         self.saturation = color_data.get("saturation", "")
         self.hue_range = color_data.get("hue_range", None)
+        self.hue_center = color_data.get("hue_center", 0)
 
 
 class MaterialConfig:
@@ -54,6 +62,7 @@ class MaterialConfig:
         self.short_name = mat_data.get("short_name", "")
         self.uiPanel_display_name = mat_data.get("uiPanel_display_name", self.node_type)
         self.renderer = mat_data.get("renderer", "unknown")
+        self.plugin = mat_data.get("plugin", "")
 
         self.attr_map = {}
         self.prerequisites = {}
@@ -89,13 +98,12 @@ class MaterialConfig:
         self.displacement_node_type = disp_data.get("node_type", "")
         self.displacement_scale = disp_data.get("displacementScale", "")
         self.displacement_texture = disp_data.get("displacementTexture", "")
+        self.displacement_file_source = disp_data.get("file_source", "outAlpha")
+        self.displacement_lyr_src = disp_data.get("lyr_src", "outAlpha")
+        self.displacement_output = disp_data.get("output", "displacement")
 
     def get_maya_attr(self, common_attr):
         return self.attr_map.get(common_attr, "")
-
-    def has_attr(self, common_attr):
-        val = self.attr_map.get(common_attr, "")
-        return bool(val)
 
     def get_prerequisites(self):
         return self.prerequisites
@@ -112,10 +120,10 @@ class ConfigLoader:
         self._common_attrs = {}
         self._bump_normal_configs = {}
         self._color_correction_configs = {}
-        self._builder_specs = {}
         self._builder_naming = {}
         self._color_weight_pairs = []
         self._color_space_config = {}
+        self._texture_channels = {}
         self._load_all()
 
     def _load_all(self):
@@ -123,15 +131,14 @@ class ConfigLoader:
         self._load_materials()
         self._load_bump_normal()
         self._load_color_correction()
-        self._load_builder_specs()
         self._load_builder_naming()
         self._load_color_space()
+        self._load_texture_channels()
 
     def _load_common(self):
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
         raw = self._read_json(path)
         self._color_weight_pairs = raw.get("color_weight_pairs", [])
-
         common_attr_groups = {}
         for group_name, group_data in raw.items():
             if isinstance(group_data, dict):
@@ -194,20 +201,26 @@ class ConfigLoader:
     def get_material_config(self, node_type):
         return self._material_configs.get(node_type)
 
-    def get_all_material_node_types(self):
-        return list(self._material_configs.keys())
-
     def get_all_material_configs(self):
         return dict(self._material_configs)
 
     def get_color_weight_pairs(self):
         return list(self._color_weight_pairs)
 
+    def get_weight_attr_for_common_attr(self, common_attr):
+        for color_attr, weight_attr in self._color_weight_pairs:
+            if color_attr == common_attr:
+                return weight_attr
+        return ""
+
     def get_common_attrs(self):
         return list(self._common_attrs)
 
     def get_bump_normal_config(self, renderer):
         return self._bump_normal_configs.get(renderer)
+
+    def get_all_bn_configs(self):
+        return dict(self._bump_normal_configs)
 
     def get_all_bn_types(self):
         types = set()
@@ -229,8 +242,8 @@ class ConfigLoader:
     def get_color_correction_config(self, renderer):
         return self._color_correction_configs.get(renderer)
 
-    def get_builder_spec(self, renderer):
-        return self._builder_specs.get(renderer)
+    def get_all_cc_configs(self):
+        return dict(self._color_correction_configs)
 
     def get_builder_naming(self):
         return dict(self._builder_naming)
@@ -241,26 +254,11 @@ class ConfigLoader:
             return
         self._builder_naming = self._read_json(path)
 
-    def _load_builder_specs(self):
-        path = os.path.join(self._CONFIG_DIR, "builder_specs.json")
-        if not os.path.exists(path):
-            return
-        self._builder_specs = self._read_json(path)
-
     def identify_cc_renderer(self, node_type):
         for renderer, cc in self._color_correction_configs.items():
             if cc.node_type == node_type:
                 return renderer
         return None
-
-    def identify_renderer(self, node_type):
-        config = self._material_configs.get(node_type)
-        if not config:
-            for nt, cfg in self._material_configs.items():
-                if nt.lower() == node_type.lower():
-                    return nt
-            return None
-        return config.node_type
 
     def get_display_name(self, node_type):
         config = self._material_configs.get(node_type)
@@ -283,19 +281,42 @@ class ConfigLoader:
             return
         self._color_space_config = self._read_json(path)
 
+    def _load_texture_channels(self):
+        path = os.path.join(self._CONFIG_DIR, "texture_channels.json")
+        if not os.path.exists(path):
+            return
+        self._texture_channels = self._read_json(path)
+
+    def get_filename_role_keywords(self):
+        """Build the filename keyword -> colorspace role mapping from texture_channels.json.
+
+        Channels with type "color" map to srgb; the rest (float/normal/bump/displacement)
+        map to raw. Short aliases (length < 5) are filtered out to avoid substring
+        false positives (e.g. "col" matching "school").
+        """
+        roles = {"srgb": [], "raw": []}
+        for channel_data in self._texture_channels.get("channels", {}).values():
+            role = "srgb" if channel_data.get("type") == "color" else "raw"
+            for alias in channel_data.get("aliases", []):
+                kw = normalize_keyword(alias)
+                if len(kw) >= 5 and kw not in roles[role]:
+                    roles[role].append(kw)
+        return roles
+
     def get_color_space_config(self):
         return dict(self._color_space_config)
 
     def get_expanded_attribute_keywords(self):
         common_roles = self._color_space_config.get("commonAttributeRoles", {})
-        expanded = {role: list(keywords) for role, keywords in common_roles.items()}
+        expanded = {role: [normalize_keyword(k) for k in keywords]
+                    for role, keywords in common_roles.items()}
 
         for node_type, mat_config in self._material_configs.items():
             for common_attr, maya_attr in mat_config.attr_map.items():
                 if not maya_attr:
                     continue
                 for role, common_attrs in common_roles.items():
-                    if common_attr in common_attrs and maya_attr not in expanded[role]:
-                        expanded[role].append(maya_attr)
+                    if common_attr in common_attrs and normalize_keyword(maya_attr) not in expanded[role]:
+                        expanded[role].append(normalize_keyword(maya_attr))
 
         return expanded

@@ -1,7 +1,7 @@
-from ui import QtWidgets, QtCore, QtGui, cmds
+from ui import QtWidgets, cmds
 import os
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
-from core.config_loader import ConfigLoader
+from core.config_loader import ConfigLoader, normalize_keyword
 
 
 class NodeToolsTab:
@@ -11,6 +11,7 @@ class NodeToolsTab:
         self.config = ConfigLoader()
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
+        self._filename_role_keywords = self.config.get_filename_role_keywords()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -244,22 +245,61 @@ class NodeToolsTab:
         path = cmds.getAttr(f"{file_node}.fileTextureName")
         if not path:
             return None
-        filename = os.path.basename(path).lower()
-        for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
-            for kw in cs_data.get("filenameKeywords", []):
+        filename = os.path.basename(path).lower().replace("_", "").replace("-", "")
+        for role, keywords in self._filename_role_keywords.items():
+            for kw in keywords:
                 if kw in filename:
                     return role
         return None
 
+    @staticmethod
+    def _is_material_node(node):
+        try:
+            return bool(cmds.listConnections(f"{node}.outColor", type="shadingEngine"))
+        except Exception:
+            return False
+
+    _INTERNAL_TRACE_NODES = {
+        "defaultTextureList1", "defaultRenderUtilityList1",
+        "defaultShaderList1", "defaultColorMgtGlobals",
+    }
+
+    def _trace_channel_targets(self, file_node, max_depth=4):
+        """BFS trace all output endpoints of a file node, returning the list of attribute
+        names on hit materials.
+
+        Covers single-channel connections (outColorR/G/B), outAlpha outputs, and
+        traversal through intermediate nodes (cc/layeredTexture/multiplyDivide/bump,
+        etc.). Maya default render list containers (defaultTextureList, etc.) are
+        skipped to avoid polluting the trace.
+        """
+        targets = []
+        visited = {file_node}
+        queue = [(file_node, 0)]
+
+        while queue:
+            node, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+            for dest in (cmds.listConnections(node, plugs=True, destination=True) or []):
+                if "." not in dest:
+                    continue
+                dnode, attr_path = dest.split(".", 1)
+                if dnode in self._INTERNAL_TRACE_NODES:
+                    continue
+                if self._is_material_node(dnode):
+                    targets.append(attr_path.rsplit(".", 1)[-1])
+                elif dnode not in visited:
+                    visited.add(dnode)
+                    queue.append((dnode, depth + 1))
+
+        return targets
+
     def _match_by_channel(self, file_node):
-        conns = cmds.listConnections(f"{file_node}.outColor", plugs=True, source=False) or []
-        for conn in conns:
-            attr_name = conn.split(".")[-1]
+        for attr_name in self._trace_channel_targets(file_node):
+            n_attr = normalize_keyword(attr_name)
             for role, keywords in self.expanded_keywords.items():
-                if attr_name in keywords:
-                    return role
-            for role, cs_data in self.cs_config.get("colorSpaces", {}).items():
-                if attr_name in cs_data.get("attributeKeywords", []):
+                if n_attr in keywords:
                     return role
         return None
 
@@ -271,13 +311,17 @@ class NodeToolsTab:
 
         default_role = self.cs_config.get("default", "raw")
         count = 0
+        suspicious = []
 
         for f in selected:
-            role = self._match_by_filename(f)
-            if not role:
-                role = self._match_by_channel(f)
-            if not role:
-                role = default_role
+            role_fn = self._match_by_filename(f)
+            role_chan = self._match_by_channel(f)
+
+            if role_fn and role_chan and role_fn != role_chan:
+                suspicious.append(f)
+                continue
+
+            role = role_fn or role_chan or default_role
 
             if self._set_color_space(f, role):
                 count += 1
@@ -285,4 +329,13 @@ class NodeToolsTab:
             else:
                 cmds.warning(f"{f}: no matching color space found for role '{role}'")
 
-        print(f"Auto matched color space on {count}/{len(selected)} file node(s).")
+        if suspicious:
+            cmds.select(suspicious, add=True)
+            for f in suspicious:
+                path = cmds.getAttr(f"{f}.fileTextureName") or ""
+                print(f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
+                      f"vs channel→{self._match_by_channel(f)}, skipped, handle manually")
+            print(f"Auto matched color space on {count}/{len(selected)} file node(s); "
+                  f"{len(suspicious)} ambiguous node(s) selected for manual review.")
+        else:
+            print(f"Auto matched color space on {count}/{len(selected)} file node(s).")

@@ -1,8 +1,7 @@
-from ui import QtWidgets, QtCore, QtGui, shiboken
+from ui import QtWidgets, QtCore, shiboken
 from core.builder_context import BuilderContext
 from ui.styles import FULL_STYLESHEET
-from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab,
-                      TransformTab, AttrModifierTab, LocatorTab)
+from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, DebugTab)
 
 
 def _maya_main_window():
@@ -30,9 +29,8 @@ class ConverterWindow(QtWidgets.QDialog):
         self.converter_tab = ConverterTab()
         self.builder_tab = BuilderTab(self.ctx)
         self.node_tools_tab = NodeToolsTab(self.ctx)
-        self.transform_tab = TransformTab(self.ctx)
-        self.attr_modifier_tab = AttrModifierTab(self.ctx)
-        self.locator_tab = LocatorTab(self.ctx)
+        self.batch_builder_tab = BatchBuilderTab(self.ctx)
+        self.debug_tab = DebugTab()
 
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
@@ -56,10 +54,9 @@ class ConverterWindow(QtWidgets.QDialog):
 
         self.tab_widget.addTab(self.converter_tab.build_ui(), "  Converter  ")
         self.tab_widget.addTab(self.builder_tab.build_ui(), "  Material Builder  ")
+        self.tab_widget.addTab(self.batch_builder_tab.build_ui(), "  Batch Builder  ")
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
-        self.tab_widget.addTab(self.transform_tab.build_ui(), "  Transform Tools  ")
-        self.tab_widget.addTab(self.attr_modifier_tab.build_ui(), "  Attr Modifier  ")
-        self.tab_widget.addTab(self.locator_tab.build_ui(), "  Locator  ")
+        self.tab_widget.addTab(self.debug_tab.build_ui(), "  Debug  ")
 
 
 def show():

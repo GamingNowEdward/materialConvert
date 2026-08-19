@@ -1,4 +1,4 @@
-import pymel.core as pm
+import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader
 import core.node_utils as node_utils
@@ -39,7 +39,7 @@ class MaterialConverter:
         source_renderer = self.config.get_renderer_name(source_node_type)
         target_renderer = self.config.get_renderer_name(target_node_type)
 
-        msg = f"Converting: {source_mat.name()} ({self.config.get_display_name(source_node_type)})"
+        msg = f"Converting: {source_mat} ({self.config.get_display_name(source_node_type)})"
         log.append(msg)
         self.logger.log(msg)
         msg = f"       to: {self.config.get_display_name(target_node_type)}"
@@ -49,9 +49,9 @@ class MaterialConverter:
         attr_info = self.attr_converter.collect_attrs(source_mat, source_config)
 
         suffix = target_config.short_name or "converted"
-        base_name = source_mat.name() + "_" + suffix
+        base_name = source_mat + "_" + suffix
         new_mat = node_utils.create_target_material(target_node_type, base_name)
-        msg = f"Created: {new_mat.name()}"
+        msg = f"Created: {new_mat}"
         log.append(msg)
         self.logger.log(msg)
 
@@ -72,15 +72,15 @@ class MaterialConverter:
         if source_renderer != target_renderer:
             self.disp_converter.convert(source_mat, new_mat, source_config, target_config, target_renderer, log)
 
-        sgs = source_mat.outColor.connections(plugs=False)
+        sgs = cmds.listConnections(f"{source_mat}.outColor", plugs=False) or []
         for sg in sgs:
-            if pm.nodeType(sg) == "shadingEngine":
+            if cmds.nodeType(sg) == "shadingEngine":
                 try:
-                    new_mat.outColor >> sg.surfaceShader
+                    cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
                 except Exception:
-                    pm.warning(f"MaterialConverter: failed to connect {new_mat.name()} to {sg.name()}.surfaceShader")
+                    cmds.warning(f"MaterialConverter: failed to connect {new_mat} to {sg}.surfaceShader")
 
-        msg = f"Disconnected old material: {source_mat.name()}"
+        msg = f"Disconnected old material: {source_mat}"
         log.append(msg)
         self.logger.log(msg)
 
@@ -90,7 +90,6 @@ class MaterialConverter:
         self.logger.clear()
         results = []
 
-        import maya.cmds as cmds
         cmds.undoInfo(openChunk=True)
 
         try:
@@ -107,7 +106,7 @@ class MaterialConverter:
                     self.logger.log(msg)
                     continue
                 if source_type == target_node_type:
-                    msg = f"Skipped {mat.name()}: already {self.config.get_display_name(target_node_type)}"
+                    msg = f"Skipped {mat}: already {self.config.get_display_name(target_node_type)}"
                     results.append({
                         "material": mat,
                         "skipped": True,

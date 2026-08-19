@@ -18,7 +18,13 @@
     "disp": "_disp",
     "bump": "_bump",
     "nrm": "_nrm",
-    "sss": "_sss"
+    "sss": "_sss",
+    "metallic": "_metallic",
+    "opacity": "_opacity",
+    "emission": "_emission",
+    "transmission": "_transmission",
+    "sheen": "_sheen",
+    "reflection": "_reflection"
   },
   "layered_blend_modes": [6, 1, 1],
   "layered_colors": [[1, 1, 1], [1, 1, 1], [0.5, 0.5, 0.5]]

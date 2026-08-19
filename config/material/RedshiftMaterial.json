@@ -2,6 +2,7 @@
   "material": {
     "node_type": "RedshiftMaterial",
     "target_connection": "surfaceShader",
+    "plugin": "redshift4maya",
     "prerequisites": {
       "refl_brdf": {
         "attribute": "refl_brdf",
@@ -68,6 +69,9 @@
   "displacement": {
     "node_type": "RedshiftDisplacement",
     "displacementScale": "scale",
-    "displacementTexture": "texMap"
+    "displacementTexture": "texMap",
+    "file_source": "outAlpha",
+    "lyr_src": "outColor",
+    "output": "out"
   }
 }

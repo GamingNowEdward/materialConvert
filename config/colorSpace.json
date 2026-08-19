@@ -3,13 +3,15 @@
 
     "commonAttributeRoles": {
         "srgb": [
-            "baseColor", "diffuseColor", "specularColor", "emissionColor",
-            "subsurfaceColor", "coatColor", "sheenColor", "fuzzColor", "illumColor"
+            "baseColor", "specularColor", "transmissionColor", "subsurfaceColor",
+            "coatColor", "fuzzColor", "emissionColor",
+            "diffuseColor", "sheenColor", "illumColor"
         ],
         "raw": [
-            "metalness", "roughness", "diffuseRoughness", "specularRoughness",
-            "normalCamera", "bumpMap", "displacement", "opacity",
-            "geometryOpacity", "opacityMap"
+            "metallic", "roughness", "specularRoughness", "normal_bump",
+            "displacementTexture", "opacity",
+            "metalness", "normalCamera", "bumpMap", "displacement",
+            "diffuseRoughness", "geometryOpacity", "opacityMap"
         ]
     },
 
@@ -20,29 +22,6 @@
                 "sRGB - Texture",
                 "sRGB",
                 "sRGB Encoded Rec.709 (sRGB)"
-            ],
-
-            "filenameKeywords": [
-                "basecolor",
-                "base_color",
-                "albedo",
-                "diffuse",
-                "color",
-                "emission",
-                "sss",
-                "subsurface"
-            ],
-
-            "attributeKeywords": [
-                "baseColor",
-                "diffuseColor",
-                "specularColor",
-                "emissionColor",
-                "subsurfaceColor",
-                "coatColor",
-                "sheenColor",
-                "fuzzColor",
-                "illumColor"
             ]
         },
 
@@ -52,38 +31,6 @@
                 "Raw",
                 "Non-Color",
                 "Data"
-            ],
-
-            "filenameKeywords": [
-                "roughness",
-                "rough",
-                "metallic",
-                "metal",
-                "normal",
-                "nrm",
-                "bump",
-                "displacement",
-                "disp",
-                "opacity",
-                "ao",
-                "ambient"
-            ],
-
-            "attributeKeywords": [
-                "metalness",
-                "roughness",
-                "diffuseRoughness",
-                "specularRoughness",
-                "normalCamera",
-                "bumpMap",
-                "displacement",
-                "opacity",
-                "geometryOpacity",
-                "opacityMap",
-                "refl_metalness",
-                "base_metalness",
-                "base_diffuse_roughness",
-                "geometry_normal"
             ]
         }
     }

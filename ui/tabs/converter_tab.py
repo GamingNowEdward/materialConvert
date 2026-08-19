@@ -1,5 +1,5 @@
 from ui import QtWidgets, QtCore, QtGui
-import pymel.core as pm
+import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader
 from core.converter import MaterialConverter
@@ -112,13 +112,13 @@ class ConverterTab:
         self.mat_list.clear()
         self.current_materials = []
 
-        selection = pm.ls(sl=True)
+        selection = cmds.ls(sl=True)
         if not selection:
             self.selection_display.setText("(Nothing Selected)")
             self._add_log("No Maya objects currently selected.")
             return
 
-        names = [obj.name() for obj in selection[:5]]
+        names = selection[:5]
         display = ", ".join(names)
         if len(selection) > 5:
             display += f" (+{len(selection) - 5} more)"
@@ -134,7 +134,7 @@ class ConverterTab:
         for mat in materials:
             node_type = node_utils.identify_node_type(mat)
             display_name = self.config.get_display_name(node_type)
-            item_text = f" {mat.name()}   ({display_name})"
+            item_text = f" {mat}   ({display_name})"
             item = QtWidgets.QListWidgetItem(item_text)
             item.setData(256, mat)
             self.mat_list.addItem(item)
@@ -186,7 +186,7 @@ class ConverterTab:
 
         new_mats = [r["new_material"] for r in results if r.get("success") and r.get("new_material")]
         if new_mats:
-            pm.select(new_mats)
+            cmds.select(new_mats)
 
         self.refresh_materials()
 

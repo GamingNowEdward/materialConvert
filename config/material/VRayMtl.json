@@ -2,11 +2,17 @@
   "material": {
     "node_type": "VRayMtl",
     "target_connection": "surfaceShader",
+    "plugin": "vrayformaya",
     "prerequisites": {
       "roughness_mode": {
         "attribute": "useRoughness",
         "value": 1
       }
+        ,
+        "reflection_color": {
+          "attribute": "reflectionColor",
+          "value": [1, 1, 1]
+        }
     },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",
@@ -35,8 +41,8 @@
     "thinWalled": "refrThinWalled"
   },
   "subsurface": {
-    "subsurfaceWeight": "",
-    "subsurfaceColor": "",
+    "subsurfaceWeight": "translucencyAmount",
+    "subsurfaceColor": "translucencyColor",
     "subsurfaceRadius": "",
     "subsurfaceScale": ""
   },
@@ -44,7 +50,7 @@
     "coatWeight": "coatColorAmount",
     "coatColor": "coatColor",
     "coatRoughness": "coatGlossiness",
-    "coatIor": "coatIor"
+    "coatIor": "coatIOR"
   },
   "fuzz": {
     "fuzzWeight": "sheenColorAmount",
@@ -58,6 +64,9 @@
   "displacement": {
     "node_type": "displacementShader",
     "displacementScale": "scale",
-    "displacementTexture": "displacement"
+    "displacementTexture": "displacement",
+    "file_source": "outAlpha",
+    "lyr_src": "outAlpha",
+    "output": "displacement"
   }
 }

@@ -2,6 +2,8 @@
 
 **English** | [简体中文](docs/README_zh.md)
 
+**Conversion Specification:** [English](docs/CONVERSION_SPEC.md) | [简体中文](docs/CONVERSION_SPEC_zh.md)
+
 Maya toolkit for PBR material conversion, building, and scene management across Arnold / Redshift / V-Ray.
 
 ## Installation
@@ -29,7 +31,7 @@ exec(open(r"your_path\materialConvert\main.py").read())
 Double-click `copy_launch.bat` to copy the launch command to clipboard, then paste directly into Maya Script Editor.
 
 **Supported**: Maya 2024+
-**Requires**: [PyMEL](https://help.autodesk.com/view/MAYAUL/2027/ENU/?guid=GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4) (included with Maya, ensure it is installed in your Maya environment)
+**Requires**: none (zero external dependencies, pure `maya.cmds` API)
 
 ## Features
 
@@ -42,41 +44,34 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 ### Material Builder
 - One-click build complete PBR materials from texture paths
-- Supports Color / Roughness / Normal / Bump / Displacement channels
+- Supports Color / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission channels
 - SSS channel support (colorCorrect + layeredTexture + ramp)
 - Displacement node chain support
-- Renderer buttons dynamically generated from config
+- Material type dropdown driven by `config/material/*.json` — new materials appear automatically
+- Optional "Add To Quick Select Set" toggle
 - Create File From P2D: create file node from selected place2dTexture
+
+### Batch Builder
+- Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
+- Group textures into materials and preview which materials will be created (`Materials to Build`)
+- Show parsed channels and unparsed files in one table with a sortable Status column
+- Batch build all / selected materials to any supported renderer
+- Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp) or simple direct connection
+- Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
+
 
 ### Node Tools
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
 - **Set File Color Space**: Batch set color space on selected file nodes
-- **Auto Match Selected**: Automatically match color space based on filename keywords and connection channels (reference `config/colorSpace.json`)
+- **Auto Match Selected**: Automatically match color space — filename keywords from `config/texture_channels.json` (grouped by channel type), channel match via BFS-tracing all downstream connections (single-channel/outAlpha/intermediate nodes) with normalized attribute keywords from `commonAttributeRoles` + `config/material/*.json` expansion; ambiguous nodes (filename role ≠ channel role) are skipped and kept selected for manual review
 - **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
 - **Rename Shading Engine**: Batch rename SG to match material names
 
-### Transform Tools
-- **Align To Floor**: Move objects so lowest point touches Y=0
-- **Axis Alignment**: Align to X/Y/Z min/max bounds
-- **Center Pivots**: Center pivot points on selected objects
-- **World Space Location**: Move objects to specified world coordinates
-- **Freeze Translations**: Reset translation values to zero
-- **Freeze Rotations**: Reset rotation values to zero
-- **Freeze Scale**: Reset scale values to one
-- **Freeze All**: Reset all transforms at once
-- **Apply All Pipeline**: Center pivots → Set location → Floor align → Y-min align → Freeze all
-
-### Attr Modifier
-- Batch modify attribute values on selected nodes
-- Supports Boolean, Float, Integer, and String data types
-- Automatically checks both transform and shape nodes
-
-### Locator
-- Auto-create Layout Locator for selected objects
-- Scale Locator based on bounding box dimensions
-- Per-axis (X/Y/Z) independent scale multipliers
-- Optional display override color
-- Prefix support for naming convention
+### Debug
+- Validate all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
+- Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
+- Renderers without an installed plugin are auto-loaded when possible, otherwise skipped entirely (never misreported as spelling errors)
+- Filterable validation log (Errors / Warnings / Skipped / OK / Info) with category color coding
 
 ## Architecture
 
@@ -87,6 +82,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 
 ### Key Design Principles
 - **Config-driven**: All renderer mappings defined in JSON files, zero hardcoded attribute names in Python code
+- **Config-driven CC types**: Color-correction node detection reads the node types defined in `config/colorCorrection.json`; adding a configured CC type requires no Python type-list update
 - **Easy extension**: Adding new renderer support = add JSON file in `config/material/`, no code changes needed
 - **Modular converters**: 4 independent modules handle attribute transfer, bump/normal, color correction, and displacement
 - **Unified imports**: PySide version detection centralized in `ui/__init__.py`
@@ -98,7 +94,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 materialConvert/
 ├── config/                          # JSON configuration files
 │   ├── material/                    # Renderer material attribute mappings
-│   │   ├── common.json              # Universal PBR parameters
+│   │   ├── common.json              # Universal PBR parameters and color-weight relationships
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json
@@ -108,7 +104,7 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
-│   ├── builder_specs.json           # Material Builder renderer specs
+│   ├── texture_channels.json       # Batch Builder filename-to-channel rules
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
@@ -121,23 +117,30 @@ materialConvert/
 │   ├── node_utils.py                # Maya node utility functions
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
-│   └── builder_context.py           # Material Builder shared state
+│   ├── builder_context.py           # Material Builder shared state
+│   ├── texture_scanner.py           # Directory scanning / filename-to-channel parsing
+│   ├── batch_builder.py             # Batch build orchestration
+│   ├── material_builder.py          # Material Builder core logic
+│   └── config_validator.py          # JSON config validation (Debug tab)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme
-│   └── tabs/                        # Six functional tabs
+│   └── tabs/                        # Five functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
+│       ├── batch_builder_tab.py    # Batch Builder
 │       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator tool
+│       └── debug_tab.py             # Debug (config validation)
 ├── docs/                            # Documentation
+│   ├── AGENTS.md                    # AI Agent development guide
 │   ├── CONVERSION_SPEC.md           # Full conversion specification
 │   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
 │   └── README_zh.md                 # 中文版 README
 ├── main.py                          # Entry script
-└── CHANGELOG.md                     # Changelog
+├── copy_launch.bat                  # Double-click to copy launch command
+├── LICENSE
+├── CHANGELOG.md                     # Changelog
+└── CHANGELOG_zh.md                  # 中文版更新日志
 ```
 
 ## Documentation

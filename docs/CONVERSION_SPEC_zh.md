@@ -48,8 +48,8 @@
 | **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refr_color | refractionColor |
 | **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacity_color | opacityMap |
 | **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refr_thin_walled | refrThinWalled |
-| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | - |
-| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | - |
+| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | translucencyAmount |
+| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | translucencyColor |
 | **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | ms_radius | - |
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
@@ -75,9 +75,9 @@
 ### 1.3 值传递规则
 
 - **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
-- **Alpha Is Luminance**：属性传递完成后，扫描目标材质所有连接，若发现使用 `outAlpha` 的连接，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过）
-- **数值**：直接复制（float/int）
-- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float（如 V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`），自动回退取第一个通道值
+- **Alpha Is Luminance**：属性传递完成后，按目标配置的**实际属性名**扫描目标材质所有连接，并**递归追踪上游**（穿越 CC/ramp/layeredTexture/bump 等中间节点），若发现链条中使用 `outAlpha` 输出，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过；opacity 透明度通道豁免，避免误开真实 alpha 贴图）
+- **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
+- **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
@@ -116,6 +116,7 @@
 | RedshiftMaterial | `coat_brdf` | `1` |
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
+| VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
 
 ---
 
@@ -178,15 +179,27 @@
 | **Redshift** | `RedshiftColorCorrection` | `input` | `outColor` | `hue` | [0, 360] |
 | **V-Ray** | `VRayColorCorrection` | `texture_map` | `outColor` | `hue_shift` | [-180, 180] |
 
-### 3.3 Hue 范围归一化
+### 3.3 Hue 归一化
 
-所有 hue 值统一归一化到 **0-360** 作为通用格式：
+所有 hue 值统一转换为**通用偏移角 [-180, 180]**(`0` = 无变化),基于各渲染器的中性点(`config/colorCorrection.json` 中的 `hue_center`)：
 
-| 源范围 | → 通用 (0-360) | 通用 → 目标范围 |
-|---|---|---|
-| Arnold [-1, 1] | `(v + 1) / 2 * 360` | → Arnold: `-1 + v/360 * 2` |
-| V-Ray [-180, 180] | `(v + 180) / 360 * 360` | → V-Ray: `-180 + v/360 * 360` |
-| Maya/Redshift [0, 360] | 直通 | 直通 |
+| 渲染器 | 属性 | 范围 | 中性点（无变化） | → 通用偏移角 |
+|---|---|---|---|---|
+| **Maya** | `colorCorrect.hueShift` | [0, 360] | 180 | `v - 180` |
+| **Arnold** | `aiColorCorrect.hueShift` | [-1, 1] | 0（偏移型） | `v * 180` |
+| **Redshift** | `ColorCorrection.hue` | [0, 360] | 0 | `v`（折回 [-180, 180]） |
+| **V-Ray** | `hue_shift` | [-180, 180] | 0（偏移型） | `v` |
+
+通用偏移角 → 目标值：
+
+| 目标 | 换算 |
+|---|---|
+| Maya | `(offset + 180) % 360` |
+| Arnold | `offset / 180` |
+| Redshift | `offset % 360` |
+| V-Ray | `offset` |
+
+示例：Redshift `hue=0`（无变化）→ Arnold `hueShift=0`；Redshift `hue=90` → Arnold `hueShift=0.5`；Redshift `hue=270` → Arnold `hueShift=-0.5`。
 
 ### 3.4 CC 上游检测
 
@@ -211,6 +224,13 @@ file → CC → layeredTexture → 材质
 
 ```
 file → 新CC → layeredTexture → 材质
+```
+
+当中间节点**与源材质共享**（源材质属性仍连接 `layeredTexture.outColor`）时，新 CC 接管中间节点输入之前，先把源材质属性改接回原 CC 输出——**源材质链永不被目标渲染器节点污染**：
+
+```
+file → 原CC → 源材质        （源链保持完整）
+file → 新CC → layeredTexture → 目标材质
 ```
 
 无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性。
@@ -296,9 +316,9 @@ Arnold ↔ V-Ray 互转时不创建置换节点（跳过）。
 
 所有纹理连接均通过 `_smart_connect()` 处理，按顺序尝试三种连接方式：
 
-1. **直连**：`src_plug >> dst_plug`
-2. **outColor**：`src_node.outColor >> dst_plug`（解决 float → color 类型不兼容）
-3. **outAlpha**：`src_node.outAlpha >> dst_plug`（解决 alpha → float 类型不兼容）
+1. **直连**：`cmds.connectAttr(src_plug, dst_plug, force=True)`
+2. **outColor**：`src_node.outColor → dst_plug`（解决 float → color 类型不兼容）
+3. **outAlpha**：`src_node.outAlpha → dst_plug`（解决 alpha → float 类型不兼容）
 
 ---
 
@@ -313,123 +333,3 @@ UI 支持同时批量转换多个材质：
 5. 转换完成后自动选中新创建的材质
 
 ---
-
-## 九、Material Builder
-
-在 Converter 面板的第二个标签页中集成了材质创建功能，支持从纹理路径一键构建 Arnold / Redshift / V-Ray 的完整 PBR 材质。
-
-### 9.1 支持功能
-
-| 功能 | 说明 |
-|---|---|
-| 纹理路径 | 可选填入 Color、Roughness、Normal/Bump、Displacement 贴图路径 |
-| Normal/Bump 切换 | 勾选为 Normal，取消为 Bump |
-| SSS | 勾选后额外创建 sss 通道（colorCorrect + layeredTexture + ramp） |
-| Displacement | 勾选后创建置换节点链 |
-| 三种渲染器 | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
-| Create File From P2D | 从选中的 place2dTexture 节点创建 file 节点并自动连接 |
-
-### 9.2 Redshift 材质前提条件
-
-创建 Redshift 材质时自动设置 `refl_brdf=1`、`coat_brdf=1`，确保与转换器使用的配置一致。
-
----
-
-## 十、Node Tools
-
-第三个标签页，提供场景中节点批量操作：
-
-- 按类型选择（材质/文件/bump/layeredTexture/CC），排除默认材质
-- 批量设置 file 节点的颜色空间
-- 自动匹配选中 file 节点的色彩空间（参考 `config/colorSpace.json`）
-- 批量重命名 Shading Engine（SG）
-
-### 10.1 自动匹配色彩空间规则
-
-匹配优先级（从高到低）：
-
-1. **文件名匹配**（最高优先）：检查文件名是否包含 `filenameKeywords` 中的关键词（不区分大小写）
-   - 例如：`wood_basecolor.jpg` 包含 `basecolor` → 匹配 `srgb` 类型
-2. **连接通道匹配**（次选）：追踪 file 节点的 `outColor` 连接，检查目标材质属性是否在 `attributeKeywords` 中
-   - 例如：file 节点连接到 `mat.roughness` → 匹配 `raw` 类型
-3. **默认类型**（最低优先）：无匹配时使用 `config/colorSpace.json` 中 `default` 指定的类型（当前为 `raw`）
-
-匹配到类型后，从该类型的 `aliases` 列表中依次尝试，选择当前 OCIO 配置中实际可用的色彩空间名称进行设置。
-
----
-
-## 十一、Locator 工具
-
-为选中物体自动创建 Layout Locator，将物体设为 Locator 的子级，并根据包围盒尺寸缩放 Locator。
-
-### 11.1 功能
-
-| 参数 | 说明 |
-|---|---|
-| Prefix | 生成 Locator 的名称前缀，默认 `loc_` |
-| Scale Multipliers | X/Y/Z 三轴独立缩放倍率，作用于包围盒最大边长 |
-| Enable Override Color | 勾选后可选择 Locator 的显示覆盖色 |
-
-### 11.2 转换流程
-
-```
-选中物体 → 获取包围盒大小 → 创建 Locator（同名位置） → 将物体设为 Locator 子级
-→ 清空物体变换 → 设置 Locator 缩放 = 包围盒边长 × 倍率 → 可选设置覆盖色
-```
-
-### 11.3 跳过规则
-
-- 如果物体已有 Locator 作为 direct shape（即本身就是 Locator），跳过
-- 每次操作包裹在 `undoInfo(openChunk=True/closeChunk)` 中，支持单步撤销
-
----
-
-## 十二、项目结构
-
-```
-materialConvert/
-├── config/                          # JSON 配置文件（渲染器材质/CC/bump映射）
-│   ├── material/                    # 各渲染器材质属性映射
-│   │   ├── common.json              # 通用 PBR 参数定义
-│   │   ├── aiStandardSurface.json
-│   │   ├── aiOpenPBRSurface.json
-│   │   ├── RedshiftMaterial.json
-│   │   ├── RedshiftOpenPBRMaterial.json
-│   │   ├── RedshiftStandardMaterial.json
-│   │   └── VRayMtl.json
-│   ├── bumpNormal.json              # 凹凸/法线节点映射
-│   ├── colorCorrection.json         # 颜色校正节点映射
-│   ├── colorSpace.json              # 色彩空间自动匹配规则
-│   ├── builder_specs.json           # Material Builder 渲染器规格
-│   └── builder_naming.json          # Material Builder 命名约定
-├── core/                            # 核心引擎
-│   ├── converter.py                 # MaterialConverter 调度器
-│   ├── converters/                  # 四个业务转换模块
-│   │   ├── attribute.py             # 属性收集与传递
-│   │   ├── bump.py                  # 凹凸/法线转换
-│   │   ├── cc.py                    # 颜色校正转换
-│   │   └── displacement.py          # 置换转换
-│   ├── config_loader.py             # JSON 配置解析
-│   ├── node_utils.py                # Maya 节点操作工具函数（模块级）
-│   ├── prerequisites.py             # 渲染器前提条件处理
-│   ├── logger.py                    # 统一日志模块
-│   └── builder_context.py           # Material Builder 共享状态与工具
-├── ui/                              # 用户界面
-│   ├── converter_ui.py              # 主窗口 (QTabWidget)
-│   ├── styles.py                    # QSS 暗色主题样式
-│   └── tabs/                        # 六个功能标签页
-│       ├── converter_tab.py         # 材质转换（含进度条）
-│       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator 工具
-├── main.py                          # 入口脚本
-├── docs/
-│   ├── AGENTS.md                    # AI Agent 开发指南
-│   ├── CONVERSION_SPEC.md           # 英文版转换规格说明
-│   ├── CONVERSION_SPEC_zh.md        # 本文档
-│   └── README_zh.md                 # 中文版 README
-├── CHANGELOG.md                     # 变更日志
-└── CHANGELOG_zh.md                  # 中文版更新日志
-```

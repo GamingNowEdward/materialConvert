@@ -1,4 +1,3 @@
-import pymel.core as pm
 import maya.cmds as cmds
 
 from core.node_utils import RENDERER_SHORT
@@ -21,20 +20,19 @@ class CCConverter:
             if conn:
                 node = conn.get("node")
                 if node:
-                    cc_node_type = pm.nodeType(node)
+                    cc_node_type = cmds.nodeType(node)
                     src_cc_renderer = self.config.identify_cc_renderer(cc_node_type)
                     if src_cc_renderer:
                         self._cache(cc_cache, attr_name, node, src_cc_renderer, conn)
                     else:
-                        history = cmds.listHistory(node.name(), future=False, pdo=True) or []
+                        history = cmds.listHistory(node, future=False, pdo=True) or []
                         for h_name in history:
-                            if h_name == node.name():
+                            if h_name == node:
                                 continue
-                            h_node = pm.PyNode(h_name)
-                            cc_node_type = pm.nodeType(h_node)
+                            cc_node_type = cmds.nodeType(h_name)
                             src_cc_renderer = self.config.identify_cc_renderer(cc_node_type)
                             if src_cc_renderer:
-                                self._cache(cc_cache, attr_name, h_node, src_cc_renderer, conn)
+                                self._cache(cc_cache, attr_name, h_name, src_cc_renderer, conn)
                                 break
         return cc_cache
 
@@ -44,13 +42,14 @@ class CCConverter:
 
         cc_out_dests = []
         try:
-            cc_out_dests = h_node.attr(cc_config.target_connection).connections(plugs=True, source=False) or []
+            cc_out_dests = cmds.listConnections(f"{h_node}.{cc_config.target_connection}",
+                                                plugs=True, source=False) or []
         except Exception:
             pass
 
         cc_cache[attr_name] = {
             "cc_node": h_node,
-            "cc_node_name": h_node.name(),
+            "cc_node_name": h_node,
             "cc_out_dests": cc_out_dests,
             "params": params,
             "input_plug": input_plug,
@@ -76,23 +75,52 @@ class CCConverter:
 
             input_plug = cc_entry.get("input_plug")
             if input_plug and cc_config.source_connection:
-                self.utils.smart_connect(input_plug, cc_node.attr(cc_config.source_connection))
+                self.utils.smart_connect(input_plug, f"{cc_node}.{cc_config.source_connection}")
 
             if src_cc_name:
                 self._converted[src_cc_name] = cc_node
 
         cc_out_dests = cc_entry.get("cc_out_dests", [])
-        cc_out_dests = [d for d in cc_out_dests if not self.config.get_material_config(pm.nodeType(d.node()))]
+        cc_out_dests = [d for d in cc_out_dests if not self.config.get_material_config(cmds.nodeType(d.split(".")[0]))]
+
         if cc_out_dests:
+            self._restore_shared_source_chain(cc_entry)
             for dest in cc_out_dests:
                 try:
-                    cc_node.attr(cc_config.target_connection) >> dest
+                    cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", dest, force=True)
                 except Exception:
-                    pm.warning(f"CCConverter: failed to connect {cc_node.name()} to {dest}")
+                    cmds.warning(f"CCConverter: failed to connect {cc_node} to {dest}")
         else:
             try:
-                cc_node.attr(cc_config.target_connection) >> target_plug
+                cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", target_plug, force=True)
             except Exception:
-                pm.warning(f"CCConverter: failed to connect {cc_node.name()} to {target_plug}")
+                cmds.warning(f"CCConverter: failed to connect {cc_node} to {target_plug}")
 
-        log.append(f"  Color correction converted: {cc_node.name()}")
+        log.append(f"  Color correction converted: {cc_node}")
+
+    def _restore_shared_source_chain(self, cc_entry):
+        """After the original CC is displaced by a new CC, if the intermediate node is
+        shared with the source material, re-route the source material attribute back to
+        the original CC to avoid polluting the source chain."""
+        src_cc_name = cc_entry.get("cc_node_name", "")
+        output_plug = cc_entry.get("output_plug")
+        if not src_cc_name or not output_plug:
+            return
+
+        src_renderer = self.config.identify_cc_renderer(cmds.nodeType(src_cc_name))
+        if not src_renderer:
+            return
+        src_cfg = self.config.get_color_correction_config(src_renderer)
+        if not src_cfg or not src_cfg.target_connection:
+            return
+
+        cc_out_nodes = {d.split(".")[0] for d in cc_entry.get("cc_out_dests", [])}
+        for dest_plug in (cmds.listConnections(output_plug, plugs=True, destination=True) or []):
+            dest_node = dest_plug.split(".")[0]
+            if dest_node in cc_out_nodes:
+                continue
+            if self.config.get_material_config(cmds.nodeType(dest_node)):
+                try:
+                    cmds.connectAttr(f"{src_cc_name}.{src_cfg.target_connection}", dest_plug, force=True)
+                except Exception:
+                    cmds.warning(f"CCConverter: failed to restore source chain to {dest_plug}")

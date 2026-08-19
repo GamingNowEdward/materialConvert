@@ -1,0 +1,94 @@
+{
+  "extensions": [".png", ".jpg", ".jpeg", ".exr", ".tif", ".tiff", ".tx", ".hdr"],
+  "channels": {
+    "BaseColor": {
+      "aliases": ["basecolor", "basecolour", "basemap", "albedo", "albedomap",
+                    "diffuse", "diffusemap", "diff", "color", "colormap", "col", "base", "dif"],
+      "common_attr": "baseColor",
+      "type": "color"
+    },
+    "Transmission": {
+      "aliases": ["transmission", "transmissionmap", "transmissioncolor", "trans",
+                    "transmap", "refraction", "refractionmap", "refractioncolor",
+                    "refract", "refr"],
+      "common_attr": "transmissionColor",
+      "type": "color"
+    },
+    "Reflection": {
+      "aliases": ["reflection", "reflectionmap", "reflectioncolor", "reflect",
+                    "reflectmap", "refl", "specular", "specularmap", "specularcolor",
+                    "specmap", "speccolor", "spec"],
+      "common_attr": "specularColor",
+      "type": "color"
+    },
+    "SheenColor": {
+      "aliases": ["sheencolor", "sheen", "sheenmap", "fuzz", "fuzzcolor", "fuzzmap"],
+      "common_attr": "fuzzColor",
+      "type": "color"
+    },
+    "TranslucencyColor": {
+      "aliases": ["translucencycolor", "translucency", "translucencymap"],
+      "common_attr": "subsurfaceColor",
+      "type": "color"
+    },
+    "ScatteringColor": {
+      "aliases": ["scatteringcolor", "scattering", "scatteringmap", "scatter",
+                    "sss", "sssmap", "subsurface", "subsurfacecolor", "subsurfacemap"],
+      "common_attr": "subsurfaceColor",
+      "type": "color"
+    },
+    "Emission": {
+      "aliases": ["emission", "emissionmap", "emissive", "emissivemap", "emit",
+                    "illumination", "illuminationmap", "illum", "glow", "glowmap",
+                    "selfillum", "luminance"],
+      "common_attr": "emissionColor",
+      "type": "color"
+    },
+    "Roughness": {
+      "aliases": ["roughness", "roughnessmap", "roughmap", "rough", "rgh", "rghmap"],
+      "common_attr": "specularRoughness",
+      "type": "float",
+      "use_alpha": true
+    },
+    "Glossiness": {
+      "aliases": ["glossiness", "glossinessmap", "glossmap", "glossy", "gloss", "glos"],
+      "common_attr": "specularRoughness",
+      "type": "float",
+      "use_alpha": true,
+      "invert": true
+    },
+    "Metallic": {
+      "aliases": ["metallic", "metallicmap", "metalness", "metalnessmap",
+                    "metalmap", "metmap"],
+      "common_attr": "metallic",
+      "type": "float",
+      "use_alpha": true
+    },
+    "Opacity": {
+      "aliases": ["opacity", "opacitymap", "alpha", "alphamap", "transparency",
+                    "transparencymap", "opac", "cutout", "cutoutmap"],
+      "common_attr": "opacity",
+      "type": "float",
+      "use_alpha": true
+    },
+    "Normal": {
+      "aliases": ["normal", "normalmap", "normalgl", "normaldx", "normalmapgl",
+                    "normalmapdx", "nrm", "nrml", "nrmgl", "nrmdx",
+                    "norgl", "nordx", "nmap"],
+      "common_attr": "normal_bump",
+      "type": "normal"
+    },
+    "Bump": {
+      "aliases": ["bump", "bumpmap", "bumpgl", "bumpdx", "bmp", "bmpmap"],
+      "common_attr": "normal_bump",
+      "type": "bump"
+    },
+    "Displacement": {
+      "aliases": ["displacement", "displacementmap", "displace", "dispmap", "disp",
+                    "heightmap", "height", "depth", "depthmap"],
+      "common_attr": "displacementTexture",
+      "type": "displacement",
+      "use_alpha": true
+    }
+  }
+}

@@ -1,16 +1,15 @@
-from ui import QtWidgets, QtCore, QtGui
+from ui import QtWidgets
 from core.builder_context import qt_maya_logger, BuilderContext
+from core.material_builder import MaterialBuilder
 from core.config_loader import ConfigLoader
 
 
 class BuilderTab:
 
-    P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
-                 'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
-
     def __init__(self, ctx: BuilderContext):
         self.ctx = ctx
         self.config = ConfigLoader()
+        self.builder = MaterialBuilder(ctx)
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -21,59 +20,54 @@ class BuilderTab:
         self.name_input = QtWidgets.QLineEdit(self.ctx.get_naming()["default_name"])
         layout.addWidget(self.name_input)
 
-        tex_group = QtWidgets.QGroupBox("Texture Paths (Optional)")
-        tex_layout = QtWidgets.QGridLayout(tex_group)
-        tex_layout.setSpacing(8)
+        self.channel_entries = {}
 
-        self.path_inputs = {}
-        texture_types = [
-            ('color', "Color:"), ('rough', "Roughness:"),
-            ('nrm', "Normal/Bump:"), ('disp', "Displacement:")
+        color_channels = [
+            ('baseColor', "Color:", True),
+            ('subsurfaceColor', "SSS:", False),
+            ('emissionColor', "Emission:", False),
+            ('transmissionColor', "Transmission:", False),
+            ('specularColor', "Reflection:", False),
+            ('fuzzColor', "Sheen:", False),
         ]
+        color_group = self._build_channel_group("Color Channels", color_channels)
+        layout.addWidget(color_group)
 
-        for row, (key, label_text) in enumerate(texture_types):
-            lbl = QtWidgets.QLabel(label_text)
-            lbl.setFixedWidth(85)
-            le = QtWidgets.QLineEdit()
-            le.setPlaceholderText("Leave empty to keep unassigned...")
-            btn = QtWidgets.QPushButton("...")
-            btn.setFixedSize(30, 25)
-            btn.clicked.connect(lambda checked=False, le=le: self._browse_file(le))
-            tex_layout.addWidget(lbl, row, 0)
-            tex_layout.addWidget(le, row, 1)
-            tex_layout.addWidget(btn, row, 2)
-            self.path_inputs[key] = le
+        scalar_channels = [
+            ('specularRoughness', "Roughness:", True),
+            ('metallic', "Metallic:", False),
+            ('opacity', "Opacity:", False),
+        ]
+        scalar_group, scalar_opts = self._build_channel_group("Scalar Channels", scalar_channels, with_options=True)
+        layout.addWidget(scalar_group)
 
-        layout.addWidget(tex_group)
+        self.cb_glossiness = scalar_opts.get('glossiness')
 
-        cb_layout = QtWidgets.QHBoxLayout()
-        self.cb_nrm = QtWidgets.QCheckBox("Normal (Uncheck for Bump)")
-        self.cb_nrm.setChecked(True)
-        self.cb_sss = QtWidgets.QCheckBox("SSS")
-        self.cb_disp = QtWidgets.QCheckBox("Displacement")
-        for cb in [self.cb_nrm, self.cb_sss, self.cb_disp]:
-            cb_layout.addWidget(cb)
-        layout.addLayout(cb_layout)
+        geo_channels = [
+            ('normal_bump', "Normal/Bump:", True),
+            ('displacementTexture', "Displacement:", False),
+        ]
+        geo_group, geo_opts = self._build_channel_group("Geometry Channels", geo_channels, with_options=True)
+        layout.addWidget(geo_group)
 
-        btn_layout = QtWidgets.QHBoxLayout()
-        renderer_styles = {
-            'arnold': None,
-            'redshift': 'rsBtn',
-            'vray': 'vrayBtn',
-        }
-        for renderer in ['arnold', 'redshift', 'vray']:
-            spec = self.config.get_builder_spec(renderer)
-            if not spec:
-                continue
-            display_name = renderer.upper()
-            btn = QtWidgets.QPushButton(f"BUILD {display_name}")
-            btn.setFixedHeight(45)
-            style = renderer_styles.get(renderer)
-            if style:
-                btn.setObjectName(style)
-            btn.clicked.connect(lambda checked=False, r=renderer: self._create_material_logic(r))
-            btn_layout.addWidget(btn)
-        layout.addLayout(btn_layout)
+        self.cb_normal_mode = geo_opts.get('normal_mode')
+
+        opt_layout = QtWidgets.QHBoxLayout()
+        self.cb_qss = QtWidgets.QCheckBox("Add To Quick Select Set")
+        self.cb_qss.setChecked(True)
+        opt_layout.addWidget(self.cb_qss)
+        opt_layout.addStretch()
+        layout.addLayout(opt_layout)
+
+        self.mat_combo = QtWidgets.QComboBox()
+        self.mat_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        layout.addWidget(self.mat_combo)
+
+        btn_build = QtWidgets.QPushButton("BUILD")
+        btn_build.setObjectName("convertBtn")
+        btn_build.setFixedHeight(52)
+        btn_build.clicked.connect(self._create_material_logic)
+        layout.addWidget(btn_build)
 
         line = QtWidgets.QFrame()
         line.setFrameShape(QtWidgets.QFrame.HLine)
@@ -86,7 +80,48 @@ class BuilderTab:
         btn_create_file.clicked.connect(self._create_file_from_p2d)
         layout.addWidget(btn_create_file)
 
+        self._populate_material_list()
         return widget
+
+    def _build_channel_group(self, title, channels, with_options=False):
+        group = QtWidgets.QGroupBox(title)
+        grid = QtWidgets.QGridLayout(group)
+        grid.setSpacing(6)
+        opts = {}
+
+        for row, (common_attr, label_text, default_checked) in enumerate(channels):
+            cb = QtWidgets.QCheckBox(label_text)
+            cb.setChecked(default_checked)
+            cb.setFixedWidth(120)
+            le = QtWidgets.QLineEdit()
+            le.setPlaceholderText("Leave empty to create unassigned node...")
+            btn = QtWidgets.QPushButton("...")
+            btn.setFixedSize(30, 25)
+            btn.clicked.connect(lambda checked=False, le=le: self._browse_file(le))
+            grid.addWidget(cb, row, 0)
+            grid.addWidget(le, row, 1)
+            grid.addWidget(btn, row, 2)
+            self.channel_entries[common_attr] = {'cb': cb, 'le': le}
+
+            if with_options and common_attr == 'specularRoughness':
+                cb_gloss = QtWidgets.QCheckBox("Glossiness (Invert)")
+                grid.addWidget(cb_gloss, row, 3)
+                opts['glossiness'] = cb_gloss
+
+            if with_options and common_attr == 'normal_bump':
+                cb_nrm = QtWidgets.QCheckBox("Normal (Uncheck for Bump)")
+                cb_nrm.setChecked(True)
+                grid.addWidget(cb_nrm, row, 3)
+                opts['normal_mode'] = cb_nrm
+
+        return (group, opts) if with_options else group
+
+    def _populate_material_list(self):
+        self.mat_combo.clear()
+        all_configs = self.config.get_all_material_configs()
+        for node_type in sorted(all_configs.keys()):
+            display_name = self.config.get_display_name(node_type)
+            self.mat_combo.addItem(display_name, node_type)
 
     def _browse_file(self, line_edit):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -97,101 +132,34 @@ class BuilderTab:
             line_edit.setText(file_path)
 
     @qt_maya_logger
-    def _create_material_logic(self, renderer):
-        import maya.cmds as cmds
-        self.ctx._current_build_nodes = []
-        spec = self.ctx.get_builder_spec(renderer)
+    def _create_material_logic(self):
+        node_type = self.mat_combo.currentData()
+        if not node_type:
+            raise RuntimeError("No material type selected.")
         mat_base = self.name_input.text() or "Default"
-        use_nrm = self.cb_nrm.isChecked()
-        use_sss = self.cb_sss.isChecked()
-        use_disp = self.cb_disp.isChecked()
 
-        input_paths = {
-            'color': self.ctx.clean_path(self.path_inputs['color'].text()),
-            'rough': self.ctx.clean_path(self.path_inputs['rough'].text()),
-            'nrm': self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            'bump': self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            'disp': self.ctx.clean_path(self.path_inputs['disp'].text())
-        }
+        input_paths = {}
+        channel_options = {}
 
-        if not cmds.pluginInfo(spec['plugin'], q=True, l=True):
-            cmds.loadPlugin(spec['plugin'])
+        for common_attr, entry in self.channel_entries.items():
+            if entry['cb'].isChecked():
+                path = self.ctx.clean_path(entry['le'].text())
+                input_paths[common_attr] = path
 
-        m_node = self.ctx.create_node(spec['shader_type'], 'material', mat_base, as_type='shader')
-        sg_node = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{m_node}SG")
-        self.ctx._current_build_nodes.append(sg_node)
+        use_nrm = True
+        if 'normal_bump' in input_paths and self.cb_normal_mode is not None:
+            mode = 'normal' if self.cb_normal_mode.isChecked() else 'bump'
+            channel_options['normal_bump'] = {'mode': mode}
+            use_nrm = mode == 'normal'
 
-        self.ctx.connect(m_node, "outColor", sg_node, "surfaceShader")
-        p2d = self.ctx.create_node('place2dTexture', 'p2d', mat_base)
+        if self.cb_glossiness is not None and self.cb_glossiness.isChecked():
+            channel_options['specularRoughness'] = {'invert': True}
 
-        if 'mat_init_attrs' in spec:
-            for attr, val in spec['mat_init_attrs'].items():
-                if cmds.attributeQuery(attr, node=m_node, exists=True):
-                    cmds.setAttr(f"{m_node}.{attr}", val)
+        use_disp = 'displacementTexture' in input_paths
 
-        def make_tex(key, is_alpha=False):
-            f = self.ctx.create_node('file', 'file', mat_base, key, 'texture')
-            if is_alpha:
-                cmds.setAttr(f"{f}.alphaIsLuminance", 1)
-            target_path = input_paths.get(key, "")
-            if target_path:
-                cmds.setAttr(f"{f}.fileTextureName", target_path, type="string")
-            for attr in self.P2D_ATTRS:
-                self.ctx.connect(p2d, attr, f, attr)
-            self.ctx.connect(p2d, "outUV", f, "uvCoord")
-            self.ctx.connect(p2d, "outUvFilterSize", f, "uvFilterSize")
-            return f
-
-        tex_color = make_tex('color')
-        for ch in (['color', 'sss'] if use_sss else ['color']):
-            cc = self.ctx.create_node(spec['cc_type'], 'cc', mat_base, ch)
-            lyr = self.ctx.build_layered_node(mat_base, ch)
-            self.ctx.connect(tex_color, "outColor", cc, spec['cc_in'])
-            self.ctx.connect(cc, spec.get('cc_out', 'outColor'), lyr, "inputs[1].color")
-            self.ctx.connect(lyr, "outColor", m_node, spec['attr_map'][ch])
-            if ch == 'sss' and renderer == 'vray':
-                if cmds.attributeQuery('ssOn', node=m_node, exists=True):
-                    cmds.setAttr(f"{m_node}.ssOn", 1)
-
-        tex_rough = make_tex('rough', True)
-        ramp = self.ctx.create_node('ramp', 'ramp', mat_base, 'rough', 'texture')
-        self.ctx.connect(tex_rough, "outAlpha", ramp, "vCoord")
-        self.ctx.connect(ramp, "outAlpha", m_node, spec['attr_map']['rough'])
-
-        nb_key = 'nrm' if use_nrm else 'bump'
-        nb_spec = spec['nb']
-        tex_nb = make_tex(nb_key, not use_nrm)
-        middle_node_type = nb_spec['node'].get(nb_key)
-
-        if middle_node_type:
-            nb_node = self.ctx.create_node(middle_node_type, nb_key, mat_base)
-            mode_attrs = nb_spec['init_attrs'].get(nb_key, {})
-            for attr, val in mode_attrs.items():
-                cmds.setAttr(f"{nb_node}.{attr}", val)
-            self.ctx.connect(tex_nb, nb_spec['file_src'][nb_key], nb_node, nb_spec['in'][nb_key])
-            self.ctx.connect(nb_node, nb_spec['out'][nb_key], m_node, spec['attr_map']['nrm'])
-        else:
-            self.ctx.connect(tex_nb, nb_spec['file_src'][nb_key], m_node, spec['attr_map']['nrm'])
-            if 'mat_attrs' in nb_spec and nb_key in nb_spec['mat_attrs']:
-                for attr, val in nb_spec['mat_attrs'][nb_key].items():
-                    if cmds.attributeQuery(attr, node=m_node, exists=True):
-                        cmds.setAttr(f"{m_node}.{attr}", val)
-
-        if use_disp:
-            d_spec = spec['disp']
-            tex_disp = make_tex('disp', True)
-            lyr_disp = self.ctx.build_layered_node(mat_base, 'disp', layers=2)
-            for rgb in 'RGB':
-                self.ctx.connect(tex_disp, d_spec['file_src'], lyr_disp, f"inputs[1].color{rgb}")
-            d_node = self.ctx.create_node(d_spec['node'], 'disp', mat_base, as_type='shader')
-            self.ctx.connect(lyr_disp, d_spec['lyr_src'], d_node, d_spec['in'])
-            self.ctx.connect(d_node, d_spec['out'], sg_node, "displacementShader")
-
-        qss_nodes = [n for n in self.ctx._current_build_nodes]
-        if qss_nodes:
-            cmds.sets(qss_nodes, name=f"{self.ctx.get_naming()['qss_prefix']}{mat_base}")
-
-        cmds.select(m_node)
+        return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_disp,
+                                  use_qss=self.cb_qss.isChecked(),
+                                  channel_options=channel_options)
 
     @qt_maya_logger
     def _create_file_from_p2d(self):
@@ -201,7 +169,7 @@ class BuilderTab:
             raise RuntimeError("Please select a place2dTexture node first.")
         p2d = sel[0]
         f_node = cmds.shadingNode('file', asTexture=True, isColorManaged=True)
-        for attr in self.P2D_ATTRS:
+        for attr in MaterialBuilder.P2D_ATTRS:
             self.ctx.connect(p2d, attr, f_node, attr)
         self.ctx.connect(p2d, "outUV", f_node, "uvCoord")
         self.ctx.connect(p2d, "outUvFilterSize", f_node, "uvFilterSize")

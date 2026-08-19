@@ -48,8 +48,8 @@ Columns: aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMater
 | **transmissionColor** | transmissionColor | transmissionColor | refr_color | transmission_color | refr_color | refractionColor |
 | **opacity** | geometryOpacity | opacity | opacity_color | geometry_opacity | opacity_color | opacityMap |
 | **thinWalled** | geometryThinWalled | thinWalled | refr_thin_walled | geometry_thin_walled | refr_thin_walled | refrThinWalled |
-| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | - |
-| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | - |
+| **subsurfaceWeight** | subsurfaceWeight | subsurface | ms_amount | subsurface_weight | ms_amount | translucencyAmount |
+| **subsurfaceColor** | subsurfaceColor | subsurfaceColor | ms_color0 | subsurface_color | ms_color | translucencyColor |
 | **subsurfaceRadius** | subsurfaceRadius | subsurfaceRadius | ms_radius0 | subsurface_radius | ms_radius | - |
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
@@ -75,9 +75,9 @@ These universal attributes are **not** processed in the main transfer loop — t
 ### 1.3 Value Transfer Rules
 
 - **Texture connections**: Migrated via `_smart_connect()` — tries direct connection first, falls back to `outColor` then `outAlpha` for type incompatibility
-- **Alpha Is Luminance**: After attribute transfer, scans all target material connections; if `outAlpha` is used, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift)
-- **Numeric values**: Copied directly (float/int)
-- **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float (e.g., V-Ray `opacityMap` → Arnold OpenPBR `geometryOpacity`), falls back to first channel value
+- **Alpha Is Luminance**: After attribute transfer, scans target material connections using the **actual attribute names** from the target config and **recursively traces upstream** (through intermediate nodes like CC/ramp/layeredTexture/bump); if an `outAlpha` output is found in the chain, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift; `opacity` channel is exempt to avoid enabling luminance on genuine alpha maps)
+- **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
+- **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
 ### 1.4 Black Color Auto-Zeroing
@@ -116,6 +116,7 @@ Automatically set before attribute transfer:
 | RedshiftMaterial | `coat_brdf` | `1` |
 | RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
 | VRayMtl (roughness) | `useRoughness` | `1` |
+| VRayMtl (default reflection) | `reflectionColor` | `[1, 1, 1]` |
 
 ---
 
@@ -178,15 +179,27 @@ Source CC node → [Source config] → Universal format {gamma, contrast, gain, 
 | **Redshift** | `RedshiftColorCorrection` | `input` | `outColor` | `hue` | [0, 360] |
 | **V-Ray** | `VRayColorCorrection` | `texture_map` | `outColor` | `hue_shift` | [-180, 180] |
 
-### 3.3 Hue Range Normalization
+### 3.3 Hue Normalization
 
-All hue values are normalized to **0-360** as the universal format:
+All hue values are converted to a **universal offset angle [-180, 180]** (`0` = no change), based on each renderer's neutral point (`hue_center` in `config/colorCorrection.json`):
 
-| Source Range | → Universal (0-360) | Universal → Target Range |
-|---|---|---|
-| Arnold [-1, 1] | `(v + 1) / 2 * 360` | → Arnold: `-1 + v/360 * 2` |
-| V-Ray [-180, 180] | `(v + 180) / 360 * 360` | → V-Ray: `-180 + v/360 * 360` |
-| Maya/Redshift [0, 360] | Pass-through | Pass-through |
+| Renderer | Attribute | Range | Neutral (no change) | → Universal offset |
+|---|---|---|---|---|
+| **Maya** | `colorCorrect.hueShift` | [0, 360] | 180 | `v - 180` |
+| **Arnold** | `aiColorCorrect.hueShift` | [-1, 1] | 0 (offset type) | `v * 180` |
+| **Redshift** | `ColorCorrection.hue` | [0, 360] | 0 | `v` (wrapped to [-180, 180]) |
+| **V-Ray** | `hue_shift` | [-180, 180] | 0 (offset type) | `v` |
+
+Universal offset → target value:
+
+| Target | Conversion |
+|---|---|
+| Maya | `(offset + 180) % 360` |
+| Arnold | `offset / 180` |
+| Redshift | `offset % 360` |
+| V-Ray | `offset` |
+
+Examples: Redshift `hue=0` (no change) → Arnold `hueShift=0`; Redshift `hue=90` → Arnold `hueShift=0.5`; Redshift `hue=270` → Arnold `hueShift=-0.5`.
 
 ### 3.4 CC Upstream Detection
 
@@ -211,6 +224,13 @@ New CC is inserted at the same position:
 
 ```
 file → newCC → layeredTexture → material
+```
+
+When the intermediate node is **shared with the source material** (source attribute still connected to `layeredTexture.outColor`), the source attribute is reconnected back to the original CC output before the new CC takes over the intermediate node input — the **source material chain is never polluted** with target-renderer nodes:
+
+```
+file → originalCC → source material      (source chain preserved)
+file → newCC → layeredTexture → target material
 ```
 
 Without intermediate nodes (CC directly connected to material), new CC connects directly to target material attribute.
@@ -296,9 +316,9 @@ Converted **materials**, **bump/normal nodes**, **color correction nodes**, and 
 
 All texture connections are handled via `_smart_connect()`, trying three connection methods in order:
 
-1. **Direct**: `src_plug >> dst_plug`
-2. **outColor**: `src_node.outColor >> dst_plug` (resolves float → color type incompatibility)
-3. **outAlpha**: `src_node.outAlpha >> dst_plug` (resolves alpha → float type incompatibility)
+1. **Direct**: `cmds.connectAttr(src_plug, dst_plug, force=True)`
+2. **outColor**: `src_node.outColor → dst_plug` (resolves float → color type incompatibility)
+3. **outAlpha**: `src_node.outAlpha → dst_plug` (resolves alpha → float type incompatibility)
 
 ---
 
@@ -313,123 +333,3 @@ UI supports batch conversion of multiple materials:
 5. Newly created materials are automatically selected after conversion
 
 ---
-
-## 9. Material Builder
-
-Integrated in the Converter panel's second tab, supports one-click building of complete Arnold / Redshift / V-Ray PBR materials from texture paths.
-
-### 9.1 Supported Features
-
-| Feature | Description |
-|---|---|
-| Texture Paths | Optional input for Color, Roughness, Normal/Bump, Displacement maps |
-| Normal/Bump Toggle | Checked = Normal, unchecked = Bump |
-| SSS | When checked, additionally creates sss channel (colorCorrect + layeredTexture + ramp) |
-| Displacement | When checked, creates displacement node chain |
-| Three Renderers | BUILD ARNOLD / BUILD REDSHIFT / BUILD VRAY |
-| Create File From P2D | Creates file node from selected place2dTexture node and auto-connects |
-
-### 9.2 Redshift Material Prerequisites
-
-Creating Redshift materials automatically sets `refl_brdf=1` and `coat_brdf=1` to ensure consistency with converter configuration.
-
----
-
-## 10. Node Tools
-
-Third tab providing batch node operations:
-
-- Select nodes by type (material/file/bump/layeredTexture/CC), excluding default materials
-- Batch set file node color space
-- Auto match color space for selected file nodes (reference `config/colorSpace.json`)
-- Batch rename Shading Engine (SG)
-
-### 10.1 Auto Match Color Space Rules
-
-Matching priority (high to low):
-
-1. **Filename match** (highest): Checks if filename contains keywords in `filenameKeywords` (case-insensitive)
-   - Example: `wood_basecolor.jpg` contains `basecolor` → matches `srgb` type
-2. **Channel match** (secondary): Traces file node's `outColor` connection, checks if target material attribute is in `attributeKeywords`
-   - Example: file node connected to `mat.roughness` → matches `raw` type
-3. **Default type** (lowest): When no match, uses the type specified by `default` in `config/colorSpace.json` (currently `raw`)
-
-After matching a type, iterates through the `aliases` list and sets the first color space name available in the current OCIO configuration.
-
----
-
-## 11. Locator Tool
-
-Auto-creates Layout Locators for selected objects, sets objects as child of Locator, and scales Locator based on bounding box size.
-
-### 11.1 Features
-
-| Parameter | Description |
-|---|---|
-| Prefix | Name prefix for generated Locators, default `loc_` |
-| Scale Multipliers | Per-axis (X/Y/Z) independent scale multipliers, applied to bounding box max dimension |
-| Enable Override Color | When checked, allows selecting Locator display override color |
-
-### 11.2 Flow
-
-```
-Select objects → Get bounding box size → Create Locator (same position) → Set object as Locator child
-→ Clear object transforms → Set Locator scale = bbox dimension × multiplier → Optionally set override color
-```
-
-### 11.3 Skip Rules
-
-- Objects that already have a Locator as direct shape (i.e., are Locators) are skipped
-- Each operation is wrapped in `undoInfo(openChunk=True/closeChunk)` for single-step undo
-
----
-
-## 12. Project Structure
-
-```
-materialConvert/
-├── config/                          # JSON configuration files
-│   ├── material/                    # Renderer material attribute mappings
-│   │   ├── common.json              # Universal PBR parameter definitions
-│   │   ├── aiStandardSurface.json
-│   │   ├── aiOpenPBRSurface.json
-│   │   ├── RedshiftMaterial.json
-│   │   ├── RedshiftOpenPBRMaterial.json
-│   │   ├── RedshiftStandardMaterial.json
-│   │   └── VRayMtl.json
-│   ├── bumpNormal.json              # Bump/normal node mappings
-│   ├── colorCorrection.json         # Color correction node mappings
-│   ├── colorSpace.json              # Color space auto-match rules
-│   ├── builder_specs.json           # Material Builder renderer specs
-│   └── builder_naming.json          # Material Builder naming conventions
-├── core/                            # Core engine
-│   ├── converter.py                 # MaterialConverter dispatcher
-│   ├── converters/                  # Business conversion modules
-│   │   ├── attribute.py             # Attribute collection & transfer
-│   │   ├── bump.py                  # Bump/normal conversion
-│   │   ├── cc.py                    # Color correction conversion
-│   │   └── displacement.py          # Displacement conversion
-│   ├── config_loader.py             # JSON config parser
-│   ├── node_utils.py                # Maya node utility functions (module-level)
-│   ├── prerequisites.py             # Renderer prerequisite handling
-│   ├── logger.py                    # Unified logging module
-│   └── builder_context.py           # Material Builder shared state & tools
-├── ui/                              # User interface
-│   ├── converter_ui.py              # Main window (QTabWidget)
-│   ├── styles.py                    # QSS dark theme styles
-│   └── tabs/                        # Six functional tabs
-│       ├── converter_tab.py         # Material conversion (with progress bar)
-│       ├── builder_tab.py           # Material Builder
-│       ├── node_tools_tab.py        # Node Tools
-│       ├── transform_tab.py         # Transform Tools
-│       ├── attr_modifier_tab.py     # Attr Modifier
-│       └── locator_tab.py           # Locator tool
-├── main.py                          # Entry script
-├── docs/
-│   ├── AGENTS.md                    # AI Agent development guide
-│   ├── CONVERSION_SPEC.md           # This document
-│   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
-│   └── README_zh.md                 # 中文版 README
-├── CHANGELOG.md                     # Changelog
-└── CHANGELOG_zh.md                  # 中文版更新日志
-```

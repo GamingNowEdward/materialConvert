@@ -38,9 +38,6 @@ class BuilderContext:
 
         self._current_build_nodes = []
 
-    def get_builder_spec(self, renderer):
-        return self._config.get_builder_spec(renderer)
-
     def get_naming(self):
         return self._naming
 

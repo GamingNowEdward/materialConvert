@@ -1,4 +1,4 @@
-import pymel.core as pm
+import maya.cmds as cmds
 
 from core.prerequisites import apply_attr_prerequisites
 
@@ -43,23 +43,74 @@ class AttributeConverter:
                     and isinstance(weight_val, (int, float)) and weight_val > 0):
                 weight_data["value"] = 0
 
-    def _fix_alpha_luminance(self, target_mat, target_renderer, log):
+    _FIX_ALPHA_SKIP = {"opacity", "displacementScale", "displacementTexture"}
+
+    def _fix_alpha_luminance(self, target_mat, target_renderer, target_config, log):
         if target_renderer == "redshift":
             return
 
-        for common_attr in self.config.get_common_attrs():
+        for common_attr, maya_attr in target_config.attr_map.items():
+            if common_attr in self._FIX_ALPHA_SKIP or not maya_attr:
+                continue
+
+            plug = f"{target_mat}.{maya_attr}"
+            if not cmds.objExists(plug):
+                continue
+
+            alpha_plug = self._trace_alpha_plug(plug)
+            if not alpha_plug:
+                continue
+
+            tex_node = alpha_plug.split(".")[0]
             try:
-                plug = target_mat.attr(common_attr)
-                conns = plug.connections(plugs=True, source=True)
-                for conn in conns:
-                    if conn.attrName(longName=True) == "outAlpha":
-                        tex_node = conn.node()
-                        if (tex_node.hasAttr("alphaIsLuminance")
-                                and not tex_node.alphaIsLuminance.get()):
-                            tex_node.alphaIsLuminance.set(True)
-                            log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
-            except Exception:
-                pass
+                if (cmds.attributeQuery("alphaIsLuminance", node=tex_node, exists=True)
+                        and not cmds.getAttr(f"{tex_node}.alphaIsLuminance")):
+                    cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
+                    log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
+            except Exception as e:
+                cmds.warning(f"AttributeConverter: failed to enable alphaIsLuminance on {tex_node}: {e}")
+
+    def _trace_alpha_plug(self, start, visited=None, depth=0):
+        """Recursively trace upstream from an attribute/node to find the bitmap texture
+        source plug feeding *.outAlpha.
+
+        Traverses intermediate nodes such as CC / ramp / layeredTexture / bump
+        (checking input connections at node level) so direct-connection checks do not
+        miss texture outputs deep in the chain. The terminal target is a node that has
+        fileTextureName (intermediate nodes like ramp / CC may also expose
+        alphaIsLuminance and must be crossed).
+        """
+        if depth > 10 or not start:
+            return None
+        if visited is None:
+            visited = set()
+
+        try:
+            conns = cmds.listConnections(start, plugs=True, source=True) or []
+        except Exception:
+            return None
+
+        for conn in conns:
+            if conn.endswith(".outAlpha"):
+                node = conn.split(".")[0]
+                if cmds.attributeQuery("fileTextureName", node=node, exists=True):
+                    return conn
+                if node in visited:
+                    continue
+                visited.add(node)
+                result = self._trace_alpha_plug(node, visited, depth + 1)
+                if result:
+                    return result
+
+        for conn in conns:
+            src_node = conn.split(".")[0]
+            if src_node in visited:
+                continue
+            visited.add(src_node)
+            result = self._trace_alpha_plug(src_node, visited, depth + 1)
+            if result:
+                return result
+        return None
 
     def _fix_vray_emission(self, attr_info, source_config, target_mat, target_config):
         if source_config.get_maya_attr("emissionWeight"):
@@ -78,9 +129,9 @@ class AttributeConverter:
 
         if weight_attr := target_config.get_maya_attr("emissionWeight"):
             try:
-                target_mat.attr(weight_attr).set(1)
+                cmds.setAttr(f"{target_mat}.{weight_attr}", 1)
             except Exception:
-                pm.warning(f"AttributeConverter: failed to set emission weight on {target_mat.name()}")
+                cmds.warning(f"AttributeConverter: failed to set emission weight on {target_mat}")
 
     def transfer_all(self, target_mat, source_config, target_config, target_renderer,
                      attr_info, cc_cache, log):
@@ -104,13 +155,12 @@ class AttributeConverter:
             self._transfer_one(target_mat, tgt_maya_attr, src_maya_attr,
                                src_data, cc_cache, target_renderer, log)
 
-        self._fix_alpha_luminance(target_mat, target_renderer, log)
+        self._fix_alpha_luminance(target_mat, target_renderer, target_config, log)
 
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
-                       src_data, cc_cache, target_renderer, log):
-        try:
-            target_plug = target_mat.attr(target_attr)
-        except Exception:
+                      src_data, cc_cache, target_renderer, log):
+        target_plug = f"{target_mat}.{target_attr}"
+        if not cmds.objExists(target_plug):
             return
 
         connection = src_data.get("connection")
@@ -122,7 +172,8 @@ class AttributeConverter:
             if cc_entry:
                 self.cc_converter.transfer(cc_entry, target_plug, target_renderer, log)
                 chain_plug = cc_entry.get("output_plug")
-                if chain_plug and not self.utils.is_cc_node(chain_plug.node()):
+                if chain_plug and not self.utils.is_cc_node(
+                        chain_plug.split(".")[0], self.config):
                     self.utils.smart_connect(chain_plug, target_plug)
             else:
                 src_conn_plug = connection.get("plug")
@@ -130,14 +181,17 @@ class AttributeConverter:
                     self.utils.smart_connect(src_conn_plug, target_plug)
         elif isinstance(value, (int, float)):
             try:
-                target_plug.set(value)
-            except Exception:
-                pm.warning(f"AttributeConverter: failed to set float value on {target_mat.name()}.{target_attr}")
+                if cmds.getAttr(target_plug, type=True) in ("float3", "double3"):
+                    cmds.setAttr(target_plug, value, value, value)
+                else:
+                    cmds.setAttr(target_plug, value)
+            except Exception as e:
+                cmds.warning(f"AttributeConverter: failed to set float value on {target_plug}: {e}")
         elif isinstance(value, (tuple, list)) and len(value) >= 3:
             try:
-                target_plug.set(value)
+                cmds.setAttr(target_plug, *value)
             except Exception:
                 try:
-                    target_plug.set(value[0])
+                    cmds.setAttr(target_plug, value[0])
                 except Exception:
-                    pm.warning(f"AttributeConverter: failed to set color value on {target_mat.name()}.{target_attr}")
+                    cmds.warning(f"AttributeConverter: failed to set color value on {target_plug}")

@@ -1,5 +1,89 @@
 # 更新日志
 
+## 2026-08-20
+
+### 新增
+- 新增 **Debug** 标签页（`ui/tabs/debug_tab.py` + `core/config_validator.py`）：在 Maya 中校验全部 JSON 配置拼写（材质 / `bumpNormal.json` / `colorCorrection.json`），创建临时节点验证 `node_type` 与每个映射属性（含 prerequisites、displacement 段），结束后自动清理临时节点
+- 校验日志支持按类别筛选（Errors / Warnings / Skipped / OK / Info），默认只显示问题类，条目按优先级排序并按类别着色
+
+### 变更
+- `core/config_loader.py`：新增 `get_all_bn_configs()` / `get_all_cc_configs()` 公开 getter
+- 主窗口标签页增至 5 个：Converter → Material Builder → Batch Builder → Node Tools → Debug
+
+### 修复
+- `core/config_validator.py`：插件检测改用 `pluginInfo(loaded)` + `loadPlugin`（此前 `pluginInfo(exists)` 对已安装但未加载的插件误判为 not found，导致已安装渲染器被整组跳过）；已安装但未加载的插件现在会先自动加载再校验
+- `core/config_validator.py`：`displacementShader` 哨兵 `node_type` 现在会创建节点并实际校验其属性（此前全部跳过）；移除 `COMMON_PLACEHOLDERS` 误判——显式定义的真实属性（如 `RedshiftBumpMap.scale`、`aiNormalMap.input`）不再被误判为 common 占位符跳过
+
+### 文档
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：精简为仅转换相关内容（移除 Material Builder / Batch Builder / Node Tools / Debug / 项目结构章节，与 README 重叠部分删除），只保留主材质属性、凹凸/法线、颜色校正、置换、节点创建、旧节点处理、纹理连接兼容性、批量转换
+- `README.md` / `README_zh.md`：顶部新增两个 `CONVERSION_SPEC` 语言的跳转链接
+
+## 2026-08-19
+
+### 新增
+- 新增 **Batch Builder（批量构建）** 标签页（`ui/tabs/batch_builder_tab.py`）：目录扫描、按文件名解析通道、已解析/未解析合并表格（Status 可排序）、Materials to Build 待创建材质预览
+- 新增 `config/texture_channels.json`：文件名关键词 → 通道规则，`common_attr` 复用 `common.json` 的通道名，并补充常见 PBR 后缀（Poly Haven / ambientCG / Quixel / Substance / Unity / Unreal 预设）
+- 新增 `core/texture_scanner.py`：非递归目录扫描，长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）
+- 新增 `core/batch_builder.py`：把扫描结果转换为 `MaterialBuilder` 短 key 并编排批量构建
+- `MaterialBuilder` 扩展通道：Metallic / Opacity / Emission / Transmission / Reflection / Sheen / SSS / Glossiness（通过 `file.invert` 自动反相）；新增 `use_full_chain` 参数支持简单直连
+- VRayMtl 的 prerequisites 现在支持颜色/列表值（如 `reflectionColor: [1, 1, 1]`），通过 `core/prerequisites.py` 实现
+- `config/builder_naming.json`：新增更短的通道后缀缩写
+
+### 变更
+- Material Builder 标签页 UI 重构为 3 个通道分组（Color / Scalar / Geometry），每个通道带启用复选框 + 纹理路径输入；通道现涵盖全部 11 个支持的通用属性（新增 Metallic、Opacity、Emission、Transmission、Reflection、Sheen、SSS 独立路径）
+- SSS 通道不再自动复用 baseColor 纹理；需要与其他通道一样提供明确的路径输入
+- 通道启用但纹理路径为空时现在会创建未指定纹理的 file 节点（此前跳过），与批量构建行为一致
+- 移除 Builder 别名层：手动 Builder、Batch Builder 与 `MaterialBuilder` 现在都直接使用规范通用属性名；`builder_aliases` 不再存在于 `config/material/common.json`
+- `texture_channels.json` 使用 `common_attr` 表示规范的 `common.json` 属性名
+- Batch Builder 现在将通用属性名直接传入 Material Builder；移除 `COMMON_ATTR_TO_SHORT` 转换表，同时保持现有节点命名不变
+- 颜色校正节点类型识别改由 `config/colorCorrection.json` 驱动；新增已配置的 CC 节点类型不再需要维护 Python 硬编码类型列表
+- 主窗口标签页顺序：Converter → Material Builder → Batch Builder → Node Tools
+- 将独立的 "Unparsed Files" 面板合并进表格（Status 显示 `UNPARSED`），并新增 Materials to Build 待创建材质列表
+- Auto Match Selected（`ui/tabs/node_tools_tab.py`）：当文件名匹配与通道匹配均命中但返回角色不同时，该 file 节点判定为歧义——跳过自动设置（色彩空间不变）、保留选中，并在 Script Editor 打印冲突详情供手动复核
+- 文件名色彩空间关键词改为以 `config/texture_channels.json` 为**唯一来源**（按通道 `type` 分组：color → srgb、其余 → raw；过滤 < 5 字符短别名）；删除 `config/colorSpace.json` 中的 `filenameKeywords`
+- 通道匹配关键词统一：`config/colorSpace.json` 的 `commonAttributeRoles` 成为唯一来源，键对齐 `common.json` 规范名（`metallic`、`normal_bump`、`transmissionColor`、`displacementTexture`）；删除 `colorSpaces.{role}.attributeKeywords` 与 `node_tools_tab.py` 的 `_norm_attr_keywords` 兜底——修复此前从未被匹配的渲染器专属属性（`bump_input`、`baseMetalness`、`texMap`、`refr_color` 等），透射链现正确归类为 `srgb`
+
+### 文档
+- `README.md` / `README_zh.md`：项目结构补全遗漏文件（`docs/AGENTS.md`、`CHANGELOG_zh.md`、`copy_launch.bat`、`LICENSE`）
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：修正 VRayMtl subsurface 映射（`subsurfaceWeight` → `translucencyAmount`、`subsurfaceColor` → `translucencyColor`，而非 `-`）；删除不存在的 `reflectionColorAmount` 前提条件；修正 Builder 位置描述（"Converter 面板的第二个标签页" → "独立的第二个主标签页"）；项目结构补全 `copy_launch.bat` 和 `LICENSE`
+- `AGENTS.md`：`renderer_map` 示例补充 `"vray": "vray"`
+
+### 修复
+- `core/converters/attribute.py`：重写 `_fix_alpha_luminance` — 改用目标配置的**实际属性名**扫描（此前用逻辑名 `common_attr` 直查目标材质属性，渲染器专属属性名如 `metalness`/`opacityMap`/`reflectionGlossiness` 静默失效）、**递归上游追踪**中间节点（CC/ramp/layeredTexture/bump）查找 `outAlpha`、豁免 opacity 透明度通道、Redshift 跳过 — 修复 `smart_connect` 回退到 `outAlpha` 后浮点通道（roughness/metallic/bump）`alphaIsLuminance` 从不开启的问题
+- `core/material_builder.py`：`make_tex` 中 `alphaIsLuminance` 移到 `fileTextureName` 之后设置，避免纹理加载后状态被重置
+
+### 重构
+- `core/material_builder.py`：移除 `_new` 方法名残留 — `_build_color_chain_new` / `_build_rough_chain_new` / `_build_bump_normal_new` / `_build_displacement_new` 去掉后缀重命名
+- 将 4 个完全重复的颜色通道构建方法（`_build_emission_chain` / `_build_transmission_chain` / `_build_sheen_chain` / `_build_reflection_chain`）与 baseColor/SSS 分支合并为参数化 `_build_color_chain(common_attr, name_key, ...)`；标量通道（roughness/metallic/opacity）统一为 `_build_scalar_chain(...)`，由 `use_full_chain` + `invert` 驱动
+- 移除 `MaterialBuilder.build()` 的死参数 `use_sss`（subsurface 构建一直由 `input_paths` 决定，与该标志无关）；同步更新 `core/batch_builder.py`、`ui/tabs/builder_tab.py` 调用方，并删除 `tests/test_batch_builder.py` 中两个断言 `use_sss` 的用例
+- `core/config_loader.py`：`NodeMapping.isNormal` / `isNormal_value` 改为 PEP8 命名 `is_normal` / `is_normal_value`（`config/bumpNormal.json` 的 JSON 键同步对齐）；删除未使用的死方法 `has_attr`
+
+## 2026-08-17
+
+### 移除
+- `ui/tabs/transform_tab.py`、`attr_modifier_tab.py`、`locator_tab.py`（及其标签页）：移除 Transform Tools / Attr Modifier / Locator 三个面板
+
+### 重构
+- **Builder 配置统一到 Convert 体系**：删除 `config/builder_specs.json`；Builder 渲染器规格改从 `config/material/*.json`（`node_type`/`plugin`/属性映射）+ `bumpNormal.json` + `colorCorrection.json` + 材质 JSON 的 `displacement` 块读取
+- 新增 `core/material_builder.py`：构建逻辑从 `ui/tabs/builder_tab.py` 下沉到 core，完全配置驱动
+- `ui/tabs/builder_tab.py`：材质类型下拉框由全部材质 JSON 驱动（新增材质自动出现）；全宽 BUILD 按钮；可选"加入快速选择集"开关
+- `config/material/*.json`：新增 `plugin` 字段；displacement 块扩展 `file_source`/`lyr_src`/`output`；修正 `VRayMtl` subsurface 映射（`ssColor` → `translucencyColor`，此版本 VRayMtl 无 `ssColor` 属性）
+- `config/bumpNormal.json`：为 Builder 新增 `file_source`/`default_scale`
+- **pymel 全面迁移至 `maya.cmds`**：`core/node_utils.py`、`core/prerequisites.py`、`core/converter.py`、`core/converters/*`（attribute/bump/cc/displacement）、`ui/tabs/converter_tab.py` —— Maya 2027 起不再支持 pymel；plug 一律改为 `"node.attr"` 字符串
+
+### 缺陷修复
+- `core/converters/attribute.py`：float 值设置到 `float3` 目标属性时自动广播为 (v, v, v)（如 Arnold `opacity`、V-Ray `opacityMap`、Redshift `ms_radius`）
+- `core/node_utils.py`：解包 `cmds.getAttr()` 嵌套列表格式 `[(1,1,1)] → (1,1,1)`，恢复颜色值传递与黑色归零（pymel 迁移回归）
+- `config/material/VRayMtl.json`：修正 `coatIor` → `coatIOR`（属性名大小写错误，此前 coat IOR 从未传递）
+- `core/converters/cc.py`：跨渲染器转换时保持源材质 CC 链——共享中间节点（layeredTexture）场景下，源属性改接回原 CC，不再被目标渲染器 CC 污染
+- Hue 映射：`config/colorCorrection.json` 各渲染器新增 `hue_center`；`core/node_utils.py` 将 hue 转换为通用偏移角 [-180, 180]（`0` = 无变化）——修复 Redshift `hue=0` 被映射为 Arnold `hueShift=-1`（应为 0）的错误
+
+### 功能增强
+- 自动色彩空间匹配（`ui/tabs/node_tools_tab.py`、`core/config_loader.py`）：通道匹配改为 BFS 追踪 file 节点**全部下游连接**（单通道 `outColorR/G/B`、`outAlpha`、穿越 colorCorrect/layeredTexture/multiplyDivide/bump 等中间节点），不再只查 `outColor`；属性名匹配前规范化（小写、去除 `_`/`-`）；追踪时跳过 Maya 默认渲染列表容器
+
+### 文档
+- `README.md` / `README_zh.md` / `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md` / `AGENTS.md`：移除已删除面板、更新 Builder 配置来源、pymel → cmds、项目结构
+
 ## 2026-08-13
 
 ### 功能增强
