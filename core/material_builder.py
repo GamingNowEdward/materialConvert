@@ -19,7 +19,7 @@ class MaterialBuilder:
             return ""
         return self.config.get_weight_attr_for_common_attr(common_attr)
 
-    def build(self, node_type, base_name, input_paths, use_nrm=True, use_sss=False, use_disp=False,
+    def build(self, node_type, base_name, input_paths, use_nrm=True, use_disp=False,
               use_qss=True, use_full_chain=True, channel_options=None):
         mat_config = self.config.get_material_config(node_type)
         if not mat_config:
@@ -58,25 +58,30 @@ class MaterialBuilder:
             self.ctx.connect(p2d, "outUvFilterSize", f, "uvFilterSize")
             return f
 
-        self._build_color_chain_new(m_node, renderer, base_name, make_tex, mat_config,
-                                    use_sss, use_full_chain, input_paths)
-        self._build_rough_chain_new(m_node, base_name, make_tex, mat_config,
-                                    use_full_chain, channel_options, input_paths)
-        self._build_metallic_chain(m_node, base_name, make_tex, mat_config, input_paths)
-        self._build_opacity_chain(m_node, base_name, make_tex, mat_config, input_paths)
-        self._build_emission_chain(m_node, renderer, base_name, make_tex, mat_config,
-                                   use_full_chain, input_paths)
-        self._build_transmission_chain(m_node, renderer, base_name, make_tex, mat_config,
-                                       use_full_chain, input_paths)
-        self._build_sheen_chain(m_node, renderer, base_name, make_tex, mat_config,
-                                use_full_chain, input_paths)
-        self._build_reflection_chain(m_node, renderer, base_name, make_tex, mat_config,
-                                     use_full_chain, input_paths)
-        self._build_bump_normal_new(m_node, renderer, base_name, make_tex, mat_config,
-                                    use_nrm, channel_options, input_paths)
+        for common_attr, name_key in (('baseColor', 'color'), ('subsurfaceColor', 'sss')):
+            self._build_color_chain(m_node, renderer, base_name, make_tex, mat_config,
+                                    use_full_chain, input_paths, common_attr, name_key)
+
+        self._build_scalar_chain(m_node, base_name, make_tex, mat_config, 'specularRoughness',
+                                 'rough', input_paths, use_full_chain,
+                                 channel_options.get('specularRoughness', {}).get('invert', False))
+        self._build_scalar_chain(m_node, base_name, make_tex, mat_config, 'metallic', 'metallic',
+                                 input_paths)
+        self._build_scalar_chain(m_node, base_name, make_tex, mat_config, 'opacity', 'opacity',
+                                 input_paths)
+
+        for common_attr, name_key in (('emissionColor', 'emission'),
+                                      ('transmissionColor', 'transmission'),
+                                      ('fuzzColor', 'sheen'),
+                                      ('specularColor', 'reflection')):
+            self._build_color_chain(m_node, renderer, base_name, make_tex, mat_config,
+                                    use_full_chain, input_paths, common_attr, name_key)
+
+        self._build_bump_normal(m_node, renderer, base_name, make_tex, mat_config,
+                                use_nrm, channel_options, input_paths)
         if use_disp or "displacementTexture" in input_paths:
-            self._build_displacement_new(m_node, sg_node, base_name, make_tex, mat_config,
-                                         use_full_chain)
+            self._build_displacement(m_node, sg_node, base_name, make_tex, mat_config,
+                                     use_full_chain)
 
         qss_nodes = list(self.ctx._current_build_nodes)
         if use_qss and qss_nodes:
@@ -110,124 +115,39 @@ class MaterialBuilder:
             if weight_attr and cmds.attributeQuery(weight_attr, node=m_node, exists=True):
                 cmds.setAttr(f"{m_node}.{weight_attr}", 1)
 
-    def _build_color_chain_new(self, m_node, renderer, base_name, make_tex, mat_config,
-                               use_sss, use_full_chain, input_paths):
+    def _build_color_chain(self, m_node, renderer, base_name, make_tex, mat_config,
+                           use_full_chain, input_paths, common_attr, name_key):
+        if common_attr not in input_paths:
+            return
+        attr_name = mat_config.get_maya_attr(common_attr)
+        if not attr_name:
+            return
+        tex = make_tex(common_attr, name_key)
         cc_config = self.config.get_color_correction_config(renderer)
+        self._connect_color_channel(
+            m_node, renderer, base_name, name_key, common_attr, attr_name, tex,
+            use_full_chain, cc_config, mat_config,
+        )
 
-        tex_color = None
-        if 'baseColor' in input_paths:
-            tex_color = make_tex('baseColor', 'color')
-            color_attr = mat_config.get_maya_attr('baseColor')
-            if color_attr:
-                self._connect_color_channel(
-                    m_node, renderer, base_name, 'color', 'baseColor', color_attr, tex_color,
-                    use_full_chain, cc_config, mat_config,
-                )
-
-        if 'subsurfaceColor' in input_paths:
-            sss_attr = mat_config.get_maya_attr('subsurfaceColor')
-            if sss_attr:
-                tex_sss = make_tex('subsurfaceColor', 'sss')
-                if tex_sss is not None:
-                    self._connect_color_channel(
-                        m_node, renderer, base_name, 'sss', 'subsurfaceColor', sss_attr, tex_sss,
-                        use_full_chain, cc_config, mat_config,
-                    )
-
-    def _build_rough_chain_new(self, m_node, base_name, make_tex, mat_config,
-                               use_full_chain, channel_options, input_paths):
-        if 'specularRoughness' not in input_paths:
+    def _build_scalar_chain(self, m_node, base_name, make_tex, mat_config, common_attr,
+                            name_key, input_paths, use_full_chain=False, invert=False):
+        if common_attr not in input_paths:
             return
-        rough_attr = mat_config.get_maya_attr('specularRoughness')
-        if not rough_attr:
+        attr_name = mat_config.get_maya_attr(common_attr)
+        if not attr_name:
             return
 
-        invert = channel_options.get('specularRoughness', {}).get('invert', False)
-        tex_rough = make_tex('specularRoughness', 'rough', is_alpha=True, invert=invert)
+        tex = make_tex(common_attr, name_key, is_alpha=True, invert=invert)
 
         if use_full_chain:
-            ramp = self.ctx.create_node('ramp', 'ramp', base_name, 'rough', 'texture')
-            self.ctx.connect(tex_rough, "outAlpha", ramp, "vCoord")
-            self.ctx.connect(ramp, "outAlpha", m_node, rough_attr)
+            ramp = self.ctx.create_node('ramp', 'ramp', base_name, name_key, 'texture')
+            self.ctx.connect(tex, "outAlpha", ramp, "vCoord")
+            self.ctx.connect(ramp, "outAlpha", m_node, attr_name)
         else:
-            node_utils.smart_connect(f"{tex_rough}.outAlpha", f"{m_node}.{rough_attr}")
+            node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}")
 
-    def _build_metallic_chain(self, m_node, base_name, make_tex, mat_config, input_paths):
-        if 'metallic' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('metallic')
-        if not attr_name:
-            return
-        tex = make_tex('metallic', is_alpha=True)
-        node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}")
-
-    def _build_opacity_chain(self, m_node, base_name, make_tex, mat_config, input_paths):
-        if 'opacity' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('opacity')
-        if not attr_name:
-            return
-        tex = make_tex('opacity', is_alpha=True)
-        node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}")
-
-    def _build_emission_chain(self, m_node, renderer, base_name, make_tex, mat_config,
-                              use_full_chain, input_paths):
-        if 'emissionColor' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('emissionColor')
-        if not attr_name:
-            return
-        tex = make_tex('emissionColor', 'emission')
-        cc_config = self.config.get_color_correction_config(renderer)
-        self._connect_color_channel(
-            m_node, renderer, base_name, 'emission', 'emissionColor', attr_name, tex,
-            use_full_chain, cc_config, mat_config,
-        )
-
-    def _build_transmission_chain(self, m_node, renderer, base_name, make_tex, mat_config,
-                                  use_full_chain, input_paths):
-        if 'transmissionColor' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('transmissionColor')
-        if not attr_name:
-            return
-        tex = make_tex('transmissionColor', 'transmission')
-        cc_config = self.config.get_color_correction_config(renderer)
-        self._connect_color_channel(
-            m_node, renderer, base_name, 'transmission', 'transmissionColor', attr_name, tex,
-            use_full_chain, cc_config, mat_config,
-        )
-
-    def _build_sheen_chain(self, m_node, renderer, base_name, make_tex, mat_config,
-                           use_full_chain, input_paths):
-        if 'fuzzColor' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('fuzzColor')
-        if not attr_name:
-            return
-        tex = make_tex('fuzzColor', 'sheen')
-        cc_config = self.config.get_color_correction_config(renderer)
-        self._connect_color_channel(
-            m_node, renderer, base_name, 'sheen', 'fuzzColor', attr_name, tex,
-            use_full_chain, cc_config, mat_config,
-        )
-
-    def _build_reflection_chain(self, m_node, renderer, base_name, make_tex, mat_config,
-                                use_full_chain, input_paths):
-        if 'specularColor' not in input_paths:
-            return
-        attr_name = mat_config.get_maya_attr('specularColor')
-        if not attr_name:
-            return
-        tex = make_tex('specularColor', 'reflection')
-        cc_config = self.config.get_color_correction_config(renderer)
-        self._connect_color_channel(
-            m_node, renderer, base_name, 'reflection', 'specularColor', attr_name, tex,
-            use_full_chain, cc_config, mat_config,
-        )
-
-    def _build_bump_normal_new(self, m_node, renderer, base_name, make_tex, mat_config,
-                               use_nrm, channel_options, input_paths):
+    def _build_bump_normal(self, m_node, renderer, base_name, make_tex, mat_config,
+                           use_nrm, channel_options, input_paths):
         bn_config = self.config.get_bump_normal_config(renderer)
         if not bn_config:
             return
@@ -272,8 +192,8 @@ class MaterialBuilder:
         if mapping.target_connection:
             self.ctx.connect(bn_node, mapping.target_connection, m_node, target_attr)
 
-    def _build_displacement_new(self, m_node, sg_node, base_name, make_tex, mat_config,
-                                use_full_chain):
+    def _build_displacement(self, m_node, sg_node, base_name, make_tex, mat_config,
+                            use_full_chain):
         disp_type = mat_config.displacement_node_type
         disp_in = mat_config.displacement_texture
         if not disp_type or not disp_in:

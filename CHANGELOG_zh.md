@@ -34,6 +34,11 @@
 - `core/converters/attribute.py`：重写 `_fix_alpha_luminance` — 改用目标配置的**实际属性名**扫描（此前用逻辑名 `common_attr` 直查目标材质属性，渲染器专属属性名如 `metalness`/`opacityMap`/`reflectionGlossiness` 静默失效）、**递归上游追踪**中间节点（CC/ramp/layeredTexture/bump）查找 `outAlpha`、豁免 opacity 透明度通道、Redshift 跳过 — 修复 `smart_connect` 回退到 `outAlpha` 后浮点通道（roughness/metallic/bump）`alphaIsLuminance` 从不开启的问题
 - `core/material_builder.py`：`make_tex` 中 `alphaIsLuminance` 移到 `fileTextureName` 之后设置，避免纹理加载后状态被重置
 
+### 重构
+- `core/material_builder.py`：移除 `_new` 方法名残留 — `_build_color_chain_new` / `_build_rough_chain_new` / `_build_bump_normal_new` / `_build_displacement_new` 去掉后缀重命名
+- 将 4 个完全重复的颜色通道构建方法（`_build_emission_chain` / `_build_transmission_chain` / `_build_sheen_chain` / `_build_reflection_chain`）与 baseColor/SSS 分支合并为参数化 `_build_color_chain(common_attr, name_key, ...)`；标量通道（roughness/metallic/opacity）统一为 `_build_scalar_chain(...)`，由 `use_full_chain` + `invert` 驱动
+- 移除 `MaterialBuilder.build()` 的死参数 `use_sss`（subsurface 构建一直由 `input_paths` 决定，与该标志无关）；同步更新 `core/batch_builder.py`、`ui/tabs/builder_tab.py` 调用方，并删除 `tests/test_batch_builder.py` 中两个断言 `use_sss` 的用例
+
 ## 2026-08-17
 
 ### 移除

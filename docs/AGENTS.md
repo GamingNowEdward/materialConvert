@@ -50,7 +50,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
 - Builder 的手动和批量数据、内部建链一律使用通用属性名（如 `baseColor`、`specularRoughness`）；颜色通道的权重属性由 `color_weight_pairs` 推导，禁止在 `MaterialBuilder` 中维护重复字典
-- **Builder 可扩展边界**：转换器（Convert）可由属性 JSON 扩展，但 Builder 只支持已实现的通道策略（color、float、roughness、normal_bump、displacement）。新增"普通属性"仍需在 `MaterialBuilder` 中添加或扩展 Python 建链函数，不能仅靠 JSON 配置
+- **Builder 可扩展边界**：转换器（Convert）可由属性 JSON 扩展，但 Builder 只支持已实现的通道策略（color、float、roughness、normal_bump、displacement）。颜色通道经 `_build_color_chain(common_attr, name_key, ...)` 参数化构建，标量通道（roughness/metallic/opacity）经 `_build_scalar_chain(...)` 构建；新增"普通属性"仍需在 `MaterialBuilder` 中添加或扩展 Python 建链函数，不能仅靠 JSON 配置
 - Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（将扫描结果按规范通用属性名传给 `MaterialBuilder`）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名

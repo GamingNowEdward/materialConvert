@@ -34,6 +34,11 @@
 - `core/converters/attribute.py`: rewrite `_fix_alpha_luminance` — scan by the target config's **actual attribute names** (previously queried logical `common_attr` names, silently failing for renderer-specific names like `metalness`/`opacityMap`/`reflectionGlossiness`), **recursively trace upstream** through intermediate nodes (CC/ramp/layeredTexture/bump) to find `outAlpha`, exempt the `opacity` channel, and keep Redshift skipped — fixes `alphaIsLuminance` never being enabled for float channels (roughness/metallic/bump) after `smart_connect` falls back to `outAlpha`
 - `core/material_builder.py`: set `alphaIsLuminance` in `make_tex` after `fileTextureName` so the state is not reset when the file loads
 
+### Refactoring
+- `core/material_builder.py`: remove `_new` method-name residue — `_build_color_chain_new` / `_build_rough_chain_new` / `_build_bump_normal_new` / `_build_displacement_new` renamed without the suffix
+- Merge the four identical color-channel builders (`_build_emission_chain` / `_build_transmission_chain` / `_build_sheen_chain` / `_build_reflection_chain`) and the baseColor/SSS branches into a parameterized `_build_color_chain(common_attr, name_key, ...)`; scalar channels (roughness/metallic/opacity) unified into `_build_scalar_chain(...)` driven by `use_full_chain` + `invert`
+- Remove the dead `use_sss` parameter from `MaterialBuilder.build()` (subsurface construction is gated by `input_paths`, not this flag); update `core/batch_builder.py` and `ui/tabs/builder_tab.py` callers and drop the two `use_sss` assertions in `tests/test_batch_builder.py`
+
 ## 2026-08-17
 
 ### Removed

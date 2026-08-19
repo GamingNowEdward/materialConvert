@@ -155,10 +155,9 @@ class BuilderTab:
         if self.cb_glossiness is not None and self.cb_glossiness.isChecked():
             channel_options['specularRoughness'] = {'invert': True}
 
-        use_sss = 'subsurfaceColor' in input_paths
         use_disp = 'displacementTexture' in input_paths
 
-        return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_sss, use_disp,
+        return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_disp,
                                   use_qss=self.cb_qss.isChecked(),
                                   channel_options=channel_options)
 

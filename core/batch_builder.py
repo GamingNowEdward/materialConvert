@@ -31,14 +31,12 @@ class BatchBuilder:
                 channel_options[common_attr] = dict(data["options"])
 
         use_disp = "displacementTexture" in input_paths
-        use_sss = "subsurfaceColor" in input_paths
 
         return self.builder.build(
             node_type,
             material["name"],
             input_paths,
             use_nrm=True,
-            use_sss=use_sss,
             use_disp=use_disp,
             use_qss=use_qss,
             use_full_chain=use_full_chain,
