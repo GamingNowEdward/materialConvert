@@ -22,8 +22,8 @@
       "target_connection": "outNormal",
       "source_connection": "bumpValue",
       "scale": "bumpDepth",
-      "isNormal": "bumpInterp",
-      "isNormal_value": 0,
+      "is_normal": "bumpInterp",
+      "is_normal_value": 0,
       "file_source": "outAlpha",
       "default_scale": 0.1
     },
@@ -33,8 +33,8 @@
       "target_connection": "outNormal",
       "source_connection": "bumpValue",
       "scale": "bumpDepth",
-      "isNormal": "bumpInterp",
-      "isNormal_value": 1,
+      "is_normal": "bumpInterp",
+      "is_normal_value": 1,
       "file_source": "outColor",
       "default_scale": 1.0
     }
@@ -66,8 +66,8 @@
       "target_connection": "out",
       "source_connection": "input",
       "scale": "scale",
-      "isNormal": "inputType",
-      "isNormal_value": 0,
+      "is_normal": "inputType",
+      "is_normal_value": 0,
       "file_source": "outColor",
       "default_scale": 0.1
     },
@@ -77,8 +77,8 @@
       "target_connection": "out",
       "source_connection": "input",
       "scale": "scale",
-      "isNormal": "inputType",
-      "isNormal_value": 1,
+      "is_normal": "inputType",
+      "is_normal_value": 1,
       "file_source": "outColor",
       "default_scale": 1.0
     }

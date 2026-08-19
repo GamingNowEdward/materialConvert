@@ -38,6 +38,7 @@
 - `core/material_builder.py`: remove `_new` method-name residue — `_build_color_chain_new` / `_build_rough_chain_new` / `_build_bump_normal_new` / `_build_displacement_new` renamed without the suffix
 - Merge the four identical color-channel builders (`_build_emission_chain` / `_build_transmission_chain` / `_build_sheen_chain` / `_build_reflection_chain`) and the baseColor/SSS branches into a parameterized `_build_color_chain(common_attr, name_key, ...)`; scalar channels (roughness/metallic/opacity) unified into `_build_scalar_chain(...)` driven by `use_full_chain` + `invert`
 - Remove the dead `use_sss` parameter from `MaterialBuilder.build()` (subsurface construction is gated by `input_paths`, not this flag); update `core/batch_builder.py` and `ui/tabs/builder_tab.py` callers and drop the two `use_sss` assertions in `tests/test_batch_builder.py`
+- `core/config_loader.py`: rename `NodeMapping.isNormal` / `isNormal_value` to PEP8 `is_normal` / `is_normal_value` (JSON keys in `config/bumpNormal.json` aligned); remove the dead `has_attr` method
 
 ## 2026-08-17
 

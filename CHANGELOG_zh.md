@@ -38,6 +38,7 @@
 - `core/material_builder.py`：移除 `_new` 方法名残留 — `_build_color_chain_new` / `_build_rough_chain_new` / `_build_bump_normal_new` / `_build_displacement_new` 去掉后缀重命名
 - 将 4 个完全重复的颜色通道构建方法（`_build_emission_chain` / `_build_transmission_chain` / `_build_sheen_chain` / `_build_reflection_chain`）与 baseColor/SSS 分支合并为参数化 `_build_color_chain(common_attr, name_key, ...)`；标量通道（roughness/metallic/opacity）统一为 `_build_scalar_chain(...)`，由 `use_full_chain` + `invert` 驱动
 - 移除 `MaterialBuilder.build()` 的死参数 `use_sss`（subsurface 构建一直由 `input_paths` 决定，与该标志无关）；同步更新 `core/batch_builder.py`、`ui/tabs/builder_tab.py` 调用方，并删除 `tests/test_batch_builder.py` 中两个断言 `use_sss` 的用例
+- `core/config_loader.py`：`NodeMapping.isNormal` / `isNormal_value` 改为 PEP8 命名 `is_normal` / `is_normal_value`（`config/bumpNormal.json` 的 JSON 键同步对齐）；删除未使用的死方法 `has_attr`
 
 ## 2026-08-17
 

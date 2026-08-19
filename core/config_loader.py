@@ -15,8 +15,8 @@ class NodeMapping:
         self.source_connection = data.get("source_connection", "")
         self.scale = data.get("scale", "")
         self.input = data.get("input", "")
-        self.isNormal = data.get("isNormal", "")
-        self.isNormal_value = data.get("isNormal_value", None)
+        self.is_normal = data.get("is_normal", "")
+        self.is_normal_value = data.get("is_normal_value", None)
         self.input_type = data.get("input_type", "")
         self.input_type_value = data.get("input_type_value", None)
         self.file_source = data.get("file_source", "outColor")
@@ -104,10 +104,6 @@ class MaterialConfig:
 
     def get_maya_attr(self, common_attr):
         return self.attr_map.get(common_attr, "")
-
-    def has_attr(self, common_attr):
-        val = self.attr_map.get(common_attr, "")
-        return bool(val)
 
     def get_prerequisites(self):
         return self.prerequisites

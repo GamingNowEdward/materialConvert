@@ -128,10 +128,10 @@ class BumpConverter:
                     should_skip = True
             except Exception:
                 pass
-        elif bn_mapping.isNormal:
+        elif bn_mapping.is_normal:
             try:
-                actual = cmds.getAttr(f"{source_mat}.{bn_mapping.isNormal}")
-                if actual != bn_mapping.isNormal_value:
+                actual = cmds.getAttr(f"{source_mat}.{bn_mapping.is_normal}")
+                if actual != bn_mapping.is_normal_value:
                     should_skip = True
             except Exception:
                 pass
@@ -206,13 +206,13 @@ class BumpConverter:
             return True
         if bump_type and bump_type == node_actual_type and bump_type != normal_type:
             return False
-        if r_config.bump and r_config.bump.isNormal:
+        if r_config.bump and r_config.bump.is_normal:
             try:
-                actual = cmds.getAttr(f"{bn_node}.{r_config.bump.isNormal}")
-                if r_config.normal and r_config.normal.isNormal_value is not None:
-                    return actual == r_config.normal.isNormal_value
+                actual = cmds.getAttr(f"{bn_node}.{r_config.bump.is_normal}")
+                if r_config.normal and r_config.normal.is_normal_value is not None:
+                    return actual == r_config.normal.is_normal_value
             except Exception:
-                cmds.warning(f"BumpConverter: failed to read {r_config.bump.isNormal} on {bn_node}")
+                cmds.warning(f"BumpConverter: failed to read {r_config.bump.is_normal} on {bn_node}")
         return default_mode == "normal"
 
     def _read_bn_attrs(self, bn_node, bn_cfg, attr_name, is_connection=False):
@@ -266,11 +266,11 @@ class BumpConverter:
                 cmds.setAttr(f"{target_mat}.{input_type_attr}", input_type_value)
             except Exception:
                 cmds.warning(f"BumpConverter: failed to set [{input_type_attr}] on {target_mat}")
-        elif tgt_mapping.isNormal:
+        elif tgt_mapping.is_normal:
             try:
-                cmds.setAttr(f"{target_mat}.{tgt_mapping.isNormal}", tgt_mapping.isNormal_value)
+                cmds.setAttr(f"{target_mat}.{tgt_mapping.is_normal}", tgt_mapping.is_normal_value)
             except Exception:
-                cmds.warning(f"BumpConverter: failed to set isNormal on {target_mat}")
+                cmds.warning(f"BumpConverter: failed to set is_normal on {target_mat}")
 
         log.append("  Bump/Normal: converted to material attributes")
 
@@ -290,11 +290,11 @@ class BumpConverter:
         if tgt_mapping.source_connection:
             self.utils.smart_connect(input_plug, f"{bn_node}.{tgt_mapping.source_connection}")
 
-        if tgt_mapping.isNormal:
+        if tgt_mapping.is_normal:
             try:
-                cmds.setAttr(f"{bn_node}.{tgt_mapping.isNormal}", tgt_mapping.isNormal_value)
+                cmds.setAttr(f"{bn_node}.{tgt_mapping.is_normal}", tgt_mapping.is_normal_value)
             except Exception:
-                cmds.warning(f"BumpConverter: failed to set isNormal on {bn_node}")
+                cmds.warning(f"BumpConverter: failed to set is_normal on {bn_node}")
 
         common_config = self.config.get_material_config(cmds.nodeType(target_mat))
         if common_config:
