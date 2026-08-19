@@ -45,7 +45,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，支持回调函数，UI 层注册回调更新日志面板
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QTabWidget，4 个标签页）
+- 界面：`ui/converter_ui.py`（QTabWidget，5 个标签页）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
@@ -54,6 +54,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（将扫描结果按规范通用属性名传给 `MaterialBuilder`）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名
+- Debug：`core/config_validator.py`（`ConfigValidator` 读取全部 JSON 配置，在 Maya 中创建临时节点校验 node_type 与属性拼写，结束后清理临时节点；插件检测用 `pluginInfo(loaded)` + `loadPlugin`，加载失败（未安装/不兼容）时**整组忽略（SKIP）**，不误报为拼写错误）+ `ui/tabs/debug_tab.py`（Debug 面板：Validate All JSON Configs 按钮 + 按类别筛选、着色的验证日志）
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
@@ -96,6 +97,8 @@ n = cmds.createNode("RedshiftOpenPBRMaterial")  # 测试确切的类型名（验
 ### `displacementShader` 哨兵值
 在置换 JSON 配置中，`node_type: "displacementShader"` **不是真正的节点类型名**。它表示"将纹理直接连接到 `SG.displacementShader`"。真正需要创建节点的类型（如 `RedshiftDisplacement`）才会触发节点创建。
 
+> 注：`core/config_validator.py` 的 Debug 校验不受此语义影响——它会直接创建 `displacementShader` 节点并实际校验其属性（`scale`/`displacement` 等）。
+
 ### 旧节点永不删除
 转换后的材质、凹凸、CC 和置换节点**保留在场景中**，只是从 shadingEngine 上断开连接。不要添加删除逻辑。
 
@@ -107,6 +110,9 @@ n = cmds.createNode("RedshiftOpenPBRMaterial")  # 测试确切的类型名（验
 renderer_map = {"arnold": "ai", "redshift": "rs", "vray": "vray"}  # 仅在需要缩写时使用
 renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为原名
 ```
+
+### Debug 验证忽略未安装渲染器
+`core/config_validator.py` 检测插件加载状态（`pluginInfo(loaded)`，未加载则 `loadPlugin` 自动加载）；当插件加载失败（未安装/不兼容）时，将**整组渲染器标记为 SKIP 并跳过**，绝不产生 ERROR/WARN，避免没有对应渲染器（如未装 V-Ray/Redshift）的用户看到一堆误报。SKIP 计入 summary 的 skip 数，不计入失败数。
 
 ## 开发工作流
 

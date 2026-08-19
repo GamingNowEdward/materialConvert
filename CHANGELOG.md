@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-20
+
+### Added
+- New **Debug** tab (`ui/tabs/debug_tab.py` + `core/config_validator.py`): validates all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`); creates temporary nodes to verify `node_type` and every mapped attribute (incl. prerequisites and displacement blocks), then cleans up
+- Validation log is filterable by category (Errors / Warnings / Skipped / OK / Info), defaults to problem-only, entries sorted by priority and color-coded
+
+### Changed
+- `core/config_loader.py`: add public `get_all_bn_configs()` / `get_all_cc_configs()` getters
+- Main window now has 5 tabs: Converter → Material Builder → Batch Builder → Node Tools → Debug
+
+### Fixed
+- `core/config_validator.py`: plugin detection now uses `pluginInfo(loaded)` + `loadPlugin` (previously `pluginInfo(exists)` returned false for installed-but-not-loaded plugins, wrongly skipping entire installed renderer groups); installed-but-unloaded plugins are now auto-loaded before validation
+- `core/config_validator.py`: the `displacementShader` sentinel `node_type` is now created and its attributes validated (previously all skipped); removed the `COMMON_PLACEHOLDERS` false positive — explicitly defined real attributes (e.g. `RedshiftBumpMap.scale`, `aiNormalMap.input`) are no longer mis-skipped as common placeholders
+
+### Documentation
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: trimmed to conversion-only content (removed Material Builder / Batch Builder / Node Tools / Debug / Project Structure sections that overlapped with README); keeps main material attributes, bump/normal, color correction, displacement, node creation, old-node handling, texture connection compatibility, and batch conversion
+- `README.md` / `README_zh.md`: added jump links to both `CONVERSION_SPEC` language versions at the top
+
 ## 2026-08-19
 
 ### Added

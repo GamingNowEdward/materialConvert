@@ -2,6 +2,8 @@
 
 [English](../README.md) | **简体中文**
 
+**转换规格说明：** [简体中文](CONVERSION_SPEC_zh.md) | [English](CONVERSION_SPEC.md)
+
 Maya 工具包，支持 Arnold / Redshift / V-Ray 之间的 PBR 材质转换、构建和场景管理。
 
 ## 安装
@@ -65,6 +67,12 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **Color Management**：批量设置 file 节点的 ignoreColorSpaceFileRules
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 
+### Debug
+- 在 Maya 中校验全部 JSON 配置的拼写是否正确（材质 / `bumpNormal.json` / `colorCorrection.json`）
+- 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites 与 displacement），结束后自动清理
+- 未安装插件的渲染器尽可能自动加载，加载失败则整组跳过（绝不误报为拼写错误）
+- 可筛选的验证日志（Errors / Warnings / Skipped / OK / Info），按类别着色
+
 ## 架构
 
 ### 数据流
@@ -112,15 +120,17 @@ materialConvert/
 │   ├── builder_context.py           # Material Builder 共享状态
 │   ├── texture_scanner.py           # 目录扫描 / 文件名→通道解析
 │   ├── batch_builder.py             # 批量构建编排
-│   └── material_builder.py          # Material Builder 核心逻辑
+│   ├── material_builder.py          # Material Builder 核心逻辑
+│   └── config_validator.py          # JSON 配置校验（Debug 标签页）
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题
-│   └── tabs/                        # 四个功能标签页
+│   └── tabs/                        # 五个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
 │       ├── batch_builder_tab.py    # Batch Builder
-│       └── node_tools_tab.py        # Node Tools
+│       ├── node_tools_tab.py        # Node Tools
+│       └── debug_tab.py             # Debug（配置校验）
 ├── docs/                            # 文档
 │   ├── AGENTS.md                    # AI Agent 开发指南
 │   ├── CONVERSION_SPEC.md           # 转换规格说明（英文）

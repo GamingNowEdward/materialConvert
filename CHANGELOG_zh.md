@@ -1,5 +1,23 @@
 # 更新日志
 
+## 2026-08-20
+
+### 新增
+- 新增 **Debug** 标签页（`ui/tabs/debug_tab.py` + `core/config_validator.py`）：在 Maya 中校验全部 JSON 配置拼写（材质 / `bumpNormal.json` / `colorCorrection.json`），创建临时节点验证 `node_type` 与每个映射属性（含 prerequisites、displacement 段），结束后自动清理临时节点
+- 校验日志支持按类别筛选（Errors / Warnings / Skipped / OK / Info），默认只显示问题类，条目按优先级排序并按类别着色
+
+### 变更
+- `core/config_loader.py`：新增 `get_all_bn_configs()` / `get_all_cc_configs()` 公开 getter
+- 主窗口标签页增至 5 个：Converter → Material Builder → Batch Builder → Node Tools → Debug
+
+### 修复
+- `core/config_validator.py`：插件检测改用 `pluginInfo(loaded)` + `loadPlugin`（此前 `pluginInfo(exists)` 对已安装但未加载的插件误判为 not found，导致已安装渲染器被整组跳过）；已安装但未加载的插件现在会先自动加载再校验
+- `core/config_validator.py`：`displacementShader` 哨兵 `node_type` 现在会创建节点并实际校验其属性（此前全部跳过）；移除 `COMMON_PLACEHOLDERS` 误判——显式定义的真实属性（如 `RedshiftBumpMap.scale`、`aiNormalMap.input`）不再被误判为 common 占位符跳过
+
+### 文档
+- `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：精简为仅转换相关内容（移除 Material Builder / Batch Builder / Node Tools / Debug / 项目结构章节，与 README 重叠部分删除），只保留主材质属性、凹凸/法线、颜色校正、置换、节点创建、旧节点处理、纹理连接兼容性、批量转换
+- `README.md` / `README_zh.md`：顶部新增两个 `CONVERSION_SPEC` 语言的跳转链接
+
 ## 2026-08-19
 
 ### 新增

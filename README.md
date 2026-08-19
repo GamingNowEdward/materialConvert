@@ -2,6 +2,8 @@
 
 **English** | [简体中文](docs/README_zh.md)
 
+**Conversion Specification:** [English](docs/CONVERSION_SPEC.md) | [简体中文](docs/CONVERSION_SPEC_zh.md)
+
 Maya toolkit for PBR material conversion, building, and scene management across Arnold / Redshift / V-Ray.
 
 ## Installation
@@ -65,6 +67,12 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
 - **Rename Shading Engine**: Batch rename SG to match material names
 
+### Debug
+- Validate all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
+- Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
+- Renderers without an installed plugin are auto-loaded when possible, otherwise skipped entirely (never misreported as spelling errors)
+- Filterable validation log (Errors / Warnings / Skipped / OK / Info) with category color coding
+
 ## Architecture
 
 ### Data Flow
@@ -112,15 +120,17 @@ materialConvert/
 │   ├── builder_context.py           # Material Builder shared state
 │   ├── texture_scanner.py           # Directory scanning / filename-to-channel parsing
 │   ├── batch_builder.py             # Batch build orchestration
-│   └── material_builder.py          # Material Builder core logic
+│   ├── material_builder.py          # Material Builder core logic
+│   └── config_validator.py          # JSON config validation (Debug tab)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QTabWidget)
 │   ├── styles.py                    # QSS dark theme
-│   └── tabs/                        # Four functional tabs
+│   └── tabs/                        # Five functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
 │       ├── batch_builder_tab.py    # Batch Builder
-│       └── node_tools_tab.py        # Node Tools
+│       ├── node_tools_tab.py        # Node Tools
+│       └── debug_tab.py             # Debug (config validation)
 ├── docs/                            # Documentation
 │   ├── AGENTS.md                    # AI Agent development guide
 │   ├── CONVERSION_SPEC.md           # Full conversion specification
