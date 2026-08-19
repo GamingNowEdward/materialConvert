@@ -20,41 +20,44 @@ class BuilderTab:
         self.name_input = QtWidgets.QLineEdit(self.ctx.get_naming()["default_name"])
         layout.addWidget(self.name_input)
 
-        tex_group = QtWidgets.QGroupBox("Texture Paths (Optional)")
-        tex_layout = QtWidgets.QGridLayout(tex_group)
-        tex_layout.setSpacing(8)
+        self.channel_entries = {}
 
-        self.path_inputs = {}
-        texture_types = [
-            ('color', "Color:"), ('rough', "Roughness:"),
-            ('nrm', "Normal/Bump:"), ('disp', "Displacement:")
+        color_channels = [
+            ('baseColor', "Color:", True),
+            ('subsurfaceColor', "SSS:", False),
+            ('emissionColor', "Emission:", False),
+            ('transmissionColor', "Transmission:", False),
+            ('specularColor', "Reflection:", False),
+            ('fuzzColor', "Sheen:", False),
         ]
+        color_group = self._build_channel_group("Color Channels", color_channels)
+        layout.addWidget(color_group)
 
-        for row, (key, label_text) in enumerate(texture_types):
-            lbl = QtWidgets.QLabel(label_text)
-            lbl.setFixedWidth(85)
-            le = QtWidgets.QLineEdit()
-            le.setPlaceholderText("Leave empty to keep unassigned...")
-            btn = QtWidgets.QPushButton("...")
-            btn.setFixedSize(30, 25)
-            btn.clicked.connect(lambda checked=False, le=le: self._browse_file(le))
-            tex_layout.addWidget(lbl, row, 0)
-            tex_layout.addWidget(le, row, 1)
-            tex_layout.addWidget(btn, row, 2)
-            self.path_inputs[key] = le
+        scalar_channels = [
+            ('specularRoughness', "Roughness:", True),
+            ('metallic', "Metallic:", False),
+            ('opacity', "Opacity:", False),
+        ]
+        scalar_group, scalar_opts = self._build_channel_group("Scalar Channels", scalar_channels, with_options=True)
+        layout.addWidget(scalar_group)
 
-        layout.addWidget(tex_group)
+        self.cb_glossiness = scalar_opts.get('glossiness')
 
-        cb_layout = QtWidgets.QHBoxLayout()
-        self.cb_nrm = QtWidgets.QCheckBox("Normal (Uncheck for Bump)")
-        self.cb_nrm.setChecked(True)
-        self.cb_sss = QtWidgets.QCheckBox("SSS")
-        self.cb_disp = QtWidgets.QCheckBox("Displacement")
+        geo_channels = [
+            ('normal_bump', "Normal/Bump:", True),
+            ('displacementTexture', "Displacement:", False),
+        ]
+        geo_group, geo_opts = self._build_channel_group("Geometry Channels", geo_channels, with_options=True)
+        layout.addWidget(geo_group)
+
+        self.cb_normal_mode = geo_opts.get('normal_mode')
+
+        opt_layout = QtWidgets.QHBoxLayout()
         self.cb_qss = QtWidgets.QCheckBox("Add To Quick Select Set")
         self.cb_qss.setChecked(True)
-        for cb in [self.cb_nrm, self.cb_sss, self.cb_disp, self.cb_qss]:
-            cb_layout.addWidget(cb)
-        layout.addLayout(cb_layout)
+        opt_layout.addWidget(self.cb_qss)
+        opt_layout.addStretch()
+        layout.addLayout(opt_layout)
 
         self.mat_combo = QtWidgets.QComboBox()
         self.mat_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
@@ -80,6 +83,39 @@ class BuilderTab:
         self._populate_material_list()
         return widget
 
+    def _build_channel_group(self, title, channels, with_options=False):
+        group = QtWidgets.QGroupBox(title)
+        grid = QtWidgets.QGridLayout(group)
+        grid.setSpacing(6)
+        opts = {}
+
+        for row, (common_attr, label_text, default_checked) in enumerate(channels):
+            cb = QtWidgets.QCheckBox(label_text)
+            cb.setChecked(default_checked)
+            cb.setFixedWidth(120)
+            le = QtWidgets.QLineEdit()
+            le.setPlaceholderText("Leave empty to create unassigned node...")
+            btn = QtWidgets.QPushButton("...")
+            btn.setFixedSize(30, 25)
+            btn.clicked.connect(lambda checked=False, le=le: self._browse_file(le))
+            grid.addWidget(cb, row, 0)
+            grid.addWidget(le, row, 1)
+            grid.addWidget(btn, row, 2)
+            self.channel_entries[common_attr] = {'cb': cb, 'le': le}
+
+            if with_options and common_attr == 'specularRoughness':
+                cb_gloss = QtWidgets.QCheckBox("Glossiness (Invert)")
+                grid.addWidget(cb_gloss, row, 3)
+                opts['glossiness'] = cb_gloss
+
+            if with_options and common_attr == 'normal_bump':
+                cb_nrm = QtWidgets.QCheckBox("Normal (Uncheck for Bump)")
+                cb_nrm.setChecked(True)
+                grid.addWidget(cb_nrm, row, 3)
+                opts['normal_mode'] = cb_nrm
+
+        return (group, opts) if with_options else group
+
     def _populate_material_list(self):
         self.mat_combo.clear()
         all_configs = self.config.get_all_material_configs()
@@ -101,19 +137,26 @@ class BuilderTab:
         if not node_type:
             raise RuntimeError("No material type selected.")
         mat_base = self.name_input.text() or "Default"
-        use_nrm = self.cb_nrm.isChecked()
-        use_sss = self.cb_sss.isChecked()
-        use_disp = self.cb_disp.isChecked()
 
-        input_paths = {
-            'baseColor': self.ctx.clean_path(self.path_inputs['color'].text()),
-            'specularRoughness': self.ctx.clean_path(self.path_inputs['rough'].text()),
-            'normal_bump': self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            'displacementTexture': self.ctx.clean_path(self.path_inputs['disp'].text()),
-        }
-        channel_options = {
-            'normal_bump': {'mode': 'normal' if use_nrm else 'bump'},
-        }
+        input_paths = {}
+        channel_options = {}
+
+        for common_attr, entry in self.channel_entries.items():
+            if entry['cb'].isChecked():
+                path = self.ctx.clean_path(entry['le'].text())
+                input_paths[common_attr] = path
+
+        use_nrm = True
+        if 'normal_bump' in input_paths and self.cb_normal_mode is not None:
+            mode = 'normal' if self.cb_normal_mode.isChecked() else 'bump'
+            channel_options['normal_bump'] = {'mode': mode}
+            use_nrm = mode == 'normal'
+
+        if self.cb_glossiness is not None and self.cb_glossiness.isChecked():
+            channel_options['specularRoughness'] = {'invert': True}
+
+        use_sss = 'subsurfaceColor' in input_paths
+        use_disp = 'displacementTexture' in input_paths
 
         return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_sss, use_disp,
                                   use_qss=self.cb_qss.isChecked(),

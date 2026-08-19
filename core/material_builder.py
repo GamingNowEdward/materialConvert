@@ -74,7 +74,7 @@ class MaterialBuilder:
                                      use_full_chain, input_paths)
         self._build_bump_normal_new(m_node, renderer, base_name, make_tex, mat_config,
                                     use_nrm, channel_options, input_paths)
-        if use_disp or input_paths.get("displacementTexture"):
+        if use_disp or "displacementTexture" in input_paths:
             self._build_displacement_new(m_node, sg_node, base_name, make_tex, mat_config,
                                          use_full_chain)
 
@@ -124,15 +124,10 @@ class MaterialBuilder:
                     use_full_chain, cc_config, mat_config,
                 )
 
-        if use_sss or 'subsurfaceColor' in input_paths:
+        if 'subsurfaceColor' in input_paths:
             sss_attr = mat_config.get_maya_attr('subsurfaceColor')
             if sss_attr:
-                if 'subsurfaceColor' in input_paths:
-                    tex_sss = make_tex('subsurfaceColor', 'sss')
-                elif tex_color is not None:
-                    tex_sss = tex_color
-                else:
-                    tex_sss = None
+                tex_sss = make_tex('subsurfaceColor', 'sss')
                 if tex_sss is not None:
                     self._connect_color_channel(
                         m_node, renderer, base_name, 'sss', 'subsurfaceColor', sss_attr, tex_sss,

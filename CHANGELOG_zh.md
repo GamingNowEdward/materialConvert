@@ -12,6 +12,9 @@
 - `config/builder_naming.json`：新增更短的通道后缀缩写
 
 ### 变更
+- Material Builder 标签页 UI 重构为 3 个通道分组（Color / Scalar / Geometry），每个通道带启用复选框 + 纹理路径输入；通道现涵盖全部 11 个支持的通用属性（新增 Metallic、Opacity、Emission、Transmission、Reflection、Sheen、SSS 独立路径）
+- SSS 通道不再自动复用 baseColor 纹理；需要与其他通道一样提供明确的路径输入
+- 通道启用但纹理路径为空时现在会创建未指定纹理的 file 节点（此前跳过），与批量构建行为一致
 - 移除 Builder 别名层：手动 Builder、Batch Builder 与 `MaterialBuilder` 现在都直接使用规范通用属性名；`builder_aliases` 不再存在于 `config/material/common.json`
 - `texture_channels.json` 使用 `common_attr` 表示规范的 `common.json` 属性名
 - Batch Builder 现在将通用属性名直接传入 Material Builder；移除 `COMMON_ATTR_TO_SHORT` 转换表，同时保持现有节点命名不变

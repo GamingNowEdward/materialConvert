@@ -12,6 +12,9 @@
 - `config/builder_naming.json`: shorter suffix abbreviations for new builder channels
 
 ### Changed
+- Material Builder tab UI restructured into 3 channel groups (Color / Scalar / Geometry), each channel with enable checkbox + texture path input; channels now include all 11 supported common attributes (added Metallic, Opacity, Emission, Transmission, Reflection, Sheen, SSS with independent path)
+- SSS channel no longer auto-reuses baseColor texture; requires explicit path input like other channels
+- Empty texture path with channel enabled now creates an unassigned file node (previously skipped), consistent with batch builder behavior
 - Removed the Builder alias layer: manual Builder, Batch Builder, and `MaterialBuilder` now use canonical common attributes directly; `builder_aliases` is no longer part of `config/material/common.json`
 - `texture_channels.json` now uses `common_attr` for the canonical `common.json` attribute name
 - Batch Builder now passes canonical common attributes directly to Material Builder; removed the `COMMON_ATTR_TO_SHORT` conversion table while preserving existing node naming
