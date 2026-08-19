@@ -43,22 +43,74 @@ class AttributeConverter:
                     and isinstance(weight_val, (int, float)) and weight_val > 0):
                 weight_data["value"] = 0
 
-    def _fix_alpha_luminance(self, target_mat, target_renderer, log):
+    _FIX_ALPHA_SKIP = {"opacity", "displacementScale", "displacementTexture"}
+
+    def _fix_alpha_luminance(self, target_mat, target_renderer, target_config, log):
         if target_renderer == "redshift":
             return
 
-        for common_attr in self.config.get_common_attrs():
+        for common_attr, maya_attr in target_config.attr_map.items():
+            if common_attr in self._FIX_ALPHA_SKIP or not maya_attr:
+                continue
+
+            plug = f"{target_mat}.{maya_attr}"
+            if not cmds.objExists(plug):
+                continue
+
+            alpha_plug = self._trace_alpha_plug(plug)
+            if not alpha_plug:
+                continue
+
+            tex_node = alpha_plug.split(".")[0]
             try:
-                conns = cmds.listConnections(f"{target_mat}.{common_attr}", plugs=True, source=True) or []
-                for conn in conns:
-                    if conn.split(".")[-1] == "outAlpha":
-                        tex_node = conn.split(".")[0]
-                        if (cmds.attributeQuery("alphaIsLuminance", node=tex_node, exists=True)
-                                and not cmds.getAttr(f"{tex_node}.alphaIsLuminance")):
-                            cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
-                            log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
-            except Exception:
-                pass
+                if (cmds.attributeQuery("alphaIsLuminance", node=tex_node, exists=True)
+                        and not cmds.getAttr(f"{tex_node}.alphaIsLuminance")):
+                    cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
+                    log.append(f"  Enabled Alpha Is Luminance on {tex_node}")
+            except Exception as e:
+                cmds.warning(f"AttributeConverter: failed to enable alphaIsLuminance on {tex_node}: {e}")
+
+    def _trace_alpha_plug(self, start, visited=None, depth=0):
+        """Recursively trace upstream from an attribute/node to find the bitmap texture
+        source plug feeding *.outAlpha.
+
+        Traverses intermediate nodes such as CC / ramp / layeredTexture / bump
+        (checking input connections at node level) so direct-connection checks do not
+        miss texture outputs deep in the chain. The terminal target is a node that has
+        fileTextureName (intermediate nodes like ramp / CC may also expose
+        alphaIsLuminance and must be crossed).
+        """
+        if depth > 10 or not start:
+            return None
+        if visited is None:
+            visited = set()
+
+        try:
+            conns = cmds.listConnections(start, plugs=True, source=True) or []
+        except Exception:
+            return None
+
+        for conn in conns:
+            if conn.endswith(".outAlpha"):
+                node = conn.split(".")[0]
+                if cmds.attributeQuery("fileTextureName", node=node, exists=True):
+                    return conn
+                if node in visited:
+                    continue
+                visited.add(node)
+                result = self._trace_alpha_plug(node, visited, depth + 1)
+                if result:
+                    return result
+
+        for conn in conns:
+            src_node = conn.split(".")[0]
+            if src_node in visited:
+                continue
+            visited.add(src_node)
+            result = self._trace_alpha_plug(src_node, visited, depth + 1)
+            if result:
+                return result
+        return None
 
     def _fix_vray_emission(self, attr_info, source_config, target_mat, target_config):
         if source_config.get_maya_attr("emissionWeight"):
@@ -103,7 +155,7 @@ class AttributeConverter:
             self._transfer_one(target_mat, tgt_maya_attr, src_maya_attr,
                                src_data, cc_cache, target_renderer, log)
 
-        self._fix_alpha_luminance(target_mat, target_renderer, log)
+        self._fix_alpha_luminance(target_mat, target_renderer, target_config, log)
 
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
                       src_data, cc_cache, target_renderer, log):

@@ -40,14 +40,12 @@ class TextureScanner:
         2. Substring match ignoring underscores, only for longer aliases,
            and only when the alias is bounded by non-alphanumeric characters.
         """
-        # 1. Exact token match
         tokens = normalized.split("_")
         if alias in tokens:
             idx = tokens.index(alias)
             start = sum(len(t) + 1 for t in tokens[:idx])
             return start, start + len(alias)
 
-        # 2. Substring match ignoring underscores (avoid matching inside words)
         if len(alias) < 4:
             return None
 
@@ -71,8 +69,6 @@ class TextureScanner:
                 j += 1
 
             if k == len(alias):
-                # Check boundaries: the immediate character before/after must not
-                # be alphanumeric, otherwise the alias is part of a longer word.
                 before = normalized[start - 1] if start > 0 else ""
                 after = normalized[j] if j < n else ""
 
@@ -86,9 +82,6 @@ class TextureScanner:
     def _parse(self, stem):
         normalized = self._normalize(stem)
 
-        # Collect all aliases globally and try longest first.
-        # This prevents generic aliases like "color" from stealing
-        # more specific names like "sheen_color" / "scattering_color".
         candidates = []
         for channel_name, channel_data in self.channels.items():
             for alias in channel_data.get("aliases", []):

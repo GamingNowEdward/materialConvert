@@ -14,49 +14,16 @@ class MaterialBuilder:
         self.ctx = ctx
         self.config = ConfigLoader()
 
-    def _resolve_common_attr(self, key):
-        if not key:
-            return ""
-
-        alias_map = self.config.get_channel_common_attrs()
-        normalized_key = key.replace("_", "").replace("-", "").lower()
-        common_attr = (alias_map.get(key)
-                       or alias_map.get(key.lower())
-                       or alias_map.get(normalized_key))
-        if common_attr:
-            return common_attr
-        if key in self.config.get_common_attrs():
-            return key
-        raise ValueError(f"Unknown Builder channel: {key}")
-
     def _resolve_weight_attr(self, common_attr):
         if not common_attr:
             return ""
         return self.config.get_weight_attr_for_common_attr(common_attr)
 
-    def _normalize_channels(self, input_paths, channel_options):
-        """Normalize optional compact aliases at the Builder boundary.
-
-        Batch Builder already supplies canonical common attributes.  The
-        canonical manual Builder UI also supplies them, while callers that
-        use compact aliases such as ``color`` and ``rough`` remain supported
-        without leaking those aliases into build logic.
-        """
-        normalized_paths = {}
-        for key, path in (input_paths or {}).items():
-            normalized_paths[self._resolve_common_attr(key)] = path
-
-        normalized_options = {}
-        for key, options in (channel_options or {}).items():
-            normalized_options[self._resolve_common_attr(key)] = dict(options)
-
-        return normalized_paths, normalized_options
-
     def build(self, node_type, base_name, input_paths, use_nrm=True, use_sss=False, use_disp=False,
               use_qss=True, use_full_chain=True, channel_options=None):
         mat_config = self.config.get_material_config(node_type)
         if not mat_config:
-            raise RuntimeError(f"缺少材质配置: {node_type}")
+            raise RuntimeError(f"Missing material config: {node_type}")
         renderer = mat_config.renderer
 
         if mat_config.plugin and not cmds.pluginInfo(mat_config.plugin, query=True, loaded=True):
@@ -73,17 +40,16 @@ class MaterialBuilder:
         p2d = self.ctx.create_node('place2dTexture', 'p2d', base_name)
 
         channel_options = channel_options or {}
-        input_paths, channel_options = self._normalize_channels(input_paths, channel_options)
 
         def make_tex(common_attr, name_key=None, is_alpha=False, invert=False):
             f = self.ctx.create_node(
                 'file', 'file', base_name, name_key or common_attr, 'texture'
             )
-            if is_alpha:
-                cmds.setAttr(f"{f}.alphaIsLuminance", 1)
             path = input_paths.get(common_attr, "")
             if path:
                 cmds.setAttr(f"{f}.fileTextureName", path, type="string")
+            if is_alpha:
+                cmds.setAttr(f"{f}.alphaIsLuminance", 1)
             if invert and cmds.attributeQuery("invert", node=f, exists=True):
                 cmds.setAttr(f"{f}.invert", 1)
             for attr in self.P2D_ATTRS:
@@ -149,8 +115,6 @@ class MaterialBuilder:
         cc_config = self.config.get_color_correction_config(renderer)
 
         tex_color = None
-        # Builder Tab always includes a Base Color field, so this keeps old behavior.
-        # Batch Builder omits it when there is no BaseColor texture.
         if 'baseColor' in input_paths:
             tex_color = make_tex('baseColor', 'color')
             color_attr = mat_config.get_maya_attr('baseColor')
@@ -160,7 +124,6 @@ class MaterialBuilder:
                     use_full_chain, cc_config, mat_config,
                 )
 
-        # SSS: either the legacy use_sss flag or a dedicated sss path.
         if use_sss or 'subsurfaceColor' in input_paths:
             sss_attr = mat_config.get_maya_attr('subsurfaceColor')
             if sss_attr:
@@ -274,7 +237,6 @@ class MaterialBuilder:
         if not bn_config:
             return
 
-        # Priority: per-channel option from scanner, then legacy use_nrm flag.
         mode = (
             channel_options.get('normal_bump', {}).get('mode')
             or ('normal' if use_nrm else 'bump')

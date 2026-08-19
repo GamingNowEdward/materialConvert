@@ -8,22 +8,6 @@
     ["fuzzColor", "fuzzWeight"],
     ["emissionColor", "emissionWeight"]
   ],
-  "builder_aliases": {
-    "color": "baseColor",
-    "rough": "specularRoughness",
-    "sss": "subsurfaceColor",
-    "translucency": "subsurfaceColor",
-    "scattering": "subsurfaceColor",
-    "metallic": "metallic",
-    "opacity": "opacity",
-    "emission": "emissionColor",
-    "transmission": "transmissionColor",
-    "sheen": "fuzzColor",
-    "reflection": "specularColor",
-    "nrm": "normal_bump",
-    "bump": "normal_bump",
-    "disp": "displacementTexture"
-  },
   "base": {
     "baseColor": "baseColor",
     "baseColorWeight": "baseColorWeight",

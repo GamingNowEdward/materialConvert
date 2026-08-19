@@ -31,7 +31,6 @@ QPushButton#setLocBtn:hover { background-color: #5D4D3E; color: white; border: 1
 QPushButton#execModifyBtn { background-color: #2b5c46; color: #8de8b8; }
 QPushButton#execModifyBtn:hover { background-color: #3b7c5e; color: white; border: 1px solid #00FFAD; }
 
-/* Converter tab 专用按钮 */
 QPushButton#convertBtn { background-color: #2b5c46; color: #8de8b8; }
 QPushButton#convertBtn:hover { background-color: #3b7c5e; color: white; border: 1px solid #00FFAD; }
 QPushButton#refreshBtn { background-color: #3d2b5c; color: #c48de8; }

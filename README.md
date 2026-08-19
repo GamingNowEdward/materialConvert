@@ -86,7 +86,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 materialConvert/
 ├── config/                          # JSON configuration files
 │   ├── material/                    # Renderer material attribute mappings
-│   │   ├── common.json              # Universal PBR parameters and Builder channel aliases
+│   │   ├── common.json              # Universal PBR parameters and color-weight relationships
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json

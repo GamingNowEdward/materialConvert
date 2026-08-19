@@ -3,7 +3,7 @@ import os
 
 
 def normalize_keyword(kw):
-    """规范化关键字:小写 + 去除下划线/中划线,用于颜色空间属性名匹配。"""
+    """Normalize keyword: lowercase and strip underscores/dashes, used for matching colorspace attribute names."""
     return kw.lower().replace("_", "").replace("-", "")
 
 class NodeMapping:
@@ -126,7 +126,6 @@ class ConfigLoader:
         self._color_correction_configs = {}
         self._builder_naming = {}
         self._color_weight_pairs = []
-        self._channel_common_attrs = {}
         self._color_space_config = {}
         self._texture_channels = {}
         self._load_all()
@@ -144,12 +143,8 @@ class ConfigLoader:
         path = os.path.join(self._CONFIG_DIR, "material", "common.json")
         raw = self._read_json(path)
         self._color_weight_pairs = raw.get("color_weight_pairs", [])
-        self._channel_common_attrs = raw.get("builder_aliases", {})
-
         common_attr_groups = {}
         for group_name, group_data in raw.items():
-            if group_name == "builder_aliases":
-                continue
             if isinstance(group_data, dict):
                 common_attr_groups[group_name] = list(group_data.keys())
 
@@ -218,9 +213,6 @@ class ConfigLoader:
 
     def get_color_weight_pairs(self):
         return list(self._color_weight_pairs)
-
-    def get_channel_common_attrs(self):
-        return dict(self._channel_common_attrs)
 
     def get_weight_attr_for_common_attr(self, common_attr):
         for color_attr, weight_attr in self._color_weight_pairs:
@@ -306,10 +298,11 @@ class ConfigLoader:
         self._texture_channels = self._read_json(path)
 
     def get_filename_role_keywords(self):
-        """从 texture_channels.json 构建 文件名关键词 → 颜色空间角色 的映射。
+        """Build the filename keyword -> colorspace role mapping from texture_channels.json.
 
-        通道 type 为 "color" 归入 srgb,其余(float/normal/bump/displacement)归入 raw。
-        短别名(长度 < 5)会被过滤,避免子串误判(如 "col" 命中 "school")。
+        Channels with type "color" map to srgb; the rest (float/normal/bump/displacement)
+        map to raw. Short aliases (length < 5) are filtered out to avoid substring
+        false positives (e.g. "col" matching "school").
         """
         roles = {"srgb": [], "raw": []}
         for channel_data in self._texture_channels.get("channels", {}).values():

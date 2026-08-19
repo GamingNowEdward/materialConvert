@@ -35,7 +35,6 @@ class BatchBuilderTab:
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # Directory
         dir_group = QtWidgets.QGroupBox("Texture Directory")
         dir_layout = QtWidgets.QHBoxLayout(dir_group)
         dir_layout.setContentsMargins(12, 14, 12, 12)
@@ -53,7 +52,6 @@ class BatchBuilderTab:
         dir_layout.addWidget(btn_scan)
         layout.addWidget(dir_group)
 
-        # Build options
         opt_group = QtWidgets.QGroupBox("Build Options")
         opt_layout = QtWidgets.QHBoxLayout(opt_group)
         opt_layout.setContentsMargins(12, 14, 12, 12)
@@ -74,7 +72,6 @@ class BatchBuilderTab:
 
         layout.addWidget(opt_group)
 
-        # Action buttons
         btn_row = QtWidgets.QHBoxLayout()
         btn_build_all = QtWidgets.QPushButton("Build All")
         btn_build_all.setObjectName("convertBtn")
@@ -93,7 +90,6 @@ class BatchBuilderTab:
         self.progress_bar.setFormat("%v / %m")
         layout.addWidget(self.progress_bar)
 
-        # Texture / Material List (parsed + unparsed)
         table_group = QtWidgets.QGroupBox("Texture / Material List")
         table_layout = QtWidgets.QVBoxLayout(table_group)
         table_layout.setContentsMargins(12, 14, 12, 12)
@@ -112,7 +108,6 @@ class BatchBuilderTab:
 
         layout.addWidget(table_group, stretch=3)
 
-        # Materials to Build (planned materials from current scan)
         mtb_group = QtWidgets.QGroupBox("Materials to Build")
         mtb_layout = QtWidgets.QVBoxLayout(mtb_group)
         mtb_layout.setContentsMargins(12, 14, 12, 12)
@@ -122,7 +117,6 @@ class BatchBuilderTab:
         mtb_layout.addWidget(self.materials_to_build_list)
         layout.addWidget(mtb_group, stretch=1)
 
-        # Log
         log_group = QtWidgets.QGroupBox("Log")
         log_layout = QtWidgets.QVBoxLayout(log_group)
         log_layout.setContentsMargins(12, 14, 12, 12)

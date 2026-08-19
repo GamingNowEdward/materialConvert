@@ -26,10 +26,6 @@ class BumpConverter:
         bump_info = src_bn_info.get("bump")
         normal_info = src_bn_info.get("normal")
 
-        # bump_info and normal_info are mutually exclusive for a given source:
-        # separate-type nodes (aiBump2d/aiNormalMap) produce only one entry;
-        # shared-type nodes (bump2d/RedshiftBumpMap) produce only one via
-        # should_skip logic in _collect based on isNormal / input_type value.
         info = bump_info or normal_info
         if not info:
             return
@@ -72,8 +68,6 @@ class BumpConverter:
                 log.append("  Bump/Normal: reconnected existing node")
         except Exception:
             pass
-
-    # ── Collect ─────────────────────────────────────────────
 
     def _collect(self, source_mat, src_bn_config):
         result = {}
@@ -147,8 +141,6 @@ class BumpConverter:
             "input_plug": input_plug,
             "should_skip": should_skip,
         }
-
-    # ── Collect Node (4-step) ───────────────────────────────
 
     def _collect_node(self, material, bn_mapping, mode):
         bn_node = self._find_bn_node(material, bn_mapping)
@@ -238,8 +230,6 @@ class BumpConverter:
         except Exception:
             cmds.warning(f"BumpConverter: failed to read {attr_val} on {bn_node}")
         return None
-
-    # ── Do Convert ──────────────────────────────────────────
 
     def _do_convert(self, bn_info, target_mat, tgt_mapping,
                     target_renderer, is_normal, source_name, log):

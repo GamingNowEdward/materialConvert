@@ -35,7 +35,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 所有渲染器映射定义在 `config/*.json` 中，Python 代码中**零硬编码渲染器类型名**
 - 新增渲染器支持：**只需添加 JSON 文件，不需要改业务代码**
 - 四个转换模块位于 `core/converters/` 目录下：
-  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（扫描目标材质实际连接）
+  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（按目标配置实际属性名扫描、递归上游追踪、opacity 豁免、Redshift 跳过）
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
@@ -49,9 +49,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
-- `config/material/common.json` 的 `builder_aliases` 是 Builder 旧短名（如 `color`、`rough`、`nrm`）到通用属性名的唯一映射；颜色通道的权重属性由 `color_weight_pairs` 推导，禁止在 `MaterialBuilder` 中维护重复字典
-- Builder 的批量数据和内部建链一律使用通用属性名（如 `baseColor`、`specularRoughness`）；短名仅用于手动 Builder 面板与节点命名，禁止在 Batch Builder 中维护通用属性到短名的转换表
-- Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（把扫描结果转成 `MaterialBuilder` 可用的短 key）+ `ui/tabs/batch_builder_tab.py`（面板）
+- Builder 的手动和批量数据、内部建链一律使用通用属性名（如 `baseColor`、`specularRoughness`）；颜色通道的权重属性由 `color_weight_pairs` 推导，禁止在 `MaterialBuilder` 中维护重复字典
+- Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（将扫描结果按规范通用属性名传给 `MaterialBuilder`）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名
 

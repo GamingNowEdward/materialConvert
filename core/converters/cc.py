@@ -99,7 +99,9 @@ class CCConverter:
         log.append(f"  Color correction converted: {cc_node}")
 
     def _restore_shared_source_chain(self, cc_entry):
-        """原 CC 被新 CC 挤出后,若中间节点与源材质共享,把源材质属性改接回原 CC,避免源链被污染。"""
+        """After the original CC is displaced by a new CC, if the intermediate node is
+        shared with the source material, re-route the source material attribute back to
+        the original CC to avoid polluting the source chain."""
         src_cc_name = cc_entry.get("cc_node_name", "")
         output_plug = cc_entry.get("output_plug")
         if not src_cc_name or not output_plug:

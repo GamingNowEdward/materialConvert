@@ -81,7 +81,7 @@ def is_cc_node(node, config):
 
 
 def _hue_to_offset(value, cc_config):
-    """渲染器 hue 值 → 通用偏移角 [-180, 180](0 = 无变化)。"""
+    """Renderer hue value -> generic offset angle [-180, 180] (0 = no change)."""
     if not cc_config.hue_range:
         return value
     lo, hi = cc_config.hue_range
@@ -97,7 +97,7 @@ def _hue_to_offset(value, cc_config):
 
 
 def _offset_to_hue(offset, cc_config):
-    """通用偏移角 [-180, 180] → 渲染器 hue 值。"""
+    """Generic offset angle [-180, 180] -> renderer hue value."""
     if not cc_config.hue_range:
         return offset
     lo, hi = cc_config.hue_range

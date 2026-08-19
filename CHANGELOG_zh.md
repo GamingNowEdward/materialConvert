@@ -12,6 +12,7 @@
 - `config/builder_naming.json`：新增更短的通道后缀缩写
 
 ### 变更
+- 移除 Builder 别名层：手动 Builder、Batch Builder 与 `MaterialBuilder` 现在都直接使用规范通用属性名；`builder_aliases` 不再存在于 `config/material/common.json`
 - `texture_channels.json` 使用 `common_attr` 表示规范的 `common.json` 属性名
 - Batch Builder 现在将通用属性名直接传入 Material Builder；移除 `COMMON_ATTR_TO_SHORT` 转换表，同时保持现有节点命名不变
 - Builder 通道别名改由 `config/material/common.json` 的 `builder_aliases` 统一维护，颜色通道权重属性从 `color_weight_pairs` 推导；移除 `MaterialBuilder` 内的重复映射
@@ -26,6 +27,10 @@
 - `README.md` / `README_zh.md`：项目结构补全遗漏文件（`docs/AGENTS.md`、`CHANGELOG_zh.md`、`copy_launch.bat`、`LICENSE`）
 - `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`：修正 VRayMtl subsurface 映射（`subsurfaceWeight` → `translucencyAmount`、`subsurfaceColor` → `translucencyColor`，而非 `-`）；删除不存在的 `reflectionColorAmount` 前提条件；修正 Builder 位置描述（"Converter 面板的第二个标签页" → "独立的第二个主标签页"）；项目结构补全 `copy_launch.bat` 和 `LICENSE`
 - `AGENTS.md`：`renderer_map` 示例补充 `"vray": "vray"`
+
+### 修复
+- `core/converters/attribute.py`：重写 `_fix_alpha_luminance` — 改用目标配置的**实际属性名**扫描（此前用逻辑名 `common_attr` 直查目标材质属性，渲染器专属属性名如 `metalness`/`opacityMap`/`reflectionGlossiness` 静默失效）、**递归上游追踪**中间节点（CC/ramp/layeredTexture/bump）查找 `outAlpha`、豁免 opacity 透明度通道、Redshift 跳过 — 修复 `smart_connect` 回退到 `outAlpha` 后浮点通道（roughness/metallic/bump）`alphaIsLuminance` 从不开启的问题
+- `core/material_builder.py`：`make_tex` 中 `alphaIsLuminance` 移到 `fileTextureName` 之后设置，避免纹理加载后状态被重置
 
 ## 2026-08-17
 

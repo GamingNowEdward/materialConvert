@@ -265,11 +265,13 @@ class NodeToolsTab:
     }
 
     def _trace_channel_targets(self, file_node, max_depth=4):
-        """BFS 追踪 file 节点的全部输出终点,返回命中材质的属性名列表。
+        """BFS trace all output endpoints of a file node, returning the list of attribute
+        names on hit materials.
 
-        覆盖单通道连接(outColorR/G/B)、outAlpha 输出与中间节点
-        (cc/layeredTexture/multiplyDivide/bump 等)穿越。
-        Maya 默认渲染列表容器(defaultTextureList 等)会被跳过,避免污染追踪。
+        Covers single-channel connections (outColorR/G/B), outAlpha outputs, and
+        traversal through intermediate nodes (cc/layeredTexture/multiplyDivide/bump,
+        etc.). Maya default render list containers (defaultTextureList, etc.) are
+        skipped to avoid polluting the trace.
         """
         targets = []
         visited = {file_node}
@@ -331,8 +333,8 @@ class NodeToolsTab:
             cmds.select(suspicious, add=True)
             for f in suspicious:
                 path = cmds.getAttr(f"{f}.fileTextureName") or ""
-                print(f"[歧义] {path} ({f}): filename→{self._match_by_filename(f)} "
-                      f"vs channel→{self._match_by_channel(f)}, 已跳过, 请手动处理")
+                print(f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
+                      f"vs channel→{self._match_by_channel(f)}, skipped, handle manually")
             print(f"Auto matched color space on {count}/{len(selected)} file node(s); "
                   f"{len(suspicious)} ambiguous node(s) selected for manual review.")
         else:

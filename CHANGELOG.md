@@ -12,6 +12,7 @@
 - `config/builder_naming.json`: shorter suffix abbreviations for new builder channels
 
 ### Changed
+- Removed the Builder alias layer: manual Builder, Batch Builder, and `MaterialBuilder` now use canonical common attributes directly; `builder_aliases` is no longer part of `config/material/common.json`
 - `texture_channels.json` now uses `common_attr` for the canonical `common.json` attribute name
 - Batch Builder now passes canonical common attributes directly to Material Builder; removed the `COMMON_ATTR_TO_SHORT` conversion table while preserving existing node naming
 - Builder channel aliases now live in `config/material/common.json` (`builder_aliases`), and color-channel weight attributes are derived from `color_weight_pairs`; removed duplicate mappings from `MaterialBuilder`
@@ -26,6 +27,10 @@
 - `README.md` / `README_zh.md`: add missing files to project structure (`docs/AGENTS.md`, `CHANGELOG_zh.md`, `copy_launch.bat`, `LICENSE`)
 - `CONVERSION_SPEC.md` / `CONVERSION_SPEC_zh.md`: fix VRayMtl subsurface mapping (`subsurfaceWeight` → `translucencyAmount`, `subsurfaceColor` → `translucencyColor` instead of `-`); remove non-existent `reflectionColorAmount` prerequisite; fix Builder description from "Converter panel's second tab" to "dedicated second tab"; add missing `copy_launch.bat` and `LICENSE` to project structure
 - `AGENTS.md`: add missing `"vray": "vray"` to `renderer_map` example
+
+### Fixed
+- `core/converters/attribute.py`: rewrite `_fix_alpha_luminance` — scan by the target config's **actual attribute names** (previously queried logical `common_attr` names, silently failing for renderer-specific names like `metalness`/`opacityMap`/`reflectionGlossiness`), **recursively trace upstream** through intermediate nodes (CC/ramp/layeredTexture/bump) to find `outAlpha`, exempt the `opacity` channel, and keep Redshift skipped — fixes `alphaIsLuminance` never being enabled for float channels (roughness/metallic/bump) after `smart_connect` falls back to `outAlpha`
+- `core/material_builder.py`: set `alphaIsLuminance` in `make_tex` after `fileTextureName` so the state is not reset when the file loads
 
 ## 2026-08-17
 

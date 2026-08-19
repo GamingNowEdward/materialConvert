@@ -75,7 +75,7 @@ These universal attributes are **not** processed in the main transfer loop — t
 ### 1.3 Value Transfer Rules
 
 - **Texture connections**: Migrated via `_smart_connect()` — tries direct connection first, falls back to `outColor` then `outAlpha` for type incompatibility
-- **Alpha Is Luminance**: After attribute transfer, scans all target material connections; if `outAlpha` is used, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift)
+- **Alpha Is Luminance**: After attribute transfer, scans target material connections using the **actual attribute names** from the target config and **recursively traces upstream** (through intermediate nodes like CC/ramp/layeredTexture/bump); if an `outAlpha` output is found in the chain, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift; `opacity` channel is exempt to avoid enabling luminance on genuine alpha maps)
 - **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
 - **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
@@ -370,7 +370,7 @@ A dedicated tab that builds many materials from a texture directory:
 
 1. `core/texture_scanner.py` scans a directory (non-recursive) using `config/texture_channels.json`
 2. Filenames are normalized (lowercase, `-`/space → `_`), then channels are matched longest-alias-first with token / underscore-tolerant matching
-3. `core/batch_builder.py` converts parsed channels into `MaterialBuilder` short keys and calls `MaterialBuilder.build()`
+3. `core/batch_builder.py` passes parsed channels to `MaterialBuilder` using canonical common attributes and calls `MaterialBuilder.build()`; examples include `baseColor`, `specularRoughness`, `normal_bump`, and `displacementTexture`
 4. The UI shows parsed + unparsed rows in one table (sortable `Status` column) and a `Materials to Build` preview list with per-material channel counts
 5. Options include target material type, Full Pipeline toggle, and Add To Quick Select Set
 6. Unparsed files are display-only and never built

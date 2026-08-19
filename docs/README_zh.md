@@ -86,7 +86,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 materialConvert/
 ├── config/                          # JSON 配置文件
 │   ├── material/                    # 渲染器材质属性映射
-│   │   ├── common.json              # 通用 PBR 参数及 Builder 通道别名
+│   │   ├── common.json              # 通用 PBR 参数及颜色-权重关系
 │   │   ├── aiStandardSurface.json
 │   │   ├── aiOpenPBRSurface.json
 │   │   ├── RedshiftMaterial.json

@@ -104,16 +104,15 @@ class BuilderTab:
         use_nrm = self.cb_nrm.isChecked()
         use_sss = self.cb_sss.isChecked()
         use_disp = self.cb_disp.isChecked()
-        aliases = self.config.get_channel_common_attrs()
 
         input_paths = {
-            aliases['color']: self.ctx.clean_path(self.path_inputs['color'].text()),
-            aliases['rough']: self.ctx.clean_path(self.path_inputs['rough'].text()),
-            aliases['nrm']: self.ctx.clean_path(self.path_inputs['nrm'].text()),
-            aliases['disp']: self.ctx.clean_path(self.path_inputs['disp'].text()),
+            'baseColor': self.ctx.clean_path(self.path_inputs['color'].text()),
+            'specularRoughness': self.ctx.clean_path(self.path_inputs['rough'].text()),
+            'normal_bump': self.ctx.clean_path(self.path_inputs['nrm'].text()),
+            'displacementTexture': self.ctx.clean_path(self.path_inputs['disp'].text()),
         }
         channel_options = {
-            aliases['nrm']: {'mode': 'normal' if use_nrm else 'bump'},
+            'normal_bump': {'mode': 'normal' if use_nrm else 'bump'},
         }
 
         return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_sss, use_disp,

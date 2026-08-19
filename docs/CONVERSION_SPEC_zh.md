@@ -75,7 +75,7 @@
 ### 1.3 值传递规则
 
 - **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
-- **Alpha Is Luminance**：属性传递完成后，扫描目标材质所有连接，若发现使用 `outAlpha` 的连接，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过）
+- **Alpha Is Luminance**：属性传递完成后，按目标配置的**实际属性名**扫描目标材质所有连接，并**递归追踪上游**（穿越 CC/ramp/layeredTexture/bump 等中间节点），若发现链条中使用 `outAlpha` 输出，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过；opacity 透明度通道豁免，避免误开真实 alpha 贴图）
 - **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
 - **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
@@ -370,7 +370,7 @@ Builder **复用 Convert 配置体系**，无独立渲染器规格文件：
 
 1. `core/texture_scanner.py` 使用 `config/texture_channels.json` 扫描目录（不递归）
 2. 文件名归一化（小写、`-`/空格 → `_`）后，按「长别名优先 + token 匹配 / 忽略下划线子串」解析通道
-3. `core/batch_builder.py` 把解析结果转换为 `MaterialBuilder` 短 key 并调用 `MaterialBuilder.build()`
+3. `core/batch_builder.py` 使用规范的通用属性名将解析结果直接传给 `MaterialBuilder`，并调用 `MaterialBuilder.build()`；例如 `baseColor`、`specularRoughness`、`normal_bump`、`displacementTexture`
 4. UI 用同一个表格展示已解析 + 未解析行（Status 列可排序），并提供 Materials to Build 待创建材质预览（含通道数量）
 5. 可选项：目标材质类型、完整流程开关、加入快速选择集
 6. 未解析文件仅展示，不参与构建
