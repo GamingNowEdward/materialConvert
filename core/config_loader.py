@@ -219,6 +219,9 @@ class ConfigLoader:
     def get_bump_normal_config(self, renderer):
         return self._bump_normal_configs.get(renderer)
 
+    def get_all_bn_configs(self):
+        return dict(self._bump_normal_configs)
+
     def get_all_bn_types(self):
         types = set()
         for bn in self._bump_normal_configs.values():
@@ -238,6 +241,9 @@ class ConfigLoader:
 
     def get_color_correction_config(self, renderer):
         return self._color_correction_configs.get(renderer)
+
+    def get_all_cc_configs(self):
+        return dict(self._color_correction_configs)
 
     def get_builder_naming(self):
         return dict(self._builder_naming)
