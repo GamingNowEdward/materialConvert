@@ -1,4 +1,4 @@
-from ui import QtWidgets, QtCore, QtGui, shiboken
+from ui import QtWidgets, QtCore, shiboken
 from core.builder_context import BuilderContext
 from ui.styles import FULL_STYLESHEET
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab)

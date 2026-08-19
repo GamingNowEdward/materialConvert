@@ -201,9 +201,6 @@ class ConfigLoader:
     def get_material_config(self, node_type):
         return self._material_configs.get(node_type)
 
-    def get_all_material_node_types(self):
-        return list(self._material_configs.keys())
-
     def get_all_material_configs(self):
         return dict(self._material_configs)
 
@@ -256,15 +253,6 @@ class ConfigLoader:
             if cc.node_type == node_type:
                 return renderer
         return None
-
-    def identify_renderer(self, node_type):
-        config = self._material_configs.get(node_type)
-        if not config:
-            for nt, cfg in self._material_configs.items():
-                if nt.lower() == node_type.lower():
-                    return nt
-            return None
-        return config.node_type
 
     def get_display_name(self, node_type):
         config = self._material_configs.get(node_type)

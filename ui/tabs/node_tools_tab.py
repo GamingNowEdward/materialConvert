@@ -1,4 +1,4 @@
-from ui import QtWidgets, QtCore, QtGui, cmds
+from ui import QtWidgets, cmds
 import os
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
 from core.config_loader import ConfigLoader, normalize_keyword

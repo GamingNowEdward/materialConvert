@@ -1,4 +1,4 @@
-from ui import QtWidgets, QtCore, QtGui
+from ui import QtWidgets
 from core.builder_context import qt_maya_logger, BuilderContext
 from core.material_builder import MaterialBuilder
 from core.config_loader import ConfigLoader

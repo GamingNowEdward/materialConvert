@@ -193,50 +193,6 @@ def smart_connect(src_plug, dst_plug):
     return False
 
 
-def transfer_connection_to_plug(src_plug, dst_plug):
-    if src_plug is None or dst_plug is None:
-        return False
-    try:
-        connections = cmds.listConnections(src_plug, plugs=True, source=True) or []
-        if connections:
-            for conn in connections:
-                cmds.disconnectAttr(conn, dst_plug)
-            return True
-    except Exception:
-        cmds.warning(f"transfer_connection_to_plug: failed to transfer connection to {dst_plug}")
-    return False
-
-
-def connect_plug_to_plug(src_plug, dst_plug):
-    if src_plug is None or dst_plug is None:
-        return False
-    try:
-        cmds.connectAttr(src_plug, dst_plug, force=True)
-        return True
-    except Exception:
-        cmds.warning(f"connect_plug_to_plug: failed to connect {src_plug} to {dst_plug}")
-        return False
-
-
-def delete_node_safe(node):
-    if node is None:
-        return
-    try:
-        cmds.delete(node)
-    except Exception:
-        cmds.warning(f"delete_node_safe: failed to delete {node}")
-
-
-def get_connected_node(plug):
-    try:
-        conns = cmds.listConnections(plug, plugs=True, source=True) or []
-        if conns:
-            return conns[0]
-    except Exception:
-        pass
-    return None
-
-
 def get_shading_engine(material):
     try:
         sgs = cmds.listConnections(f"{material}.outColor", type="shadingEngine") or []
