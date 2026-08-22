@@ -168,6 +168,7 @@ class LogPanel(QtWidgets.QWidget):
         root.setSpacing(4)
 
         self._header = QtWidgets.QWidget()
+        self._header.setFixedHeight(28)
         header_layout = QtWidgets.QHBoxLayout(self._header)
         header_layout.setContentsMargins(4, 2, 4, 2)
         header_layout.setSpacing(6)
@@ -175,12 +176,13 @@ class LogPanel(QtWidgets.QWidget):
         self.collapse_btn = QtWidgets.QToolButton()
         self.collapse_btn.setText("◀")
         self.collapse_btn.setToolTip("Collapse log panel")
+        self.collapse_btn.setFixedWidth(24)
         self.collapse_btn.clicked.connect(self.toggle_expanded)
         header_layout.addWidget(self.collapse_btn)
 
-        title = QtWidgets.QLabel("Log")
-        title.setObjectName("logPanelTitle")
-        header_layout.addWidget(title)
+        self.title_label = QtWidgets.QLabel("Log")
+        self.title_label.setObjectName("logPanelTitle")
+        header_layout.addWidget(self.title_label)
         header_layout.addStretch()
 
         self.clear_btn = QtWidgets.QPushButton("Clear")
@@ -315,6 +317,9 @@ class LogPanel(QtWidgets.QWidget):
         self._drain_logs()
 
     def _apply_expanded_state(self):
+        self.title_label.setVisible(self._expanded)
+        self.clear_btn.setVisible(self._expanded)
+        self.copy_btn.setVisible(self._expanded)
         for widget in self._body_widgets:
             widget.setVisible(self._expanded)
         if self._expanded:
