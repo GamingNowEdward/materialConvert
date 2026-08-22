@@ -1,9 +1,8 @@
-from ui import QtCore, QtWidgets, shiboken
+from ui import QtWidgets, shiboken
 from core.builder_context import BuilderContext
 from core.logger import get_logger
-from ui.log_panel import LogPanel
 from ui.styles import FULL_STYLESHEET
-from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, DebugTab)
+from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, LogTab)
 
 
 def _maya_main_window(logger=None):
@@ -34,12 +33,11 @@ class ConverterWindow(QtWidgets.QMainWindow):
         self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
         self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger)
         self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
-        self.debug_tab = DebugTab(logger=self.logger)
-        self.log_panel = LogPanel(logger=self.logger)
+        self.log_tab = LogTab(logger=self.logger)
 
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(960, 800)
 
         self._build_ui()
         self._apply_style()
@@ -56,23 +54,24 @@ class ConverterWindow(QtWidgets.QMainWindow):
 
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab_widget.setObjectName("mainTabs")
+        main_layout.addWidget(self.tab_widget)
 
         self.tab_widget.addTab(self.converter_tab.build_ui(), "  Converter  ")
         self.tab_widget.addTab(self.builder_tab.build_ui(), "  Material Builder  ")
         self.tab_widget.addTab(self.batch_builder_tab.build_ui(), "  Batch Builder  ")
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
-        self.tab_widget.addTab(self.debug_tab.build_ui(), "  Debug  ")
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        splitter.addWidget(self.tab_widget)
-        splitter.addWidget(self.log_panel)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 0)
-        splitter.setCollapsible(0, False)
-        splitter.setCollapsible(1, False)
-        main_layout.addWidget(splitter)
+        self.log_tab_widget = self.log_tab.build_ui()
+        self.tab_widget.addTab(self.log_tab_widget, "  Log  ")
+
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        self._on_tab_changed(self.tab_widget.currentIndex())
 
         self.setCentralWidget(central)
+
+    def _on_tab_changed(self, index):
+        active = self.tab_widget.widget(index) is self.log_tab_widget
+        self.log_tab.set_active(active)
 
 
 def show():

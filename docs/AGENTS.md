@@ -43,9 +43,9 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
-- 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 每 150ms 通过 `poll(after_seq)` 批量拉取
+- 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过 `poll(after_seq)` 批量拉取
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页 + 右侧可折叠全局 Log 面板）
+- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页：Converter / Builder / Batch Builder / Node Tools / Log）
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
@@ -54,7 +54,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（将扫描结果按规范通用属性名传给 `MaterialBuilder`）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名
-- Debug：`core/config_validator.py`（`ConfigValidator` 读取全部 JSON 配置，在 Maya 中创建临时节点校验 node_type 与属性拼写，结束后清理临时节点；插件检测用 `pluginInfo(loaded)` + `loadPlugin`，加载失败（未安装/不兼容）时**整组忽略（SKIP）**，不误报为拼写错误）+ `ui/tabs/debug_tab.py`（Debug 面板：只保留 Validate All JSON Configs 按钮和一行结果状态，详细校验日志写入右侧全局 Log 面板）
+- Log/Debug：`core/config_validator.py`（`ConfigValidator` 读取全部 JSON 配置，在 Maya 中创建临时节点校验 node_type 与属性拼写，结束后清理临时节点；插件检测用 `pluginInfo(loaded)` + `loadPlugin`，加载失败（未安装/不兼容）时**整组忽略（SKIP）**，不误报为拼写错误）+ `ui/tabs/log_tab.py`（Log 标签页：顶部 Config Validation 控件 + 全局 `LogViewer`，两者共用同一日志表）
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
@@ -72,7 +72,7 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 ### 日志规则
 - 所有 `except` 必须使用 `as exc` 并写入 logger（至少 WARN）；禁止 `except: pass`、静默 early return、静默 fallback。
 - core 业务代码禁止直接 `print()` 和 `cmds.warning()`，统一写入 `core.logger.get_logger()`。
-- UI 日志只通过 `ui/log_panel.py` 的 `poll()` 定时批量拉取，禁止逐条回调刷新。
+- UI 日志只通过 `ui/log_panel.py` 的 `LogViewer.poll()` 批量拉取；Log 标签页隐藏时暂停 drain，切回时一次性补拉。
 - 默认可见级别为 ERROR/WARN/SKIP/INFO；属性级细节用 DEBUG（默认隐藏，用户可勾选）。
 - 性能优先：日志只追加到环形缓冲，批量转换期间每 5 个材质（或 150ms）才 `processEvents()` 一次。
 

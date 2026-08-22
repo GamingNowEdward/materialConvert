@@ -16,6 +16,8 @@ _LEVEL_COLORS = {
 
 _FILTER_ORDER = (LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO, LogLevel.OK, LogLevel.DEBUG)
 _DEFAULT_CHECKED = {LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO}
+_VALIDATION_LEVELS = {LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO}
+_ERRORS_ONLY_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
 
 class LogModel(QtCore.QAbstractTableModel):
@@ -93,9 +95,6 @@ class LogModel(QtCore.QAbstractTableModel):
             return self._records[row]
         return None
 
-    def all_records(self):
-        return list(self._records)
-
 
 class LogFilterProxy(QtCore.QSortFilterProxyModel):
     def __init__(self, parent=None):
@@ -125,82 +124,48 @@ class LogFilterProxy(QtCore.QSortFilterProxyModel):
             return False
         if self._source and record.source != self._source:
             return False
-        if self._text and self._text not in record.message.lower():
-            if self._text not in record.source.lower():
-                context = " ".join(str(v) for v in record.context.values()).lower()
-                if self._text not in context:
-                    return False
+        if self._text:
+            if self._text not in record.message.lower():
+                if self._text not in record.source.lower():
+                    context = " ".join(str(v) for v in record.context.values()).lower()
+                    if self._text not in context:
+                        return False
         return True
 
 
-class LogPanel(QtWidgets.QWidget):
+class LogViewer(QtWidgets.QWidget):
+    """Embedded global log viewer used by the Log tab.
+
+    The viewer polls ``Logger.poll(after_seq)`` with a QTimer.  While the
+    parent tab is hidden, polling can be paused with ``set_active(False)`` so
+    large batch conversions never update a hidden table.
+    """
 
     POLL_INTERVAL_MS = 150
-    EXPANDED_WIDTH = 440
-    COLLAPSED_WIDTH = 34
 
     def __init__(self, logger=None, parent=None):
         super().__init__(parent)
         self.logger = logger or get_logger()
         self._last_seq = 0
-        self._settings = QtCore.QSettings("materialConvert", "LogPanel")
-        stored = self._settings.value("expanded", "true")
-        self._expanded = stored not in ("false", False, "0")
+        self._active = False
         self._pending_sources = set()
 
-        self.setObjectName("logPanel")
-
-        self.setMinimumWidth(self.EXPANDED_WIDTH)
+        self.setObjectName("logViewer")
         self._build_ui()
 
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(self.POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._drain_logs)
-        self._timer.start()
-
-        if not self._expanded:
-            self._apply_expanded_state()
-        self._drain_logs()
 
     def _build_ui(self):
         root = QtWidgets.QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
 
-        self._header = QtWidgets.QWidget()
-        self._header.setFixedHeight(28)
-        header_layout = QtWidgets.QHBoxLayout(self._header)
-        header_layout.setContentsMargins(4, 2, 4, 2)
-        header_layout.setSpacing(6)
-
-        self.collapse_btn = QtWidgets.QToolButton()
-        self.collapse_btn.setText("◀")
-        self.collapse_btn.setToolTip("Collapse log panel")
-        self.collapse_btn.setFixedWidth(24)
-        self.collapse_btn.clicked.connect(self.toggle_expanded)
-        header_layout.addWidget(self.collapse_btn)
-
-        self.title_label = QtWidgets.QLabel("Log")
-        self.title_label.setObjectName("logPanelTitle")
-        header_layout.addWidget(self.title_label)
-        header_layout.addStretch()
-
-        self.clear_btn = QtWidgets.QPushButton("Clear")
-        self.clear_btn.setObjectName("closeBtn")
-        self.clear_btn.clicked.connect(self.clear_logs)
-        header_layout.addWidget(self.clear_btn)
-
-        self.copy_btn = QtWidgets.QPushButton("Copy")
-        self.copy_btn.clicked.connect(self.copy_visible_logs)
-        header_layout.addWidget(self.copy_btn)
-
-        root.addWidget(self._header)
-
-        self._filter_widget = QtWidgets.QWidget()
-        filter_layout = QtWidgets.QHBoxLayout(self._filter_widget)
-        filter_layout.setContentsMargins(4, 0, 4, 0)
-        filter_layout.setSpacing(6)
-
+        # Row 1: level filters
+        level_row = QtWidgets.QHBoxLayout()
+        level_row.setSpacing(8)
+        level_row.addWidget(QtWidgets.QLabel("Filter:"))
         self._filters = {}
         for level in _FILTER_ORDER:
             cb = QtWidgets.QCheckBox(level.title())
@@ -208,31 +173,47 @@ class LogPanel(QtWidgets.QWidget):
             cb.setStyleSheet(f"QCheckBox {{ color: {_LEVEL_COLORS[level]}; }}")
             cb.stateChanged.connect(self._refresh_filters)
             self._filters[level] = cb
-            filter_layout.addWidget(cb)
-        filter_layout.addStretch()
+            level_row.addWidget(cb)
+        level_row.addStretch()
+        root.addLayout(level_row)
 
-        root.addWidget(self._filter_widget)
+        # Row 2: presets / search / source / actions
+        tool_row = QtWidgets.QHBoxLayout()
+        tool_row.setSpacing(6)
 
-        self._tool_row = QtWidgets.QWidget()
-        tool_layout = QtWidgets.QHBoxLayout(self._tool_row)
-        tool_layout.setContentsMargins(4, 0, 4, 0)
-        tool_layout.setSpacing(4)
-        tool_layout.addWidget(QtWidgets.QLabel("Text:"))
+        tool_row.addWidget(QtWidgets.QLabel("View:"))
+        self.preset_combo = QtWidgets.QComboBox()
+        self.preset_combo.addItem("All", "all")
+        self.preset_combo.addItem("Validation", "validation")
+        self.preset_combo.addItem("Errors Only", "errors")
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        tool_row.addWidget(self.preset_combo)
+
+        tool_row.addWidget(QtWidgets.QLabel("Text:"))
         self.search_edit = QtWidgets.QLineEdit()
         self.search_edit.setPlaceholderText("Filter message / source / context")
         self.search_edit.textChanged.connect(self._on_search_changed)
-        tool_layout.addWidget(self.search_edit, 1)
+        tool_row.addWidget(self.search_edit, 1)
 
-        tool_layout.addWidget(QtWidgets.QLabel("Source:"))
+        tool_row.addWidget(QtWidgets.QLabel("Source:"))
         self.source_combo = QtWidgets.QComboBox()
         self.source_combo.addItem("All Sources", "")
         self.source_combo.currentIndexChanged.connect(self._on_source_changed)
-        tool_layout.addWidget(self.source_combo, 1)
+        tool_row.addWidget(self.source_combo, 1)
 
         self.auto_scroll = QtWidgets.QCheckBox("Auto scroll")
         self.auto_scroll.setChecked(True)
-        tool_layout.addWidget(self.auto_scroll)
-        root.addWidget(self._tool_row)
+        tool_row.addWidget(self.auto_scroll)
+
+        self.clear_btn = QtWidgets.QPushButton("Clear")
+        self.clear_btn.setObjectName("closeBtn")
+        self.clear_btn.clicked.connect(self.clear_logs)
+        tool_row.addWidget(self.clear_btn)
+
+        self.copy_btn = QtWidgets.QPushButton("Copy")
+        self.copy_btn.clicked.connect(self.copy_visible_logs)
+        tool_row.addWidget(self.copy_btn)
+        root.addLayout(tool_row)
 
         self.model = LogModel(self)
         self.proxy = LogFilterProxy(self)
@@ -246,6 +227,7 @@ class LogPanel(QtWidgets.QWidget):
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.table.setWordWrap(False)
         self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setColumnWidth(0, 78)
@@ -258,8 +240,31 @@ class LogPanel(QtWidgets.QWidget):
         self.status_label.setObjectName("logStatus")
         root.addWidget(self.status_label)
 
-        self._body_widgets = [self._filter_widget, self._tool_row, self.table, self.status_label]
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def set_active(self, active):
+        self._active = bool(active)
+        if self._active:
+            self._drain_logs()
+            self._timer.start()
+        else:
+            self._timer.stop()
 
+    def apply_preset(self, preset_name):
+        idx = self.preset_combo.findData(preset_name)
+        if idx >= 0:
+            self.preset_combo.setCurrentIndex(idx)
+        else:
+            self._on_preset_changed()
+        self._drain_logs()
+
+    def refresh(self):
+        self._drain_logs()
+
+    # ------------------------------------------------------------------
+    # Filtering
+    # ------------------------------------------------------------------
     def _refresh_filters(self):
         self.proxy.set_levels(
             level for level, cb in self._filters.items() if cb.isChecked()
@@ -271,6 +276,38 @@ class LogPanel(QtWidgets.QWidget):
     def _on_source_changed(self):
         self.proxy.set_source(self.source_combo.currentData() or "")
 
+    def _on_preset_changed(self):
+        preset = self.preset_combo.currentData()
+        if preset == "validation":
+            self._set_levels(_VALIDATION_LEVELS)
+            self._select_source("ConfigValidator")
+        elif preset == "errors":
+            self._set_levels(_ERRORS_ONLY_LEVELS)
+            self._select_source("")
+        else:
+            self._set_levels(set(_FILTER_ORDER))
+            self._select_source("")
+        self._refresh_filters()
+
+    def _set_levels(self, levels):
+        for level, cb in self._filters.items():
+            cb.blockSignals(True)
+            cb.setChecked(level in levels)
+            cb.blockSignals(False)
+
+    def _select_source(self, source):
+        if not source:
+            self.source_combo.setCurrentIndex(0)
+            return
+        idx = self.source_combo.findData(source)
+        if idx < 0:
+            self.source_combo.addItem(source, source)
+            idx = self.source_combo.findData(source)
+        self.source_combo.setCurrentIndex(idx)
+
+    # ------------------------------------------------------------------
+    # Data polling
+    # ------------------------------------------------------------------
     def _drain_logs(self):
         records = self.logger.poll(self._last_seq)
         if records:
@@ -311,29 +348,9 @@ class LogPanel(QtWidgets.QWidget):
         text += f" | buffer {self.logger.max_records}"
         self.status_label.setText(text)
 
-    def toggle_expanded(self):
-        self._expanded = not self._expanded
-        self._apply_expanded_state()
-        self._drain_logs()
-
-    def _apply_expanded_state(self):
-        self.title_label.setVisible(self._expanded)
-        self.clear_btn.setVisible(self._expanded)
-        self.copy_btn.setVisible(self._expanded)
-        for widget in self._body_widgets:
-            widget.setVisible(self._expanded)
-        if self._expanded:
-            self.setMinimumWidth(self.EXPANDED_WIDTH)
-            self.setMaximumWidth(16777215)
-            self.collapse_btn.setText("◀")
-            self.collapse_btn.setToolTip("Collapse log panel")
-        else:
-            self.setMinimumWidth(self.COLLAPSED_WIDTH)
-            self.setMaximumWidth(self.COLLAPSED_WIDTH)
-            self.collapse_btn.setText("▶")
-            self.collapse_btn.setToolTip("Expand log panel")
-        self._settings.setValue("expanded", "true" if self._expanded else "false")
-
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
     def clear_logs(self):
         self.logger.clear()
         self.model.clear()
@@ -346,11 +363,10 @@ class LogPanel(QtWidgets.QWidget):
             src = self.proxy.mapToSource(self.proxy.index(row, 0))
             record = self.model.record_at(src.row())
             if record:
-                records.append(
-                    f"[{record.level}] {record.source} {record.message}"
-                )
+                records.append(f"[{record.level}] {record.source} {record.message}")
         QtWidgets.QApplication.clipboard().setText("\n".join(records))
 
-    def closeEvent(self, event):
-        self._timer.stop()
-        super().closeEvent(event)
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._active:
+            self._drain_logs()

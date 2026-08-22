@@ -4,11 +4,11 @@
 
 ### Added
 - Unified structured logger (`core/logger.py`): ERROR/WARN/SKIP/INFO/DEBUG/OK levels, bounded ring buffer, `scope()` context, `poll()` batch consumption; no callback API
-- Global collapsible right-side Log panel (`ui/log_panel.py`) shared by all tabs: level/source/text filters, search, copy, clear, auto-scroll, drop counters
+- Unified Log tab (`ui/tabs/log_tab.py` + embedded `ui/log_panel.py` LogViewer) shared by all tabs: level/source/text filters, presets, search, copy, clear, auto-scroll, drop counters
 
 ### Changed
 - Converter / Builder / Batch Builder / Node Tools / Debug validation now write all operational logs into the global panel
-- Debug tab no longer owns a validation log viewer; it only keeps the validate button and a one-line last-run status
+- Debug and global log viewer merged into one Log tab; Config Validation controls sit above the shared log table
 - Removed all silent `except: pass`, direct `print()` and direct `cmds.warning()` calls from `core/` and `ui/`
 - Batch conversion/building progress updates are throttled instead of calling `processEvents()` for every log line
 - Tests added for logger and texture scanner; added `scripts/check_no_silent_pass.py` guard
