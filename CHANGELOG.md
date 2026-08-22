@@ -11,6 +11,12 @@
 - Debug and global log viewer merged into one Log tab; Config Validation controls sit above the shared log table
 - Removed all silent `except: pass`, direct `print()` and direct `cmds.warning()` calls from `core/` and `ui/`
 - Batch conversion/building progress updates are throttled instead of calling `processEvents()` for every log line
+- `Logger` and UI `LogModel` now share `DEFAULT_MAX_RECORDS` (20,000) and both enforce bounded retention
+
+### Fixed
+- `Logger.scope(source=...)` now applies source with lexical inheritance semantics: inner scope overrides, empty inner scope inherits, explicit per-call source wins
+- `LogModel` no longer grows without bound during long Maya sessions; oldest rows are removed with proper Qt model signals
+- Added regression tests for logger overflow, cursor behavior across eviction, concurrent writers, writer+poller, production-scale rollover, and bounded Qt `LogModel`
 - Tests added for logger and texture scanner; added `scripts/check_no_silent_pass.py` guard
 
 ## 2026-08-22

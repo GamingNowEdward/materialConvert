@@ -74,6 +74,8 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 - core 业务代码禁止直接 `print()` 和 `cmds.warning()`，统一写入 `core.logger.get_logger()`。
 - UI 日志只通过 `ui/log_panel.py` 的 `LogViewer.poll()` 批量拉取；Log 标签页隐藏时暂停 drain，切回时一次性补拉。
 - 默认可见级别为 ERROR/WARN/SKIP/INFO；属性级细节用 DEBUG（默认隐藏，用户可勾选）。
+- Logger 与 UI `LogModel` 共用 `DEFAULT_MAX_RECORDS`（20,000），两侧都必须有界；LogModel 超限时从头部淘汰旧行。
+- `Logger.scope(source=...)` 是词法作用域：显式 source 覆盖外层，空 source 继承外层，单条日志的 `source=` 优先级最高；退出 scope 后恢复。
 - 性能优先：日志只追加到环形缓冲，批量转换期间每 5 个材质（或 150ms）才 `processEvents()` 一次。
 
 ### 材质 JSON 必须包含 `uiPanel_display_name` 和 `renderer`

@@ -86,7 +86,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 - **Easy extension**: Adding new renderer support = add JSON file in `config/material/`, no code changes needed
 - **Modular converters**: 4 independent modules handle attribute transfer, bump/normal, color correction, and displacement
 - **Unified imports**: PySide version detection centralized in `ui/__init__.py`
-- **Logging**: Unified structured logger (ERROR/WARN/SKIP/INFO/DEBUG/OK) with ring buffer; the Log tab polls records in batches only while it is visible
+- **Logging**: Unified structured logger (ERROR/WARN/SKIP/INFO/DEBUG/OK) with ring buffer; the Log tab polls records in batches only while it is visible. Logger and UI model both retain at most `DEFAULT_MAX_RECORDS` (20,000) records
 
 ## Project Structure
 

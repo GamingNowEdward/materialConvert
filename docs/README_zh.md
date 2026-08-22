@@ -86,7 +86,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **易于扩展**：新增渲染器支持 = 在 `config/material/` 添加 JSON 文件，无需改代码
 - **模块化转换器**：4 个独立模块分别处理属性传递、凹凸/法线、颜色校正、置换
 - **统一导入**：PySide 版本探测集中在 `ui/__init__.py`
-- **日志系统**：统一结构化 Logger（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲；Log 标签页仅在可见时通过 `poll()` 批量拉取，不再使用逐条回调
+- **日志系统**：统一结构化 Logger（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲；Log 标签页仅在可见时通过 `poll()` 批量拉取，不再使用逐条回调。Logger 与 UI 模型最多各保留 `DEFAULT_MAX_RECORDS`（20,000）条记录
 
 ## 项目结构
 

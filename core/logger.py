@@ -33,14 +33,15 @@ class LogRecord:
     message: str = ""
 
 
+DEFAULT_MAX_RECORDS = 20000
 _CRITICAL_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
 
 class Logger:
     """Thread-safe bounded in-memory log store."""
 
-    def __init__(self, max_records: int = 20000):
-        self._max_records = max(100, int(max_records))
+    def __init__(self, max_records: int = DEFAULT_MAX_RECORDS):
+        self._max_records = max(1, int(max_records))
         self._records = deque()
         self._seq = 0
         self._dropped = 0
@@ -53,7 +54,7 @@ class Logger:
             seq=0,
             ts=time.time(),
             level=level,
-            source=source or "General",
+            source=source or _source_context.get() or "General",
             context=self._merged_context(context),
             message=str(message),
         )
@@ -93,15 +94,29 @@ class Logger:
 
     @contextmanager
     def scope(self, source: str = "", **context):
-        """Push source/context for the duration of an operation."""
-        token = _log_context.set(self._merged_context(context))
+        """Push source/context for the duration of an operation.
+
+        ``source`` follows lexical scoping rules: an explicit value overrides
+        the outer scope, while an empty value inherits it.  Context fields are
+        merged with the outer context dictionary.
+        """
+        context_token = _log_context.set(self._merged_context(context))
+        source_token = _source_context.set(source or _source_context.get())
         try:
             yield self
         finally:
-            _log_context.reset(token)
+            _log_context.reset(context_token)
+            _source_context.reset(source_token)
 
     def poll(self, after_seq: int = 0):
-        """Return records with ``seq > after_seq`` in emission order."""
+        """Return records with ``seq > after_seq`` in emission order.
+
+        Records that were evicted by the bounded buffer are absent from the
+        result.  Callers must move their cursor forward with the returned
+        ``seq`` values; sequence numbers are monotonically increasing even
+        across evictions.  Use ``dropped`` / ``dropped_critical`` to observe
+        how many records were evicted.
+        """
         with self._lock:
             if after_seq < 0:
                 after_seq = 0
@@ -170,6 +185,7 @@ class Logger:
 
 
 _log_context = contextvars.ContextVar("material_converter_log_context", default={})
+_source_context = contextvars.ContextVar("material_converter_log_source", default="")
 _global_logger = None
 _global_lock = threading.Lock()
 

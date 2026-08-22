@@ -3,7 +3,7 @@ from collections import deque
 
 from ui import QtCore, QtGui, QtWidgets
 
-from core.logger import LogLevel, get_logger
+from core.logger import DEFAULT_MAX_RECORDS, LogLevel, get_logger
 
 _LEVEL_COLORS = {
     LogLevel.ERROR: "#E06C75",
@@ -21,11 +21,18 @@ _ERRORS_ONLY_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
 
 class LogModel(QtCore.QAbstractTableModel):
+    """Bounded UI-side record store mirroring ``Logger`` retention."""
+
     _HEADERS = ("Time", "Level", "Source", "Context", "Message")
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, max_records=DEFAULT_MAX_RECORDS):
         super().__init__(parent)
+        self._max_records = max(1, int(max_records))
         self._records = deque()
+
+    @property
+    def max_records(self):
+        return self._max_records
 
     def clear(self):
         self.beginResetModel()
@@ -35,11 +42,28 @@ class LogModel(QtCore.QAbstractTableModel):
     def append_records(self, records):
         if not records:
             return
+
+        # A single batch can exceed the model limit if the caller passes a
+        # record collection larger than max_records.  A reset is the only sane
+        # model operation in that case; normal polling batches are smaller.
+        if len(records) >= self._max_records:
+            self.beginResetModel()
+            self._records = deque(records[-self._max_records:])
+            self.endResetModel()
+            return
+
         start = len(self._records)
         end = start + len(records) - 1
         self.beginInsertRows(QtCore.QModelIndex(), start, end)
         self._records.extend(records)
         self.endInsertRows()
+
+        overflow = len(self._records) - self._max_records
+        if overflow > 0:
+            self.beginRemoveRows(QtCore.QModelIndex(), 0, overflow - 1)
+            for _ in range(overflow):
+                self._records.popleft()
+            self.endRemoveRows()
 
     def rowCount(self, parent=QtCore.QModelIndex()):
         if parent.isValid():
@@ -345,7 +369,7 @@ class LogViewer(QtWidgets.QWidget):
             text += f" | dropped {drop}"
         if critical:
             text += f" (critical {critical})"
-        text += f" | buffer {self.logger.max_records}"
+        text += f" | buffer {self.model.max_records}"
         self.status_label.setText(text)
 
     # ------------------------------------------------------------------
