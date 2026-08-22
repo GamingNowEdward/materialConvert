@@ -9,6 +9,6 @@ __pycache__/
 *.swo
 .DS_Store
 .mimocode/
-tests/
 .pytest_cache/
 pytest.ini
+pytest-cache-files-*/

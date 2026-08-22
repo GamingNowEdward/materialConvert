@@ -71,7 +71,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 在 Maya 中校验全部 JSON 配置的拼写是否正确（材质 / `bumpNormal.json` / `colorCorrection.json`）
 - 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites 与 displacement），结束后自动清理
 - 未安装插件的渲染器尽可能自动加载，加载失败则整组跳过（绝不误报为拼写错误）
-- 可筛选的验证日志（Errors / Warnings / Skipped / OK / Info），按类别着色
+- 校验结果写入右侧可折叠全局 Log 面板（支持按级别、来源和文本过滤）
 
 ## 架构
 
@@ -86,7 +86,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **易于扩展**：新增渲染器支持 = 在 `config/material/` 添加 JSON 文件，无需改代码
 - **模块化转换器**：4 个独立模块分别处理属性传递、凹凸/法线、颜色校正、置换
 - **统一导入**：PySide 版本探测集中在 `ui/__init__.py`
-- **日志系统**：统一 Logger 类，支持回调函数与 UI 集成
+- **日志系统**：统一结构化 Logger（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲；右侧可折叠 Log 面板通过 `poll()` 批量拉取，不再使用逐条回调
 
 ## 项目结构
 

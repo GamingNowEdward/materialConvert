@@ -1,5 +1,18 @@
 # 更新日志
 
+## 2026-08-23
+
+### 新增
+- 统一结构化日志核心（`core/logger.py`）：ERROR/WARN/SKIP/INFO/DEBUG/OK 级别、有界环形缓冲、`scope()` 上下文、`poll()` 批量拉取；不再提供 callback API
+- 所有标签页共享的右侧可折叠全局 Log 面板（`ui/log_panel.py`）：级别/来源/文本过滤、搜索、复制、清空、自动滚动、丢弃计数
+
+### 变更
+- Converter / Builder / Batch Builder / Node Tools / Debug 校验日志全部接入全局 Log 面板
+- Debug 标签页不再自带日志查看器，仅保留验证按钮和一行最近结果状态
+- 移除 `core/` 与 `ui/` 中所有静默 `except: pass`、直接 `print()`、直接 `cmds.warning()`
+- 批量转换/构建进度更新改为节流刷新，不再为每条日志调用 `processEvents()`
+- 新增 logger 与纹理扫描测试，新增 `scripts/check_no_silent_pass.py` 守卫脚本
+
 ## 2026-08-22
 
 ### 修复

@@ -3,17 +3,21 @@ import os
 from ui import QtWidgets, QtCore, QtGui, cmds
 from core.builder_context import BuilderContext
 from core.config_loader import ConfigLoader
+from core.logger import get_logger
 from core.texture_scanner import TextureScanner
 from core.batch_builder import BatchBuilder
+
+_SOURCE = "BatchBuilderTab"
 
 
 class BatchBuilderTab:
 
-    def __init__(self, ctx: BuilderContext):
+    def __init__(self, ctx: BuilderContext, logger=None):
         self.ctx = ctx
+        self.log = logger or get_logger()
         self.config = ConfigLoader()
-        self.scanner = TextureScanner()
-        self.batch_builder = BatchBuilder(ctx)
+        self.scanner = TextureScanner(logger=self.log)
+        self.batch_builder = BatchBuilder(ctx, logger=self.log)
         self.scan_result = {
             "materials": [],
             "unparsed": [],
@@ -26,7 +30,6 @@ class BatchBuilderTab:
         self.table = None
         self.materials_to_build_list = None
         self.materials_to_build_label = None
-        self.log_output = None
         self.progress_bar = None
 
     def build_ui(self):
@@ -117,14 +120,6 @@ class BatchBuilderTab:
         mtb_layout.addWidget(self.materials_to_build_list)
         layout.addWidget(mtb_group, stretch=1)
 
-        log_group = QtWidgets.QGroupBox("Log")
-        log_layout = QtWidgets.QVBoxLayout(log_group)
-        log_layout.setContentsMargins(12, 14, 12, 12)
-        self.log_output = QtWidgets.QPlainTextEdit()
-        self.log_output.setReadOnly(True)
-        log_layout.addWidget(self.log_output)
-        layout.addWidget(log_group, stretch=2)
-
         return widget
 
     def _populate_target_list(self):
@@ -133,16 +128,18 @@ class BatchBuilderTab:
         for node_type in sorted(all_configs.keys()):
             display_name = self.config.get_display_name(node_type)
             self.target_combo.addItem(display_name, node_type)
+        self.log.debug(f"Populated {self.target_combo.count()} batch builder target(s)", source=_SOURCE)
 
     def _browse_directory(self):
         directory = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Texture Directory")
         if directory:
             self.directory_input.setText(directory)
+            self.log.debug(f"Selected texture directory: {directory}", source=_SOURCE)
 
     def _scan_directory(self):
         directory = self.directory_input.text().strip()
         if not directory or not os.path.isdir(directory):
-            cmds.warning("Please select a valid directory first.")
+            self.log.warn("Please select a valid directory first.", source=_SOURCE)
             return
 
         self.scan_result = self.scanner.scan(directory)
@@ -152,14 +149,16 @@ class BatchBuilderTab:
         materials = self.scan_result["materials"]
         unparsed = self.scan_result["unparsed"]
         conflicts = self.scan_result["conflicts"]
-        self._log(
+        self.log.info(
             f"Scanned {directory}: {len(materials)} material(s), "
-            f"{len(unparsed)} unparsed file(s), {len(conflicts)} conflict(s)."
+            f"{len(unparsed)} unparsed file(s), {len(conflicts)} conflict(s).",
+            source=_SOURCE,
         )
         for conflict in conflicts:
-            self._log(
+            self.log.warn(
                 f"Conflict: {conflict['material']} / {conflict['common_attr']} -> "
-                f"{conflict['existing']} vs {conflict['new']}"
+                f"{conflict['existing']} vs {conflict['new']}",
+                source=_SOURCE,
             )
 
     def _populate_table(self):
@@ -228,12 +227,12 @@ class BatchBuilderTab:
 
     def _build_materials(self, selected_only=False):
         if not self.scan_result["materials"]:
-            self._log("[ERROR] No scanned materials to build.", error=True)
+            self.log.error("No scanned materials to build.", source=_SOURCE)
             return
 
         target_node_type = self.target_combo.currentData()
         if not target_node_type:
-            self._log("[ERROR] Target material type is not selected.", error=True)
+            self.log.error("Target material type is not selected.", source=_SOURCE)
             return
 
         use_full_chain = self.cb_full_chain.isChecked()
@@ -245,17 +244,30 @@ class BatchBuilderTab:
                 m for m in self.scan_result["materials"] if m["name"] in selected_names
             ]
             if not materials:
-                self._log("[ERROR] No materials selected in the table.", error=True)
+                self.log.error("No materials selected in the table.", source=_SOURCE)
                 return
         else:
             materials = self.scan_result["materials"]
+
+        self.log.info(
+            f"--- Batch build started: {len(materials)} material(s) -> "
+            f"{self.config.get_display_name(target_node_type)} ---",
+            source=_SOURCE,
+        )
 
         self.progress_bar.setMaximum(len(materials))
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
         QtWidgets.QApplication.processEvents()
 
-        cmds.undoInfo(openChunk=True)
+        built = 0
+        failed = 0
+
+        try:
+            cmds.undoInfo(openChunk=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
+
         try:
             for i, material in enumerate(materials):
                 try:
@@ -265,18 +277,23 @@ class BatchBuilderTab:
                         use_full_chain=use_full_chain,
                         use_qss=use_qss,
                     )
-                    self._log(f"Built {material['name']} -> {new_mat}")
-                except Exception as e:
-                    self._log(f"Failed {material['name']}: {e}", error=True)
-                self.progress_bar.setValue(i + 1)
-                QtWidgets.QApplication.processEvents()
+                    self.log.info(f"Built {material['name']} -> {new_mat}", source=_SOURCE)
+                    built += 1
+                except Exception as exc:
+                    failed += 1
+                    self.log.error(f"Failed {material['name']}: {exc}", source=_SOURCE)
+
+                if (i + 1) % 5 == 0 or i == len(materials) - 1:
+                    self.progress_bar.setValue(i + 1)
+                    QtWidgets.QApplication.processEvents()
         finally:
-            cmds.undoInfo(closeChunk=True)
+            try:
+                cmds.undoInfo(closeChunk=True)
+            except Exception as exc:
+                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
 
         self.progress_bar.setVisible(False)
-        self._log("--- Batch build finished ---")
-
-    def _log(self, message, error=False):
-        if error and "[ERROR]" not in message:
-            message = f"[ERROR] {message}"
-        self.log_output.appendPlainText(message)
+        self.log.info(
+            f"--- Batch build finished: {built} built, {failed} failed ---",
+            source=_SOURCE,
+        )

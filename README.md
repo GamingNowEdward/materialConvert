@@ -71,7 +71,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Validate all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
 - Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
 - Renderers without an installed plugin are auto-loaded when possible, otherwise skipped entirely (never misreported as spelling errors)
-- Filterable validation log (Errors / Warnings / Skipped / OK / Info) with category color coding
+- Validation results go to the global collapsible Log panel (filterable by level, source and text)
 
 ## Architecture
 
@@ -86,7 +86,7 @@ Source material → [Source JSON config] → Universal format → [Target JSON c
 - **Easy extension**: Adding new renderer support = add JSON file in `config/material/`, no code changes needed
 - **Modular converters**: 4 independent modules handle attribute transfer, bump/normal, color correction, and displacement
 - **Unified imports**: PySide version detection centralized in `ui/__init__.py`
-- **Logging**: Unified Logger class with callback support for UI integration
+- **Logging**: Unified structured logger (ERROR/WARN/SKIP/INFO/DEBUG/OK) with ring buffer; the right-side collapsible Log panel polls records in batches instead of using per-record callbacks
 
 ## Project Structure
 
@@ -123,7 +123,8 @@ materialConvert/
 │   ├── material_builder.py          # Material Builder core logic
 │   └── config_validator.py          # JSON config validation (Debug tab)
 ├── ui/                              # User interface
-│   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget)
+│   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget + collapsible Log panel)
+│   ├── log_panel.py                 # Global log panel (polling, filters, QTableView)
 │   ├── styles.py                    # QSS dark theme
 │   └── tabs/                        # Five functional tabs
 │       ├── converter_tab.py         # Material conversion

@@ -103,4 +103,23 @@ QPlainTextEdit#logOutput {
     background-color: #1C1C1C; border: 1px solid #3A3A3A; border-radius: 4px;
     color: #DCDCDC; font-family: 'Consolas';
 }
+
+
+QWidget#logPanel { background-color: #1E1E1E; border-left: 1px solid #333; }
+QLabel#logPanelTitle { color: #00AFFF; font-weight: bold; font-family: 'Segoe UI'; }
+QLabel#logStatus { color: #6A737D; font-size: 11px; }
+QTableView#logTable {
+    background-color: #151515; alternate-background-color: #1A1A1A;
+    border: 1px solid #333; border-radius: 4px;
+    color: #DCDCDC; font-family: 'Consolas'; font-size: 12px;
+}
+QTableView#logTable::item { padding: 2px 4px; border: none; }
+QTableView#logTable::item:selected { background-color: #2E3D4D; color: white; }
+QHeaderView::section {
+    background-color: #262626; color: #8DBAE8; border: none;
+    border-right: 1px solid #333; padding: 4px 6px; font-weight: bold;
+}
+QToolButton { background-color: #2E3D4D; color: #8DBAE8; border-radius: 3px; padding: 2px 6px; }
+QToolButton:hover { border: 1px solid #00AFFF; color: white; }
+
 """

@@ -1,23 +1,25 @@
-from ui import QtWidgets, QtCore, QtGui
+from ui import QtWidgets, QtCore
 import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader
 from core.converter import MaterialConverter
-from core.logger import Logger
+from core.logger import get_logger
 import core.node_utils as node_utils
+
+_SOURCE = "ConverterTab"
 
 
 class ConverterTab:
 
-    def __init__(self):
+    def __init__(self, logger=None):
+        self.log = logger or get_logger()
         self.config = ConfigLoader()
-        self.logger = Logger()
-        self.converter_obj = MaterialConverter(logger=self.logger)
+        self.converter_obj = MaterialConverter(logger=self.log)
         self.current_materials = []
         self.selection_display = None
         self.mat_list = None
         self.target_combo = None
-        self.log_output = None
+        self.progress_bar = None
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -84,19 +86,7 @@ class ConverterTab:
         conv_layout.addWidget(self.progress_bar)
 
         layout.addWidget(conv_group, stretch=0)
-
-        log_group = QtWidgets.QGroupBox("Process Log")
-        log_layout = QtWidgets.QVBoxLayout(log_group)
-        log_layout.setContentsMargins(12, 14, 12, 12)
-
-        self.log_output = QtWidgets.QPlainTextEdit()
-        self.log_output.setReadOnly(True)
-        self.log_output.setObjectName("logOutput")
-
-        layout.addWidget(log_group, stretch=3)
-        log_layout.addWidget(self.log_output)
-
-        self.logger.set_callback(self._add_log)
+        layout.addStretch(3)
 
         self._populate_target_list()
         return widget
@@ -107,15 +97,21 @@ class ConverterTab:
         for node_type in sorted(all_configs.keys()):
             display_name = self.config.get_display_name(node_type)
             self.target_combo.addItem(display_name, node_type)
+        self.log.debug(f"Populated {self.target_combo.count()} conversion target(s)", source=_SOURCE)
 
     def refresh_materials(self):
         self.mat_list.clear()
         self.current_materials = []
 
-        selection = cmds.ls(sl=True)
+        try:
+            selection = cmds.ls(sl=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to query Maya selection: {exc}", source=_SOURCE)
+            selection = []
+
         if not selection:
             self.selection_display.setText("(Nothing Selected)")
-            self._add_log("No Maya objects currently selected.")
+            self.log.warn("No Maya objects currently selected.", source=_SOURCE)
             return
 
         names = selection[:5]
@@ -124,35 +120,44 @@ class ConverterTab:
             display += f" (+{len(selection) - 5} more)"
         self.selection_display.setText(display)
 
-        materials = node_utils.get_materials_from_selection()
+        try:
+            materials = node_utils.get_materials_from_selection(logger=self.log)
+        except Exception as exc:
+            self.log.error(f"Failed to collect materials from selection: {exc}", source=_SOURCE)
+            materials = []
+
         self.current_materials = materials
 
         if not materials:
-            self._add_log("No PBR shader nodes found on selection.")
+            self.log.warn("No PBR shader nodes found on selection.", source=_SOURCE)
             return
 
         for mat in materials:
-            node_type = node_utils.identify_node_type(mat)
+            try:
+                node_type = node_utils.identify_node_type(mat)
+            except Exception as exc:
+                self.log.warn(f"Failed to identify material {mat}: {exc}", source=_SOURCE)
+                node_type = ""
             display_name = self.config.get_display_name(node_type)
             item_text = f" {mat}   ({display_name})"
             item = QtWidgets.QListWidgetItem(item_text)
             item.setData(256, mat)
             self.mat_list.addItem(item)
 
-        self._add_log(f"Successfully tracked {len(materials)} material(s).")
+        self.log.info(f"Successfully tracked {len(materials)} material(s).", source=_SOURCE)
 
     def _run_conversion(self):
         if not self.current_materials:
-            self._add_log("[ERROR] Execution halted: material queue is empty.", error=True)
+            self.log.error("Execution halted: material queue is empty.", source=_SOURCE)
             return
 
         target_node_type = self.target_combo.currentData()
         if not target_node_type:
-            self._add_log("[ERROR] Execution halted: Target format undefined.", error=True)
+            self.log.error("Execution halted: Target format undefined.", source=_SOURCE)
             return
 
         target_display = self.config.get_display_name(target_node_type)
-        self._add_log(f"--- Converting to {target_display} ---")
+        self.log.info(f"--- Converting to {target_display} ---", source=_SOURCE)
 
         total = len(self.current_materials)
         self.progress_bar.setMaximum(total)
@@ -167,9 +172,9 @@ class ConverterTab:
         failed = 0
 
         for i, r in enumerate(results):
-            self.progress_bar.setValue(i + 1)
-            QtWidgets.QApplication.processEvents()
-
+            if (i + 1) % 5 == 0 or i == total - 1:
+                self.progress_bar.setValue(i + 1)
+                QtWidgets.QApplication.processEvents()
             if r.get("skipped"):
                 skipped += 1
             elif r.get("success"):
@@ -180,35 +185,15 @@ class ConverterTab:
         summary = f"DONE: {converted} converted, {skipped} skipped"
         if failed:
             summary += f", {failed} failed"
-        self._add_log(f"--- {summary} ---")
+        self.log.info(f"--- {summary} ---", source=_SOURCE)
 
         self.progress_bar.setVisible(False)
 
         new_mats = [r["new_material"] for r in results if r.get("success") and r.get("new_material")]
         if new_mats:
-            cmds.select(new_mats)
+            try:
+                cmds.select(new_mats)
+            except Exception as exc:
+                self.log.warn(f"Failed to select converted materials: {exc}", source=_SOURCE)
 
         self.refresh_materials()
-
-    def _add_log(self, message, error=False):
-        if error and "[ERROR]" not in message:
-            message = f"[ERROR] {message}"
-
-        cursor = self.log_output.textCursor()
-        cursor.movePosition(QtGui.QTextCursor.MoveOperation.End)
-
-        fmt = QtGui.QTextCharFormat()
-        if "[ERROR]" in message:
-            fmt.setForeground(QtGui.QColor("#E06C75"))
-        elif message.startswith("DONE"):
-            fmt.setForeground(QtGui.QColor("#98C379"))
-            fmt.setFontWeight(QtGui.QFont.Weight.Bold)
-        elif message.startswith("---"):
-            fmt.setForeground(QtGui.QColor("#61AFEF"))
-            fmt.setFontWeight(QtGui.QFont.Weight.Bold)
-        else:
-            fmt.setForeground(QtGui.QColor("#ABB2BF"))
-
-        cursor.insertText(message + "\n", fmt)
-        self.log_output.setTextCursor(cursor)
-        self.log_output.ensureCursorVisible()

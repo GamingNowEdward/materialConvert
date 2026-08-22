@@ -1,6 +1,8 @@
 import json
 import os
 
+from core.logger import get_logger
+
 
 def normalize_keyword(kw):
     """Normalize keyword: lowercase and strip underscores/dashes, used for matching colorspace attribute names."""
@@ -195,7 +197,7 @@ class ConfigLoader:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"ConfigLoader: failed to load {path}: {e}")
+            get_logger().error(f"ConfigLoader: failed to load {path}: {e}")
             raise
 
     def get_material_config(self, node_type):

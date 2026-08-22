@@ -1,13 +1,18 @@
-from ui import QtWidgets, cmds
 import os
+
+from ui import QtWidgets, cmds
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
 from core.config_loader import ConfigLoader, normalize_keyword
+from core.logger import get_logger
+
+_SOURCE = "NodeToolsTab"
 
 
 class NodeToolsTab:
 
-    def __init__(self, ctx: BuilderContext):
+    def __init__(self, ctx: BuilderContext, logger=None):
         self.ctx = ctx
+        self.log = logger or get_logger()
         self.config = ConfigLoader()
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
@@ -114,102 +119,139 @@ class NodeToolsTab:
         return widget
 
     def _select_all_materials(self):
-        material_types = cmds.listNodeTypes('shader') or []
+        try:
+            material_types = cmds.listNodeTypes('shader') or []
+        except Exception as exc:
+            self.log.error(f"Failed to list shader node types: {exc}", source=_SOURCE)
+            return
         all_materials = []
         for mat_type in material_types:
-            materials = cmds.ls(type=mat_type)
+            try:
+                materials = cmds.ls(type=mat_type) or []
+            except Exception as exc:
+                self.log.warn(f"Failed to list nodes of type {mat_type}: {exc}", source=_SOURCE)
+                continue
             if materials:
                 all_materials.extend([m for m in materials if m not in DEFAULT_MATERIALS])
         if all_materials:
             cmds.select(all_materials, replace=True)
-            print(f"Selected {len(all_materials)} material node(s).")
+            self.log.info(f"Selected {len(all_materials)} material node(s).", source=_SOURCE)
         else:
             cmds.select(clear=True)
+            self.log.warn("No material nodes found to select.", source=_SOURCE)
 
     def _select_all_file_nodes(self):
-        nodes = cmds.ls(type='file')
+        try:
+            nodes = cmds.ls(type='file') or []
+        except Exception as exc:
+            self.log.error(f"Failed to list file nodes: {exc}", source=_SOURCE)
+            return
         if nodes:
             cmds.select(nodes, replace=True)
-            print(f"Selected {len(nodes)} file node(s).")
+            self.log.info(f"Selected {len(nodes)} file node(s).", source=_SOURCE)
         else:
             cmds.select(clear=True)
+            self.log.warn("No file nodes found to select.", source=_SOURCE)
 
     def _select_all_bump_nodes(self):
         bn_types = self.config.get_all_bn_types()
         nodes = []
         for bt in bn_types:
-            found = cmds.ls(type=bt)
+            try:
+                found = cmds.ls(type=bt) or []
+            except Exception as exc:
+                self.log.warn(f"Failed to list bump/normal nodes of type {bt}: {exc}", source=_SOURCE)
+                continue
             if found:
                 nodes.extend(found)
         if nodes:
             cmds.select(nodes, replace=True)
-            print(f"Selected {len(nodes)} bump/normal node(s).")
+            self.log.info(f"Selected {len(nodes)} bump/normal node(s).", source=_SOURCE)
         else:
             cmds.select(clear=True)
+            self.log.warn("No bump/normal nodes found to select.", source=_SOURCE)
 
     def _select_all_layer_textures(self):
-        nodes = cmds.ls(type='layeredTexture')
+        try:
+            nodes = cmds.ls(type='layeredTexture') or []
+        except Exception as exc:
+            self.log.error(f"Failed to list layeredTexture nodes: {exc}", source=_SOURCE)
+            return
         if nodes:
             cmds.select(nodes, replace=True)
-            print(f"Selected {len(nodes)} layeredTexture node(s).")
+            self.log.info(f"Selected {len(nodes)} layeredTexture node(s).", source=_SOURCE)
         else:
             cmds.select(clear=True)
+            self.log.warn("No layeredTexture nodes found to select.", source=_SOURCE)
 
     def _select_all_color_corrections(self):
         cc_types = self.config.get_all_cc_types()
         nodes = []
         for ct in cc_types:
-            found = cmds.ls(type=ct)
+            try:
+                found = cmds.ls(type=ct) or []
+            except Exception as exc:
+                self.log.warn(f"Failed to list CC nodes of type {ct}: {exc}", source=_SOURCE)
+                continue
             if found:
                 nodes.extend(found)
         if nodes:
             cmds.select(nodes, replace=True)
-            print(f"Selected {len(nodes)} color correction node(s).")
+            self.log.info(f"Selected {len(nodes)} color correction node(s).", source=_SOURCE)
         else:
             cmds.select(clear=True)
+            self.log.warn("No color correction nodes found to select.", source=_SOURCE)
 
     def _apply_color_space(self):
         target = self.input_color_space.text().strip()
         selected = cmds.ls(selection=True, type="file")
         if not selected:
-            cmds.warning("Please select one or more file nodes first.")
+            self.log.warn("Please select one or more file nodes first.", source=_SOURCE)
             return
+        applied = 0
         for f in selected:
             try:
                 cmds.setAttr(f"{f}.colorSpace", target, type="string")
-            except Exception as e:
-                cmds.warning(f"Failed: {f}: {e}")
+                applied += 1
+                self.log.debug(f"Set {f}.colorSpace = {target}", source=_SOURCE)
+            except Exception as exc:
+                self.log.warn(f"Failed to set color space on {f}: {exc}", source=_SOURCE)
+        self.log.info(f"Applied color space '{target}' to {applied}/{len(selected)} file node(s).", source=_SOURCE)
 
     def _ignore_color_space_rules(self):
-        file_nodes = cmds.ls(type='file')
+        try:
+            file_nodes = cmds.ls(type='file') or []
+        except Exception as exc:
+            self.log.error(f"Failed to list file nodes: {exc}", source=_SOURCE)
+            return
         if not file_nodes:
-            cmds.warning("No file nodes found in scene.")
+            self.log.warn("No file nodes found in scene.", source=_SOURCE)
             return
         count = 0
         for f in file_nodes:
             try:
                 cmds.setAttr(f"{f}.ignoreColorSpaceFileRules", 1)
                 count += 1
-            except Exception:
-                pass
+            except Exception as exc:
+                self.log.warn(f"Failed to set ignoreColorSpaceFileRules on {f}: {exc}", source=_SOURCE)
         cmds.select(file_nodes, replace=True)
-        print(f"Set ignoreColorSpaceFileRules=1 on {count}/{len(file_nodes)} file nodes.")
+        self.log.info(f"Set ignoreColorSpaceFileRules=1 on {count}/{len(file_nodes)} file nodes.", source=_SOURCE)
 
     def _rename_selected_sg(self):
         mats = cmds.ls(selection=True, materials=True)
         if not mats:
-            cmds.warning("Please select material nodes first.")
+            self.log.warn("Please select material nodes first.", source=_SOURCE)
             return
         for m in mats:
             self._rename_sg(m)
-        print(f"Processed {len(mats)} material(s) SG rename.")
+        self.log.info(f"Processed {len(mats)} material(s) SG rename.", source=_SOURCE)
 
     def _rename_all_sg(self):
         all_mats = cmds.ls(materials=True)
         mats = [m for m in all_mats if m not in DEFAULT_MATERIALS]
         for m in mats:
             self._rename_sg(m)
-        print(f"Processed {len(mats)} material(s) SG rename.")
+        self.log.info(f"Processed {len(mats)} material(s) SG rename.", source=_SOURCE)
 
     def _rename_sg(self, mat):
         connections = cmds.listConnections(mat, type="shadingEngine") or []
@@ -218,16 +260,20 @@ class NodeToolsTab:
             if cmds.objExists(new_name):
                 if sg == new_name:
                     continue
-                cmds.warning(f"Name conflict: {new_name} exists, skipping {sg}")
+                self.log.warn(f"Name conflict: {new_name} exists, skipping {sg}", source=_SOURCE)
                 continue
             try:
                 cmds.rename(sg, new_name)
-                print(f"{sg} renamed to {new_name}")
-            except Exception as e:
-                cmds.warning(f"Cannot rename {sg}: {str(e)}")
+                self.log.info(f"{sg} renamed to {new_name}", source=_SOURCE)
+            except Exception as exc:
+                self.log.warn(f"Cannot rename {sg}: {exc}", source=_SOURCE)
 
     def _get_available_color_spaces(self):
-        result = cmds.colorManagementPrefs(q=True, inputSpaceNames=True)
+        try:
+            result = cmds.colorManagementPrefs(q=True, inputSpaceNames=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to query available color spaces: {exc}", source=_SOURCE)
+            return set()
         if result:
             return set(result)
         return set()
@@ -237,12 +283,20 @@ class NodeToolsTab:
         cs_data = self.cs_config.get("colorSpaces", {}).get(role, {})
         for cs_name in cs_data.get("aliases", []):
             if cs_name in available:
-                cmds.setAttr(f"{file_node}.colorSpace", cs_name, type="string")
-                return True
+                try:
+                    cmds.setAttr(f"{file_node}.colorSpace", cs_name, type="string")
+                    return True
+                except Exception as exc:
+                    self.log.warn(f"Failed to set color space on {file_node}: {exc}", source=_SOURCE)
+                    return False
         return False
 
     def _match_by_filename(self, file_node):
-        path = cmds.getAttr(f"{file_node}.fileTextureName")
+        try:
+            path = cmds.getAttr(f"{file_node}.fileTextureName")
+        except Exception as exc:
+            self.log.warn(f"Failed to read fileTextureName on {file_node}: {exc}", source=_SOURCE)
+            return None
         if not path:
             return None
         filename = os.path.basename(path).lower().replace("_", "").replace("-", "")
@@ -252,11 +306,11 @@ class NodeToolsTab:
                     return role
         return None
 
-    @staticmethod
-    def _is_material_node(node):
+    def _is_material_node(self, node):
         try:
             return bool(cmds.listConnections(f"{node}.outColor", type="shadingEngine"))
-        except Exception:
+        except Exception as exc:
+            self.log.warn(f"Failed to query shading engine for {node}: {exc}", source=_SOURCE)
             return False
 
     _INTERNAL_TRACE_NODES = {
@@ -267,11 +321,6 @@ class NodeToolsTab:
     def _trace_channel_targets(self, file_node, max_depth=4):
         """BFS trace all output endpoints of a file node, returning the list of attribute
         names on hit materials.
-
-        Covers single-channel connections (outColorR/G/B), outAlpha outputs, and
-        traversal through intermediate nodes (cc/layeredTexture/multiplyDivide/bump,
-        etc.). Maya default render list containers (defaultTextureList, etc.) are
-        skipped to avoid polluting the trace.
         """
         targets = []
         visited = {file_node}
@@ -281,7 +330,12 @@ class NodeToolsTab:
             node, depth = queue.pop(0)
             if depth >= max_depth:
                 continue
-            for dest in (cmds.listConnections(node, plugs=True, destination=True) or []):
+            try:
+                destinations = cmds.listConnections(node, plugs=True, destination=True) or []
+            except Exception as exc:
+                self.log.warn(f"Failed to trace downstream from {node}: {exc}", source=_SOURCE)
+                continue
+            for dest in destinations:
                 if "." not in dest:
                     continue
                 dnode, attr_path = dest.split(".", 1)
@@ -306,7 +360,7 @@ class NodeToolsTab:
     def _auto_match_color_space(self):
         selected = cmds.ls(selection=True, type="file")
         if not selected:
-            cmds.warning("Please select file nodes first.")
+            self.log.warn("Please select file nodes first.", source=_SOURCE)
             return
 
         default_role = self.cs_config.get("default", "raw")
@@ -325,18 +379,24 @@ class NodeToolsTab:
 
             if self._set_color_space(f, role):
                 count += 1
-                print(f"{f}: set to {role}")
+                self.log.debug(f"{f}: set to {role}", source=_SOURCE)
             else:
-                cmds.warning(f"{f}: no matching color space found for role '{role}'")
+                self.log.warn(f"{f}: no matching color space found for role '{role}'", source=_SOURCE)
 
         if suspicious:
             cmds.select(suspicious, replace=True)
             for f in suspicious:
                 path = cmds.getAttr(f"{f}.fileTextureName") or ""
-                print(f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
-                      f"vs channel→{self._match_by_channel(f)}, skipped, handle manually")
-            print(f"Auto matched color space on {count}/{len(selected)} file node(s); "
-                  f"{len(suspicious)} ambiguous node(s) selected for manual review "
-                  f"(selection replaced with the ambiguous nodes).")
+                self.log.warn(
+                    f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
+                    f"vs channel→{self._match_by_channel(f)}, skipped, handle manually",
+                    source=_SOURCE,
+                )
+            self.log.info(
+                f"Auto matched color space on {count}/{len(selected)} file node(s); "
+                f"{len(suspicious)} ambiguous node(s) selected for manual review "
+                f"(selection replaced with the ambiguous nodes).",
+                source=_SOURCE,
+            )
         else:
-            print(f"Auto matched color space on {count}/{len(selected)} file node(s).")
+            self.log.info(f"Auto matched color space on {count}/{len(selected)} file node(s).", source=_SOURCE)

@@ -1,15 +1,19 @@
 from ui import QtWidgets
 from core.builder_context import qt_maya_logger, BuilderContext
+from core.logger import get_logger
 from core.material_builder import MaterialBuilder
 from core.config_loader import ConfigLoader
+
+_SOURCE = "BuilderTab"
 
 
 class BuilderTab:
 
-    def __init__(self, ctx: BuilderContext):
+    def __init__(self, ctx: BuilderContext, logger=None):
         self.ctx = ctx
+        self.log = logger or get_logger()
         self.config = ConfigLoader()
-        self.builder = MaterialBuilder(ctx)
+        self.builder = MaterialBuilder(ctx, logger=self.log)
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -122,6 +126,7 @@ class BuilderTab:
         for node_type in sorted(all_configs.keys()):
             display_name = self.config.get_display_name(node_type)
             self.mat_combo.addItem(display_name, node_type)
+        self.log.debug(f"Populated {self.mat_combo.count()} builder material target(s)", source=_SOURCE)
 
     def _browse_file(self, line_edit):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -130,6 +135,7 @@ class BuilderTab:
         )
         if file_path:
             line_edit.setText(file_path)
+            self.log.debug(f"Selected texture path: {file_path}", source=_SOURCE)
 
     @qt_maya_logger
     def _create_material_logic(self):
@@ -157,6 +163,11 @@ class BuilderTab:
 
         use_disp = 'displacementTexture' in input_paths
 
+        self.log.debug(
+            f"Builder submit: material={node_type}, base={mat_base}, "
+            f"channels={sorted(input_paths)}, use_nrm={use_nrm}, use_disp={use_disp}",
+            source=_SOURCE,
+        )
         return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_disp,
                                   use_qss=self.cb_qss.isChecked(),
                                   channel_options=channel_options)

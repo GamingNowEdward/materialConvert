@@ -1,16 +1,19 @@
-from ui import QtWidgets, shiboken
+from ui import QtCore, QtWidgets, shiboken
 from core.builder_context import BuilderContext
+from core.logger import get_logger
+from ui.log_panel import LogPanel
 from ui.styles import FULL_STYLESHEET
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, DebugTab)
 
 
-def _maya_main_window():
+def _maya_main_window(logger=None):
+    log = logger or get_logger()
     for widget in QtWidgets.QApplication.topLevelWidgets():
         try:
             if widget.objectName() == "MayaWindow":
                 return widget
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug(f"Failed to inspect top-level widget {widget}: {exc}", source="ConverterWindow")
     return None
 
 
@@ -24,20 +27,23 @@ class ConverterWindow(QtWidgets.QMainWindow):
             parent = _maya_main_window()
         super().__init__(parent)
 
-        self.ctx = BuilderContext()
+        self.logger = get_logger()
+        self.ctx = BuilderContext(logger=self.logger)
 
-        self.converter_tab = ConverterTab()
-        self.builder_tab = BuilderTab(self.ctx)
-        self.node_tools_tab = NodeToolsTab(self.ctx)
-        self.batch_builder_tab = BatchBuilderTab(self.ctx)
-        self.debug_tab = DebugTab()
+        self.converter_tab = ConverterTab(logger=self.logger)
+        self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
+        self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger)
+        self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
+        self.debug_tab = DebugTab(logger=self.logger)
+        self.log_panel = LogPanel(logger=self.logger)
 
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
-        self.setMinimumSize(960, 800)
+        self.setMinimumSize(1200, 800)
 
         self._build_ui()
         self._apply_style()
+        self.logger.debug("Converter window initialized", source="ConverterWindow")
 
     def _apply_style(self):
         self.setStyleSheet(FULL_STYLESHEET)
@@ -50,7 +56,6 @@ class ConverterWindow(QtWidgets.QMainWindow):
 
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab_widget.setObjectName("mainTabs")
-        main_layout.addWidget(self.tab_widget)
 
         self.tab_widget.addTab(self.converter_tab.build_ui(), "  Converter  ")
         self.tab_widget.addTab(self.builder_tab.build_ui(), "  Material Builder  ")
@@ -58,29 +63,42 @@ class ConverterWindow(QtWidgets.QMainWindow):
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
         self.tab_widget.addTab(self.debug_tab.build_ui(), "  Debug  ")
 
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        splitter.addWidget(self.tab_widget)
+        splitter.addWidget(self.log_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
+        main_layout.addWidget(splitter)
+
         self.setCentralWidget(central)
 
 
 def show():
     global _converter_window
+    logger = get_logger()
 
     if shiboken is not None:
-        maya_win = _maya_main_window()
-        if maya_win:
-            for child in maya_win.children():
-                try:
-                    if (isinstance(child, QtWidgets.QWidget) and
-                            child.objectName() == ConverterWindow.WINDOW_NAME):
-                        child.close()
-                        child.deleteLater()
-                except Exception:
-                    pass
+        try:
+            maya_win = _maya_main_window(logger)
+            if maya_win:
+                for child in maya_win.children():
+                    try:
+                        if (isinstance(child, QtWidgets.QWidget) and
+                                child.objectName() == ConverterWindow.WINDOW_NAME):
+                            child.close()
+                            child.deleteLater()
+                    except Exception as exc:
+                        logger.debug(f"Failed to clean up old converter window child: {exc}", source="ConverterWindow")
+        except Exception as exc:
+            logger.warn(f"Failed to locate Maya main window during cleanup: {exc}", source="ConverterWindow")
 
     try:
         _converter_window.close()
         _converter_window.deleteLater()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"No previous converter window to close: {exc}", source="ConverterWindow")
 
     _converter_window = ConverterWindow()
     _converter_window.show()

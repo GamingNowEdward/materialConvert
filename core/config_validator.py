@@ -5,14 +5,7 @@ from dataclasses import dataclass
 import maya.cmds as _cmds
 
 from core.config_loader import ConfigLoader
-
-
-class Level:
-    OK = "OK"
-    ERROR = "ERROR"
-    WARN = "WARN"
-    SKIP = "SKIP"
-    INFO = "INFO"
+from core.logger import get_logger, LogLevel as Level
 
 
 @dataclass
@@ -28,13 +21,14 @@ class ConfigValidator:
     DISPLACEMENT_KEYS = {"node_type", "displacementScale", "displacementTexture",
                          "file_source", "lyr_src", "output"}
 
-    def __init__(self, loader=None, cmds_module=None):
+    def __init__(self, loader=None, cmds_module=None, logger=None):
         self.loader = loader or ConfigLoader()
         self.cmds = cmds_module or _cmds
         self._results = []
         self._created = []
         self._counter = 0
         self._plugin_cache = {}
+        self.log = logger or get_logger()
         self._bn_raw = None
         self._cc_raw = None
 
@@ -46,6 +40,7 @@ class ConfigValidator:
 
     def _add(self, level, scope, detail):
         self._results.append(CheckResult(level=level, scope=scope, detail=detail))
+        self.log.log(level, detail, source="ConfigValidator", scope=scope)
 
     def _make_name(self):
         self._counter += 1
@@ -71,18 +66,18 @@ class ConfigValidator:
         cmds = self.cmds
         try:
             loaded = bool(cmds.pluginInfo(plugin, query=True, loaded=True))
-        except Exception:
+        except Exception as exc:
             loaded = False
+            self.log.warn(f"pluginInfo query failed for '{plugin}': {exc}", source="ConfigValidator")
 
         if not loaded:
             try:
                 cmds.loadPlugin(plugin)
                 loaded = True
-            except Exception:
+            except Exception as exc:
                 self._plugin_cache[plugin] = "skip"
                 self._add(Level.SKIP, scope,
-                          f"plugin '{plugin}' failed to load (not installed or "
-                          "load error), skipped")
+                          f"plugin '{plugin}' failed to load ({exc}), skipped")
                 return "skip"
 
         self._plugin_cache[plugin] = "ok"
@@ -109,8 +104,9 @@ class ConfigValidator:
     def _check_attr(self, node, node_type, attr, scope, desc):
         try:
             exists = bool(self.cmds.attributeQuery(attr, node=node, exists=True))
-        except Exception:
+        except Exception as exc:
             exists = False
+            self.log.warn(f"attributeQuery failed for {attr} on {node_type}: {exc}", source="ConfigValidator")
         if exists:
             self._add(Level.OK, scope, f"{desc} -> OK on '{node_type}'")
         else:
@@ -122,8 +118,8 @@ class ConfigValidator:
             try:
                 if self.cmds.objExists(node):
                     self.cmds.delete(node)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.log.warn(f"Failed to delete temporary validation node {node}: {exc}", source="ConfigValidator")
         self._created.clear()
 
     def validate_all(self):
@@ -146,6 +142,12 @@ class ConfigValidator:
             "skip": counts[Level.SKIP],
             "info": counts[Level.INFO],
         }
+        self.log.info(
+            f"Validation finished: {summary['ok']} OK, {summary['error']} ERROR, "
+            f"{summary['warn']} WARN, {summary['skip']} SKIP, {summary['info']} INFO "
+            f"({summary['total']} checks)",
+            source="ConfigValidator",
+        )
         return list(self._results), summary
 
     def validate_materials(self):
