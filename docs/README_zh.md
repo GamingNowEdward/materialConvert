@@ -63,7 +63,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 ### Node Tools
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - **Set File Color Space**：批量设置 file 节点颜色空间
-- **Auto Match Selected**：自动匹配色彩空间——文件名关键词来自 `config/texture_channels.json`（按通道 type 分组），通道匹配通过 BFS 追踪 file 全部下游连接（单通道/outAlpha/中间节点）并对 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词规范化匹配；歧义节点（文件名角色 ≠ 通道角色）自动跳过并保留选中供手动复核
+- **Auto Match Selected**：自动匹配色彩空间——文件名关键词来自 `config/texture_channels.json`（按通道 type 分组），通道匹配通过 BFS 追踪 file 全部下游连接（单通道/outAlpha/中间节点）并对 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词规范化匹配；歧义节点（文件名角色 ≠ 通道角色）自动跳过（色彩空间不变），并**将当前选择替换为这些歧义节点**供手动复核
 - **Color Management**：批量设置 file 节点的 ignoreColorSpaceFileRules
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 

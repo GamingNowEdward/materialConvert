@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-22
+
+### Fixed
+- Auto Match Selected (`ui/tabs/node_tools_tab.py`): ambiguous nodes are now selected with `replace=True` instead of `add=True` — previously the `add` flag appended nodes already present in the current selection, so the selection never visibly changed and users could not identify the nodes flagged for manual review
+
 ## 2026-08-20
 
 ### Added

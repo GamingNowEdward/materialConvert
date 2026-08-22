@@ -330,12 +330,13 @@ class NodeToolsTab:
                 cmds.warning(f"{f}: no matching color space found for role '{role}'")
 
         if suspicious:
-            cmds.select(suspicious, add=True)
+            cmds.select(suspicious, replace=True)
             for f in suspicious:
                 path = cmds.getAttr(f"{f}.fileTextureName") or ""
                 print(f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
                       f"vs channel→{self._match_by_channel(f)}, skipped, handle manually")
             print(f"Auto matched color space on {count}/{len(selected)} file node(s); "
-                  f"{len(suspicious)} ambiguous node(s) selected for manual review.")
+                  f"{len(suspicious)} ambiguous node(s) selected for manual review "
+                  f"(selection replaced with the ambiguous nodes).")
         else:
             print(f"Auto matched color space on {count}/{len(selected)} file node(s).")
