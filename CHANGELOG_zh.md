@@ -17,6 +17,7 @@
 - `Logger.scope(source=...)` 现在按词法作用域继承 source：内层覆盖、空内层继承、单条日志显式 source 优先
 - `LogModel` 在长时间 Maya 会话中不再无限增长；最旧行通过正确的 Qt model 信号淘汰
 - 新增 logger 溢出、淘汰后游标、并发写入、writer+poller、生产规模滚动、有界 Qt `LogModel` 回归测试
+- `NodeToolsTab` Auto Match Selected 不再对非 shader 节点探测 `node.outColor`；改为缓存 shader 节点类型、跳过 `place2dTexture`/`file` 叶子、去重 BFS 目标，并限制单次 trace 节点预算
 - 新增 logger 与纹理扫描测试，新增 `scripts/check_no_silent_pass.py` 守卫脚本
 
 ## 2026-08-22

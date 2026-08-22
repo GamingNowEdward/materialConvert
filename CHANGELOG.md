@@ -17,6 +17,7 @@
 - `Logger.scope(source=...)` now applies source with lexical inheritance semantics: inner scope overrides, empty inner scope inherits, explicit per-call source wins
 - `LogModel` no longer grows without bound during long Maya sessions; oldest rows are removed with proper Qt model signals
 - Added regression tests for logger overflow, cursor behavior across eviction, concurrent writers, writer+poller, production-scale rollover, and bounded Qt `LogModel`
+- `NodeToolsTab` Auto Match Selected no longer probes `node.outColor` on non-shader nodes; it uses cached shader node types, skips `place2dTexture`/`file` leaves, deduplicates BFS destinations, and enforces a per-trace node budget
 - Tests added for logger and texture scanner; added `scripts/check_no_silent_pass.py` guard
 
 ## 2026-08-22

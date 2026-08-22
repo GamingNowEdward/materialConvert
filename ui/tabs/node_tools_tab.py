@@ -1,4 +1,5 @@
 import os
+from collections import deque
 
 from ui import QtWidgets, cmds
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
@@ -17,6 +18,8 @@ class NodeToolsTab:
         self.cs_config = self.config.get_color_space_config()
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
         self._filename_role_keywords = self.config.get_filename_role_keywords()
+        self._shader_types = None
+        self._material_node_cache = {}
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -306,16 +309,45 @@ class NodeToolsTab:
                     return role
         return None
 
-    def _is_material_node(self, node):
-        try:
-            return bool(cmds.listConnections(f"{node}.outColor", type="shadingEngine"))
-        except Exception as exc:
-            self.log.warn(f"Failed to query shading engine for {node}: {exc}", source=_SOURCE)
-            return False
+    def _get_shader_types(self):
+        if self._shader_types is None:
+            try:
+                self._shader_types = set(cmds.listNodeTypes("shader") or [])
+            except Exception as exc:
+                self.log.warn(f"Failed to list shader node types: {exc}", source=_SOURCE)
+                self._shader_types = set()
+        return self._shader_types
 
-    _INTERNAL_TRACE_NODES = {
+    def _is_material_node(self, node):
+        """Return True when *node* is a shader node type.
+
+        Uses ``listNodeTypes("shader")`` instead of probing ``node.outColor``.
+        Probing ``.outColor`` is both expensive and invalid for utility nodes
+        such as place2dTexture, which produced warning floods and slowed large
+        Auto Match operations to a crawl.
+        """
+        cached = self._material_node_cache.get(node)
+        if cached is not None:
+            return cached
+
+        try:
+            result = cmds.nodeType(node) in self._get_shader_types()
+        except Exception as exc:
+            self.log.warn(f"Failed to identify node type for {node}: {exc}", source=_SOURCE)
+            result = False
+
+        self._material_node_cache[node] = result
+        return result
+
+    _TRACE_NODE_BUDGET = 1000
+
+    _TRACE_SKIP_NODES = {
+        # Maya default bookkeeping containers.
         "defaultTextureList1", "defaultRenderUtilityList1",
         "defaultShaderList1", "defaultColorMgtGlobals",
+        # Texture/UV source nodes.  They are not material targets and should
+        # never be traversed as downstream shading nodes.
+        "place2dTexture", "file",
     }
 
     def _trace_channel_targets(self, file_node, max_depth=4):
@@ -323,29 +355,57 @@ class NodeToolsTab:
         names on hit materials.
         """
         targets = []
+        material_targets = set()
         visited = {file_node}
-        queue = [(file_node, 0)]
+        queue = deque([(file_node, 0)])
+        checked = 0
+        budget_exceeded = False
 
         while queue:
-            node, depth = queue.pop(0)
+            node, depth = queue.popleft()
             if depth >= max_depth:
                 continue
             try:
-                destinations = cmds.listConnections(node, plugs=True, destination=True) or []
+                destinations = cmds.listConnections(
+                    node, plugs=True, source=False, destination=True
+                ) or []
             except Exception as exc:
                 self.log.warn(f"Failed to trace downstream from {node}: {exc}", source=_SOURCE)
                 continue
-            for dest in destinations:
+
+            for dest in dict.fromkeys(destinations):
                 if "." not in dest:
                     continue
                 dnode, attr_path = dest.split(".", 1)
-                if dnode in self._INTERNAL_TRACE_NODES:
+                if dnode in self._TRACE_SKIP_NODES:
                     continue
+
                 if self._is_material_node(dnode):
-                    targets.append(attr_path.rsplit(".", 1)[-1])
-                elif dnode not in visited:
-                    visited.add(dnode)
-                    queue.append((dnode, depth + 1))
+                    target_attr = attr_path.rsplit(".", 1)[-1]
+                    key = (dnode, target_attr)
+                    if key not in material_targets:
+                        material_targets.add(key)
+                        targets.append(target_attr)
+                    continue
+
+                if dnode in visited:
+                    continue
+
+                checked += 1
+                if checked > self._TRACE_NODE_BUDGET:
+                    budget_exceeded = True
+                    break
+
+                visited.add(dnode)
+                queue.append((dnode, depth + 1))
+
+            if budget_exceeded:
+                self.log.warn(
+                    f"Channel trace budget exceeded for {file_node} "
+                    f"({self._TRACE_NODE_BUDGET} nodes); using partial targets",
+                    source=_SOURCE,
+                )
+                break
 
         return targets
 
@@ -363,6 +423,7 @@ class NodeToolsTab:
             self.log.warn("Please select file nodes first.", source=_SOURCE)
             return
 
+        self._material_node_cache.clear()
         default_role = self.cs_config.get("default", "raw")
         count = 0
         suspicious = []
@@ -372,7 +433,7 @@ class NodeToolsTab:
             role_chan = self._match_by_channel(f)
 
             if role_fn and role_chan and role_fn != role_chan:
-                suspicious.append(f)
+                suspicious.append((f, role_fn, role_chan))
                 continue
 
             role = role_fn or role_chan or default_role
@@ -384,12 +445,12 @@ class NodeToolsTab:
                 self.log.warn(f"{f}: no matching color space found for role '{role}'", source=_SOURCE)
 
         if suspicious:
-            cmds.select(suspicious, replace=True)
-            for f in suspicious:
+            cmds.select([item[0] for item in suspicious], replace=True)
+            for f, role_fn, role_chan in suspicious:
                 path = cmds.getAttr(f"{f}.fileTextureName") or ""
                 self.log.warn(
-                    f"[Ambiguous] {path} ({f}): filename→{self._match_by_filename(f)} "
-                    f"vs channel→{self._match_by_channel(f)}, skipped, handle manually",
+                    f"[Ambiguous] {path} ({f}): filename→{role_fn} "
+                    f"vs channel→{role_chan}, skipped, handle manually",
                     source=_SOURCE,
                 )
             self.log.info(
