@@ -54,17 +54,19 @@ class BuilderContext:
     def get_naming(self):
         return self._naming
 
-    def connect(self, src_node, src_attr, dest_node, dest_attr):
+    def connect(self, src_node, src_attr, dest_node, dest_attr, quiet=False):
         src = f"{src_node}.{src_attr}"
         dest = f"{dest_node}.{dest_attr}"
         try:
             if cmds.isConnected(src, dest):
-                self.log.debug(f"Already connected: {src} -> {dest}", source=_SOURCE)
+                if not quiet:
+                    self.log.debug(f"Already connected: {src} -> {dest}", source=_SOURCE, nodes=(src_node, dest_node))
                 return
             cmds.connectAttr(src, dest, force=True)
-            self.log.debug(f"Connected: {src} -> {dest}", source=_SOURCE)
+            if not quiet:
+                self.log.debug(f"Connected: {src} -> {dest}", source=_SOURCE, nodes=(src_node, dest_node))
         except Exception as exc:
-            self.log.error(f"Failed to connect {src} -> {dest}: {exc}", source=_SOURCE)
+            self.log.error(f"Failed to connect {src} -> {dest}: {exc}", source=_SOURCE, nodes=(src_node, dest_node))
             raise
 
     def create_node(self, node_type, prefix_key, base_name, suffix_key=None, as_type='utility'):
@@ -74,7 +76,7 @@ class BuilderContext:
         node = cmds.shadingNode(node_type, name=full_name, **create_modes.get(as_type, {'asUtility': True}))
         if hasattr(self, '_current_build_nodes'):
             self._current_build_nodes.append(node)
-        self.log.debug(f"Created {node_type} node {node} ({as_type})", source=_SOURCE)
+        self.log.debug(f"Created {node_type} node {node} ({as_type})", source=_SOURCE, nodes=(node,))
         return node
 
     def build_layered_node(self, base_name, suffix_key, layers=3):
@@ -83,7 +85,7 @@ class BuilderContext:
             if i < len(self._naming["layered_colors"]):
                 cmds.setAttr(f"{lyr}.inputs[{i}].color", *self._naming["layered_colors"][i], type="double3")
                 cmds.setAttr(f"{lyr}.inputs[{i}].blendMode", self._naming["layered_blend_modes"][i])
-        self.log.debug(f"Built layeredTexture {lyr} with {layers} layer(s)", source=_SOURCE)
+        self.log.debug(f"Built layeredTexture {lyr} with {layers} layer(s)", source=_SOURCE, nodes=(lyr,))
         return lyr
 
     @staticmethod

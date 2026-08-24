@@ -31,19 +31,19 @@ class CCConverter:
             try:
                 cc_node_type = cmds.nodeType(node)
             except Exception as exc:
-                self.log.warn(f"Failed to identify node type for {node}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to identify node type for {node}: {exc}", source=_SOURCE, nodes=(node,))
                 continue
 
             src_cc_renderer = self.config.identify_cc_renderer(cc_node_type)
             if src_cc_renderer:
-                self.log.debug(f"{attr_name}: direct CC node {node} ({src_cc_renderer})", source=_SOURCE)
+                self.log.debug(f"{attr_name}: direct CC node {node} ({src_cc_renderer})", source=_SOURCE, nodes=(node,))
                 self._cache(cc_cache, attr_name, node, src_cc_renderer, conn)
                 continue
 
             try:
                 history = cmds.listHistory(node, future=False, pdo=True) or []
             except Exception as exc:
-                self.log.warn(f"Failed to query history for {node}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to query history for {node}: {exc}", source=_SOURCE, nodes=(node,))
                 continue
 
             for h_name in history:
@@ -52,13 +52,14 @@ class CCConverter:
                 try:
                     h_type = cmds.nodeType(h_name)
                 except Exception as exc:
-                    self.log.warn(f"Failed to identify history node {h_name}: {exc}", source=_SOURCE)
+                    self.log.warn(f"Failed to identify history node {h_name}: {exc}", source=_SOURCE, nodes=(h_name,))
                     continue
                 src_cc_renderer = self.config.identify_cc_renderer(h_type)
                 if src_cc_renderer:
                     self.log.debug(
                         f"{attr_name}: found CC node {h_name} in history of {node}",
                         source=_SOURCE,
+                        nodes=(h_name, node),
                     )
                     self._cache(cc_cache, attr_name, h_name, src_cc_renderer, conn)
                     break
@@ -82,6 +83,7 @@ class CCConverter:
             self.log.warn(
                 f"Failed to list CC destinations on {h_node}.{cc_config.target_connection}: {exc}",
                 source=_SOURCE,
+                nodes=(h_node,),
             )
 
         cc_cache[attr_name] = {
@@ -109,7 +111,7 @@ class CCConverter:
         src_cc_name = cc_entry.get("cc_node_name", "")
         if src_cc_name and src_cc_name in self._converted:
             cc_node = self._converted[src_cc_name]
-            self.log.debug(f"Reusing converted CC node {cc_node} for {src_cc_name}", source=_SOURCE)
+            self.log.debug(f"Reusing converted CC node {cc_node} for {src_cc_name}", source=_SOURCE, nodes=(cc_node,))
         else:
             renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
             base_name = src_cc_name + "_" + renderer_short if src_cc_name else None
@@ -122,11 +124,12 @@ class CCConverter:
                     self.log.warn(
                         f"Failed to connect CC input {input_plug} -> {cc_node}.{cc_config.source_connection}",
                         source=_SOURCE,
+                        nodes=(cc_node, self.utils.node_name_from_plug(input_plug)),
                     )
 
             if src_cc_name:
                 self._converted[src_cc_name] = cc_node
-            self.log.debug(f"Created target CC node {cc_node}", source=_SOURCE)
+            self.log.debug(f"Created target CC node {cc_node}", source=_SOURCE, nodes=(cc_node,))
 
         cc_out_dests = cc_entry.get("cc_out_dests", [])
         filtered = []
@@ -135,11 +138,11 @@ class CCConverter:
                 dest_node = dest.split(".")[0]
                 dest_type = cmds.nodeType(dest_node)
             except Exception as exc:
-                self.log.warn(f"Failed to identify CC destination {dest}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to identify CC destination {dest}: {exc}", source=_SOURCE, nodes=(dest_node,))
                 filtered.append(dest)
                 continue
             if self.config.get_material_config(dest_type):
-                self.log.debug(f"Excluding material CC destination {dest}", source=_SOURCE)
+                self.log.debug(f"Excluding material CC destination {dest}", source=_SOURCE, nodes=(dest_node,))
             else:
                 filtered.append(dest)
         cc_out_dests = filtered
@@ -149,17 +152,17 @@ class CCConverter:
             for dest in cc_out_dests:
                 try:
                     cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", dest, force=True)
-                    self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE)
+                    self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest_node))
                 except Exception as exc:
-                    self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE)
+                    self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest_node))
         else:
             try:
                 cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", target_plug, force=True)
-                self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE)
+                self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
             except Exception as exc:
-                self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
 
-        self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE)
+        self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE, nodes=(cc_node,))
 
     def _restore_shared_source_chain(self, cc_entry):
         """After the original CC is displaced by a new CC, if the intermediate node is
@@ -173,23 +176,23 @@ class CCConverter:
         try:
             src_node_type = cmds.nodeType(src_cc_name)
         except Exception as exc:
-            self.log.warn(f"Failed to identify source CC node {src_cc_name}: {exc}", source=_SOURCE)
+            self.log.warn(f"Failed to identify source CC node {src_cc_name}: {exc}", source=_SOURCE, nodes=(src_cc_name,))
             return
 
         src_renderer = self.config.identify_cc_renderer(src_node_type)
         if not src_renderer:
-            self.log.warn(f"Source CC node {src_cc_name} is not a known CC type", source=_SOURCE)
+            self.log.warn(f"Source CC node {src_cc_name} is not a known CC type", source=_SOURCE, nodes=(src_cc_name,))
             return
         src_cfg = self.config.get_color_correction_config(src_renderer)
         if not src_cfg or not src_cfg.target_connection:
-            self.log.warn(f"No source CC config for {src_cc_name}", source=_SOURCE)
+            self.log.warn(f"No source CC config for {src_cc_name}", source=_SOURCE, nodes=(src_cc_name,))
             return
 
         cc_out_nodes = {d.split(".")[0] for d in cc_entry.get("cc_out_dests", [])}
         try:
             dest_plugs = cmds.listConnections(output_plug, plugs=True, destination=True) or []
         except Exception as exc:
-            self.log.warn(f"Failed to list destinations for {output_plug}: {exc}", source=_SOURCE)
+            self.log.warn(f"Failed to list destinations for {output_plug}: {exc}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(output_plug),))
             return
 
         for dest_plug in dest_plugs:
@@ -199,11 +202,11 @@ class CCConverter:
             try:
                 dest_type = cmds.nodeType(dest_node)
             except Exception as exc:
-                self.log.warn(f"Failed to identify destination node {dest_node}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to identify destination node {dest_node}: {exc}", source=_SOURCE, nodes=(dest_node,))
                 continue
             if self.config.get_material_config(dest_type):
                 try:
                     cmds.connectAttr(f"{src_cc_name}.{src_cfg.target_connection}", dest_plug, force=True)
-                    self.log.info(f"Restored source CC chain to {dest_plug}", source=_SOURCE)
+                    self.log.info(f"Restored source CC chain to {dest_plug}", source=_SOURCE, nodes=(src_cc_name, dest_node))
                 except Exception as exc:
-                    self.log.warn(f"Failed to restore source chain to {dest_plug}: {exc}", source=_SOURCE)
+                    self.log.warn(f"Failed to restore source chain to {dest_plug}: {exc}", source=_SOURCE, nodes=(src_cc_name, dest_node))

@@ -1,7 +1,7 @@
 import time
 from collections import deque
 
-from ui import QtCore, QtGui, QtWidgets
+from ui import QtCore, QtGui, QtWidgets, cmds
 
 from core.logger import DEFAULT_MAX_RECORDS, LogLevel, get_logger
 
@@ -135,7 +135,8 @@ class LogModel(QtCore.QAbstractTableModel):
             local = time.localtime(record.ts)
             ts = time.strftime("%Y-%m-%d %H:%M:%S", local) + f".{int(record.ts % 1 * 1000):03d}"
             context = " ".join(f"{k}={v}" for k, v in record.context.items())
-            return f"{ts} [{record.level}] {record.source} {context}\n{record.message}"
+            nodes = " | Nodes: " + ", ".join(record.nodes) if record.nodes else ""
+            return f"{ts} [{record.level}] {record.source} {context}{nodes}\n{record.message}"
         elif role == QtCore.Qt.ForegroundRole:
             return QtGui.QColor(_LEVEL_COLORS.get(record.level, "#ABB2BF"))
         elif role == QtCore.Qt.FontRole:
@@ -294,6 +295,8 @@ class LogViewer(QtWidgets.QWidget):
         self.table.setColumnWidth(1, 58)
         self.table.setColumnWidth(2, 118)
         self.table.setColumnWidth(3, 130)
+        self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_table_context_menu)
         root.addWidget(self.table, 1)
 
         self.status_label = QtWidgets.QLabel("")
@@ -425,6 +428,33 @@ class LogViewer(QtWidgets.QWidget):
         self.model.clear()
         self._last_seq = self.logger.last_seq
         self._update_status()
+
+    def _record_at_table_index(self, index):
+        """Return the LogRecord for a QTableView proxy index."""
+        if not index.isValid():
+            return None
+        src = self.proxy.mapToSource(index)
+        return self.model.record_at(src.row())
+
+    def _on_table_context_menu(self, pos):
+        index = self.table.indexAt(pos)
+        record = self._record_at_table_index(index)
+        if not record or not record.nodes:
+            return
+
+        menu = QtWidgets.QMenu(self.table)
+        if len(record.nodes) == 1:
+            label = f"Select Node: {record.nodes[0]}"
+        else:
+            label = f"Select {len(record.nodes)} Node(s)"
+        act = menu.addAction(label)
+        act.triggered.connect(
+            lambda checked=False, nodes=list(record.nodes): self._select_record_nodes(nodes)
+        )
+        menu.exec_(self.table.viewport().mapToGlobal(pos))
+
+    def _select_record_nodes(self, nodes):
+        cmds.select(nodes, replace=True, noExpand=True)
 
     def copy_visible_logs(self):
         records = []

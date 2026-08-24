@@ -29,7 +29,7 @@ class MaterialConverter:
             try:
                 source_node_type = node_utils.identify_node_type(source_mat, logger=self.logger)
             except Exception as exc:
-                self.logger.error(f"Failed to identify source material type for {source_mat}: {exc}")
+                self.logger.error(f"Failed to identify source material type for {source_mat}: {exc}", nodes=(source_mat,))
                 return None
 
             source_config = self.config.get_material_config(source_node_type)
@@ -47,14 +47,15 @@ class MaterialConverter:
 
             self.logger.info(
                 f"Converting: {source_mat} ({self.config.get_display_name(source_node_type)}) "
-                f"-> {self.config.get_display_name(target_node_type)}"
+                f"-> {self.config.get_display_name(target_node_type)}",
+                nodes=(source_mat,),
             )
             self.logger.debug(f"Renderer path: {source_renderer} -> {target_renderer}")
 
             try:
                 attr_info = self.attr_converter.collect_attrs(source_mat, source_config)
             except Exception as exc:
-                self.logger.error(f"Failed to collect attributes from {source_mat}: {exc}")
+                self.logger.error(f"Failed to collect attributes from {source_mat}: {exc}", nodes=(source_mat,))
                 return None
 
             suffix = target_config.short_name or "converted"
@@ -62,14 +63,14 @@ class MaterialConverter:
             try:
                 new_mat = node_utils.create_target_material(target_node_type, base_name, logger=self.logger)
             except Exception as exc:
-                self.logger.error(f"Failed to create target material {target_node_type} ({base_name}): {exc}")
+                self.logger.error(f"Failed to create target material {target_node_type} ({base_name}): {exc}", nodes=(source_mat,))
                 return None
-            self.logger.info(f"Created: {new_mat}")
+            self.logger.info(f"Created: {new_mat}", nodes=(new_mat,))
 
             try:
                 apply_prerequisites(new_mat, target_config, logger=self.logger)
             except Exception as exc:
-                self.logger.warn(f"Failed to apply prerequisites to {new_mat}: {exc}")
+                self.logger.warn(f"Failed to apply prerequisites to {new_mat}: {exc}", nodes=(new_mat,))
 
             try:
                 if source_renderer == target_renderer:
@@ -88,31 +89,33 @@ class MaterialConverter:
                 if source_renderer != target_renderer:
                     self.disp_converter.convert(source_mat, new_mat, source_config, target_config, target_renderer)
             except Exception as exc:
-                self.logger.error(f"Conversion failed for {source_mat}: {exc}")
+                self.logger.error(f"Conversion failed for {source_mat}: {exc}", nodes=(source_mat,))
                 return None
 
             try:
                 sgs = cmds.listConnections(f"{source_mat}.outColor", plugs=False) or []
             except Exception as exc:
-                self.logger.warn(f"Failed to query shading engines for {source_mat}: {exc}")
+                self.logger.warn(f"Failed to query shading engines for {source_mat}: {exc}", nodes=(source_mat,))
                 sgs = []
 
             connected_sgs = 0
+            connected_sg_nodes = []
             for sg in sgs:
                 try:
                     if cmds.nodeType(sg) != "shadingEngine":
-                        self.logger.debug(f"Ignoring non-shadingEngine connection {sg}", source=_SOURCE)
+                        self.logger.debug(f"Ignoring non-shadingEngine connection {sg}", source=_SOURCE, nodes=(sg,))
                         continue
                     cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
                     connected_sgs += 1
-                    self.logger.info(f"Reconnected shading engine: {new_mat}.outColor -> {sg}.surfaceShader")
+                    connected_sg_nodes.append(sg)
+                    self.logger.info(f"Reconnected shading engine: {new_mat}.outColor -> {sg}.surfaceShader", nodes=(new_mat, sg))
                 except Exception as exc:
-                    self.logger.error(f"Failed to connect {new_mat} to {sg}.surfaceShader: {exc}")
+                    self.logger.error(f"Failed to connect {new_mat} to {sg}.surfaceShader: {exc}", nodes=(new_mat, sg))
 
             if connected_sgs:
-                self.logger.info(f"Reconnected {connected_sgs} shading engine(s); old material disconnected: {source_mat}")
+                self.logger.info(f"Reconnected {connected_sgs} shading engine(s); old material disconnected: {source_mat}", nodes=(source_mat, new_mat, *connected_sg_nodes))
             else:
-                self.logger.warn(f"No shading engine connected for {new_mat}")
+                self.logger.warn(f"No shading engine connected for {new_mat}", nodes=(new_mat,))
 
             return new_mat
 
@@ -136,13 +139,14 @@ class MaterialConverter:
                         source_type = node_utils.identify_node_type(mat, logger=self.logger)
                     except Exception as exc:
                         msg = f"Skipped {mat}: failed to identify node type: {exc}"
-                        self.logger.warn(msg)
+                        self.logger.warn(msg, nodes=(mat,))
                         results.append({"material": mat, "skipped": True, "success": False, "new_material": None})
                         continue
 
                     if source_type == target_node_type:
                         self.logger.skip(
-                            f"Skipped {mat}: already {self.config.get_display_name(target_node_type)}"
+                            f"Skipped {mat}: already {self.config.get_display_name(target_node_type)}",
+                            nodes=(mat,),
                         )
                         results.append({"material": mat, "skipped": True, "success": False, "new_material": None})
                         continue
@@ -150,7 +154,7 @@ class MaterialConverter:
                     try:
                         new_mat = self.convert(mat, target_node_type)
                     except Exception as exc:
-                        self.logger.error(f"Conversion raised for {mat}: {exc}")
+                        self.logger.error(f"Conversion raised for {mat}: {exc}", nodes=(mat,))
                         new_mat = None
 
                     results.append({

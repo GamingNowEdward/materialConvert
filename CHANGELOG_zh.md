@@ -5,12 +5,14 @@
 ### 新增
 - 单消费者拉取 API `Logger.drain(after_seq)`：返回新记录 + 上次 drain 之后被逐出的记录序号（`evicted_seqs`）；落后超过一个完整缓冲区时返回 `reset=True` 全量快照用于整体重同步
 - `LogModel.replace_records()` / `remove_by_seqs()`：UI 日志模型现在精确镜像 Logger 环形缓冲区，不再保留已被关键记录替换淘汰的过期行
+- 结构化日志节点：`LogRecord.nodes` 在日志写入时携带可选择的 Maya 节点名；Log 面板中带节点的日志可右键 `Select Node(s)` 直接选择
 
 ### 变更
 - LogViewer 拉取从 `Logger.poll()` 切换为 `Logger.drain()`：环形缓冲中淘汰的行通过正确的 Qt model 信号从表格移除；reset 时整体替换
 - 级别过滤复选框统一为单一 `_LEVEL_UI` 配置表（标签/颜色/默认勾选）；OK 与 Debug 默认仍不勾选
 - 复制到剪贴板的日志每行附带时间戳、source 上下文键值与级别
 - `node_utils.identify_node_type()` / `create_cc_node()` / `create_target_material()` 接受可选注入的 `logger`；converter/bump/cc 调用方传入各自实例 logger，不再回落到全局 logger
+- `MaterialBuilder` 的 p2d → file 连接使用 `BuilderContext.connect(..., quiet=True)`，每个 file 节点只发一条汇总 DEBUG，不再逐连接刷屏
 
 ### 修复
 - 非关键写入从环形缓冲中部淘汰关键记录时 `dropped_critical` 计数未自增（反向场景误自增）

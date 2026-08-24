@@ -38,9 +38,9 @@ class ConfigValidator:
         self._counter = 0
         self._plugin_cache = {}
 
-    def _add(self, level, scope, detail):
+    def _add(self, level, scope, detail, nodes=()):
         self._results.append(CheckResult(level=level, scope=scope, detail=detail))
-        self.log.log(level, detail, source="ConfigValidator", scope=scope)
+        self.log.log(level, detail, source="ConfigValidator", scope=scope, nodes=nodes)
 
     def _make_name(self):
         self._counter += 1
@@ -98,7 +98,7 @@ class ConfigValidator:
                       f"node_type '{node_type}' could not be created: {e}")
             return None
         self._created.append(node)
-        self._add(Level.INFO, scope, f"node_type '{node_type}' created OK")
+        self._add(Level.INFO, scope, f"node_type '{node_type}' created OK", nodes=(node,))
         return node
 
     def _check_attr(self, node, node_type, attr, scope, desc):
@@ -106,12 +106,12 @@ class ConfigValidator:
             exists = bool(self.cmds.attributeQuery(attr, node=node, exists=True))
         except Exception as exc:
             exists = False
-            self.log.warn(f"attributeQuery failed for {attr} on {node_type}: {exc}", source="ConfigValidator")
+            self.log.warn(f"attributeQuery failed for {attr} on {node_type}: {exc}", source="ConfigValidator", nodes=(node,))
         if exists:
-            self._add(Level.OK, scope, f"{desc} -> OK on '{node_type}'")
+            self._add(Level.OK, scope, f"{desc} -> OK on '{node_type}'", nodes=(node,))
         else:
             self._add(Level.ERROR, scope,
-                      f"{desc} -> NOT FOUND on '{node_type}'")
+                      f"{desc} -> NOT FOUND on '{node_type}'", nodes=(node,))
 
     def _cleanup(self):
         for node in self._created:
@@ -119,7 +119,7 @@ class ConfigValidator:
                 if self.cmds.objExists(node):
                     self.cmds.delete(node)
             except Exception as exc:
-                self.log.warn(f"Failed to delete temporary validation node {node}: {exc}", source="ConfigValidator")
+                self.log.warn(f"Failed to delete temporary validation node {node}: {exc}", source="ConfigValidator", nodes=(node,))
         self._created.clear()
 
     def validate_all(self):

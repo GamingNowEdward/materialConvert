@@ -1,5 +1,7 @@
 import threading
 
+import pytest
+
 from core.logger import DEFAULT_MAX_RECORDS, Logger, LogLevel, get_logger, LogRecord
 
 
@@ -298,3 +300,95 @@ def test_record_shape():
     assert rec.level == LogLevel.INFO
     assert rec.source == "s"
     assert rec.context["a"] == 1
+
+def test_record_shape_default_nodes_empty():
+    rec = get_logger().info("x", source="s", a=1)
+    assert rec.nodes == ()
+
+
+def test_log_stores_nodes_tuple_and_dedupes():
+    log = Logger()
+    rec = log.info("x", nodes=["pSphere1", "pSphere1", "pSphere2"])
+    assert rec.nodes == ("pSphere1", "pSphere2")
+
+
+def test_log_accepts_single_node_string():
+    log = Logger()
+    rec = log.info("x", nodes="pSphere1")
+    assert rec.nodes == ("pSphere1",)
+
+
+def test_log_nodes_does_not_split_dots():
+    log = Logger()
+    rec = log.info("x", nodes="pSphere1.tx")
+    assert rec.nodes == ("pSphere1.tx",)
+
+
+def test_log_nodes_does_not_flatten_nested_iterables():
+    log = Logger()
+    rec = log.info("x", nodes=["pSphere1", ["pSphere2"]])
+    assert rec.nodes == ("pSphere1", "['pSphere2']")
+
+
+def test_convenience_methods_pass_nodes():
+    log = Logger()
+    assert log.debug("d", nodes=["a"]).nodes == ("a",)
+    assert log.info("i", nodes=["a"]).nodes == ("a",)
+    assert log.skip("s", nodes=["a"]).nodes == ("a",)
+    assert log.warn("w", nodes=["a"]).nodes == ("a",)
+    assert log.error("e", nodes=["a"]).nodes == ("a",)
+    assert log.ok("o", nodes=["a"]).nodes == ("a",)
+
+
+def test_poll_preserves_nodes():
+    log = Logger()
+    log.info("a", nodes=["pSphere1", "pSphere2"])
+    records = log.poll(0)
+    assert records[0].nodes == ("pSphere1", "pSphere2")
+
+
+def test_drain_preserves_nodes():
+    log = Logger(max_records=3)
+    log.error("e_old", nodes=["pSphere1"])
+    log.debug("d1", nodes=["pSphere2"])
+    log.debug("d2", nodes=["pSphere3"])
+    cursor = log.last_seq
+    log.error("e_new", nodes=["pSphere4"])
+    result = log.drain(cursor)
+    assert result.records[0].nodes == ("pSphere4",)
+
+
+def test_node_name_from_plug():
+    import core.node_utils as node_utils
+
+    assert node_utils.node_name_from_plug("pSphere1.tx") == "pSphere1"
+    assert node_utils.node_name_from_plug("pSphere1.rotatePivot.translateX") == "pSphere1"
+
+def test_connect_quiet_suppresses_success_debug():
+    import core.builder_context as builder_context
+
+    log = Logger()
+    ctx = builder_context.BuilderContext(logger=log)
+    ctx.connect("p2d1", "coverage", "file1", "coverage", quiet=True)
+
+    assert log.poll(0) == []
+
+
+def test_connect_quiet_still_logs_error_with_nodes(monkeypatch):
+    import core.builder_context as builder_context
+
+    log = Logger()
+    ctx = builder_context.BuilderContext(logger=log)
+
+    def boom(src, dest, force=True):
+        raise RuntimeError("connect failed")
+
+    monkeypatch.setattr(builder_context.cmds, "connectAttr", boom)
+
+    with pytest.raises(RuntimeError):
+        ctx.connect("p2d1", "coverage", "file1", "coverage", quiet=True)
+
+    records = log.poll(0)
+    assert len(records) == 1
+    assert records[0].level == LogLevel.ERROR
+    assert records[0].nodes == ("p2d1", "file1")

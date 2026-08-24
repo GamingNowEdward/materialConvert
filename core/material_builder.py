@@ -52,7 +52,7 @@ class MaterialBuilder:
         sg_node = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{m_node}SG")
         self.ctx._current_build_nodes.append(sg_node)
         self.ctx.connect(m_node, "outColor", sg_node, "surfaceShader")
-        self.log.debug(f"Created shading engine {sg_node}", source=_SOURCE)
+        self.log.debug(f"Created shading engine {sg_node}", source=_SOURCE, nodes=(sg_node,))
 
         self._apply_material_prereqs(m_node, mat_config)
 
@@ -67,15 +67,23 @@ class MaterialBuilder:
             path = input_paths.get(common_attr, "")
             if path:
                 cmds.setAttr(f"{f}.fileTextureName", path, type="string")
-                self.log.debug(f"Set {f}.fileTextureName = {path}", source=_SOURCE)
+                self.log.debug(f"Set {f}.fileTextureName = {path}", source=_SOURCE, nodes=(f,))
             if is_alpha:
                 cmds.setAttr(f"{f}.alphaIsLuminance", 1)
             if invert and cmds.attributeQuery("invert", node=f, exists=True):
                 cmds.setAttr(f"{f}.invert", 1)
-            for attr in self.P2D_ATTRS:
-                self.ctx.connect(p2d, attr, f, attr)
-            self.ctx.connect(p2d, "outUV", f, "uvCoord")
-            self.ctx.connect(p2d, "outUvFilterSize", f, "uvFilterSize")
+            p2d_connections = [(attr, attr) for attr in self.P2D_ATTRS]
+            p2d_connections += [
+                ("outUV", "uvCoord"),
+                ("outUvFilterSize", "uvFilterSize"),
+            ]
+            for src_attr, dst_attr in p2d_connections:
+                self.ctx.connect(p2d, src_attr, f, dst_attr, quiet=True)
+            self.log.debug(
+                f"Connected {len(p2d_connections)} p2d attribute(s) to {f}",
+                source=_SOURCE,
+                nodes=(p2d, f),
+            )
             return f
 
         built_channels = []
@@ -117,10 +125,10 @@ class MaterialBuilder:
         if use_qss and qss_nodes:
             qss_name = f"{self.ctx.get_naming()['qss_prefix']}{base_name}"
             cmds.sets(qss_nodes, name=qss_name)
-            self.log.info(f"Created quick select set {qss_name} with {len(qss_nodes)} node(s)", source=_SOURCE)
+            self.log.info(f"Created quick select set {qss_name} with {len(qss_nodes)} node(s)", source=_SOURCE, nodes=tuple(qss_nodes))
 
         cmds.select(m_node)
-        self.log.info(f"Built {len(built_channels)} channel(s): {', '.join(built_channels)}", source=_SOURCE)
+        self.log.info(f"Built {len(built_channels)} channel(s): {', '.join(built_channels)}", source=_SOURCE, nodes=(m_node,))
         return m_node
 
     def _apply_material_prereqs(self, m_node, mat_config):
@@ -136,10 +144,10 @@ class MaterialBuilder:
             self.ctx.connect(tex, "outColor", cc, cc_config.source_connection)
             self.ctx.connect(cc, cc_config.target_connection, lyr, "inputs[1].color")
             self.ctx.connect(lyr, "outColor", m_node, attr_name)
-            self.log.debug(f"Built full color chain for {common_attr}: {tex} -> {cc} -> {lyr} -> {m_node}.{attr_name}", source=_SOURCE)
+            self.log.debug(f"Built full color chain for {common_attr}: {tex} -> {cc} -> {lyr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, cc, lyr, m_node))
         else:
             self.ctx.connect(tex, "outColor", m_node, attr_name)
-            self.log.debug(f"Built direct color chain for {common_attr}: {tex}.outColor -> {m_node}.{attr_name}", source=_SOURCE)
+            self.log.debug(f"Built direct color chain for {common_attr}: {tex}.outColor -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
 
         if common_attr == 'subsurfaceColor' and cmds.attributeQuery('ssOn', node=m_node, exists=True):
             cmds.setAttr(f"{m_node}.ssOn", 1)
@@ -149,7 +157,7 @@ class MaterialBuilder:
             weight_attr = mat_config.get_maya_attr(weight_common)
             if weight_attr and cmds.attributeQuery(weight_attr, node=m_node, exists=True):
                 cmds.setAttr(f"{m_node}.{weight_attr}", 1)
-                self.log.debug(f"Enabled {m_node}.{weight_attr} for {common_attr}", source=_SOURCE)
+                self.log.debug(f"Enabled {m_node}.{weight_attr} for {common_attr}", source=_SOURCE, nodes=(m_node,))
 
     def _build_color_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                            use_full_chain, input_paths, common_attr, name_key):
@@ -166,7 +174,7 @@ class MaterialBuilder:
             m_node, renderer, base_name, name_key, common_attr, attr_name, tex,
             use_full_chain, cc_config, mat_config,
         )
-        self.log.info(f"Built color channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE)
+        self.log.info(f"Built color channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
         return True
 
     def _build_scalar_chain(self, m_node, base_name, make_tex, mat_config, common_attr,
@@ -185,14 +193,14 @@ class MaterialBuilder:
             ramp = self.ctx.create_node('ramp', 'ramp', base_name, name_key, 'texture')
             self.ctx.connect(tex, "outAlpha", ramp, "vCoord")
             self.ctx.connect(ramp, "outAlpha", m_node, attr_name)
-            self.log.debug(f"Built scalar chain for {common_attr}: {tex}.outAlpha -> {ramp} -> {m_node}.{attr_name}", source=_SOURCE)
+            self.log.debug(f"Built scalar chain for {common_attr}: {tex}.outAlpha -> {ramp} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, ramp, m_node))
         else:
             if node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}", logger=self.log):
-                self.log.debug(f"Connected scalar {common_attr}: {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE)
+                self.log.debug(f"Connected scalar {common_attr}: {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
             else:
-                self.log.warn(f"Failed to connect scalar {common_attr} {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE)
+                self.log.warn(f"Failed to connect scalar {common_attr} {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
 
-        self.log.info(f"Built scalar channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE)
+        self.log.info(f"Built scalar channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
         return True
 
     def _build_bump_normal(self, m_node, renderer, base_name, make_tex, mat_config,
@@ -233,7 +241,7 @@ class MaterialBuilder:
             if mapping.input_type and mapping.input_type_value is not None:
                 if cmds.attributeQuery(mapping.input_type, node=m_node, exists=True):
                     cmds.setAttr(f"{m_node}.{mapping.input_type}", mapping.input_type_value)
-            self.log.info(f"Built bump/normal as material attribute: {m_node}.{mapping.input}", source=_SOURCE)
+            self.log.info(f"Built bump/normal as material attribute: {m_node}.{mapping.input}", source=_SOURCE, nodes=(m_node,))
             return True
 
         bn_node = self.ctx.create_node(mapping.node_type, nb_key, base_name)
@@ -245,7 +253,7 @@ class MaterialBuilder:
             self.ctx.connect(tex_nb, mapping.file_source, bn_node, mapping.source_connection)
         if mapping.target_connection:
             self.ctx.connect(bn_node, mapping.target_connection, m_node, target_attr)
-        self.log.info(f"Built bump/normal node {bn_node} -> {m_node}.{target_attr}", source=_SOURCE)
+        self.log.info(f"Built bump/normal node {bn_node} -> {m_node}.{target_attr}", source=_SOURCE, nodes=(bn_node, m_node))
         return True
 
     def _build_displacement(self, m_node, sg_node, base_name, make_tex, mat_config,
@@ -265,16 +273,16 @@ class MaterialBuilder:
                 self.ctx.connect(tex_disp, mat_config.displacement_file_source,
                                  lyr_disp, f"inputs[1].color{rgb}")
             self.ctx.connect(lyr_disp, mat_config.displacement_lyr_src, d_node, disp_in)
-            self.log.debug(f"Built full displacement chain for {m_node}", source=_SOURCE)
+            self.log.debug(f"Built full displacement chain for {m_node}", source=_SOURCE, nodes=(tex_disp, lyr_disp, d_node, m_node))
         else:
             if node_utils.smart_connect(
                     f"{tex_disp}.{mat_config.displacement_file_source}",
                     f"{d_node}.{disp_in}",
                     logger=self.log):
-                self.log.debug(f"Connected displacement texture to {d_node}.{disp_in}", source=_SOURCE)
+                self.log.debug(f"Connected displacement texture to {d_node}.{disp_in}", source=_SOURCE, nodes=(tex_disp, d_node))
             else:
-                self.log.warn(f"Failed to connect displacement texture to {d_node}.{disp_in}", source=_SOURCE)
+                self.log.warn(f"Failed to connect displacement texture to {d_node}.{disp_in}", source=_SOURCE, nodes=(tex_disp, d_node))
 
         self.ctx.connect(d_node, mat_config.displacement_output, sg_node, "displacementShader")
-        self.log.info(f"Built displacement: {d_node} -> {sg_node}.displacementShader", source=_SOURCE)
+        self.log.info(f"Built displacement: {d_node} -> {sg_node}.displacementShader", source=_SOURCE, nodes=(d_node, sg_node))
         return True

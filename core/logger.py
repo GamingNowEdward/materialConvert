@@ -31,6 +31,7 @@ class LogRecord:
     source: str
     context: dict = field(default_factory=dict)
     message: str = ""
+    nodes: tuple[str, ...] = ()
 
 
 
@@ -39,6 +40,39 @@ class DrainResult:
     records: list
     evicted_seqs: list
     reset: bool
+
+def _normalize_nodes(nodes):
+    """Clean and deduplicate node identifiers at log time.
+
+    ``nodes`` is normalized into a tuple of strings.  Values are converted
+    to ``str``, stripped, filtered, and deduplicated in first-seen order.
+    Nested iterables are intentionally not flattened; they are stringified.
+    Plug strings are intentionally not split here.  Callers must pass actual
+    Maya node names (see ``node_utils.node_name_from_plug`` for plug inputs).
+    """
+    if nodes is None:
+        return ()
+    if isinstance(nodes, str):
+        items = (nodes,)
+    else:
+        try:
+            items = tuple(nodes)
+        except TypeError:
+            items = (nodes,)
+
+    result = []
+    seen = set()
+    for item in items:
+        if item is None:
+            continue
+        name = str(item).strip()
+        if not name:
+            continue
+        if name not in seen:
+            seen.add(name)
+            result.append(name)
+    return tuple(result)
+
 
 DEFAULT_MAX_RECORDS = 20000
 _CRITICAL_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
@@ -58,8 +92,9 @@ class Logger:
         self._drain_evicted_cursor = 0
         self._lock = threading.RLock()
 
-    def log(self, level: str, message: str, source: str = "", **context):
+    def log(self, level: str, message: str, source: str = "", nodes=(), **context):
         level = str(level).upper()
+        normalized_nodes = _normalize_nodes(nodes)
         record = LogRecord(
             seq=0,
             ts=time.time(),
@@ -67,6 +102,7 @@ class Logger:
             source=source or _source_context.get() or "General",
             context=self._merged_context(context),
             message=str(message),
+            nodes=normalized_nodes,
         )
 
         with self._lock:
@@ -83,27 +119,28 @@ class Logger:
                 source=record.source,
                 context=record.context,
                 message=record.message,
+                nodes=record.nodes,
             )
             self._records.append(record)
         return record
 
-    def debug(self, message, source="", **context):
-        return self.log(LogLevel.DEBUG, message, source, **context)
+    def debug(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.DEBUG, message, source, nodes, **context)
 
-    def info(self, message, source="", **context):
-        return self.log(LogLevel.INFO, message, source, **context)
+    def info(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.INFO, message, source, nodes, **context)
 
-    def skip(self, message, source="", **context):
-        return self.log(LogLevel.SKIP, message, source, **context)
+    def skip(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.SKIP, message, source, nodes, **context)
 
-    def warn(self, message, source="", **context):
-        return self.log(LogLevel.WARN, message, source, **context)
+    def warn(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.WARN, message, source, nodes, **context)
 
-    def error(self, message, source="", **context):
-        return self.log(LogLevel.ERROR, message, source, **context)
+    def error(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.ERROR, message, source, nodes, **context)
 
-    def ok(self, message, source="", **context):
-        return self.log(LogLevel.OK, message, source, **context)
+    def ok(self, message, source="", nodes=(), **context):
+        return self.log(LogLevel.OK, message, source, nodes, **context)
 
     @contextmanager
     def scope(self, source: str = "", **context):

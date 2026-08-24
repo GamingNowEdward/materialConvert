@@ -28,6 +28,7 @@ class AttributeConverter:
         self.log.debug(
             f"Collecting {len(attrs_to_collect)} source attribute(s): {sorted(attrs_to_collect)}",
             source=_SOURCE,
+            nodes=(mat,),
         )
         return self.utils.collect_attribute_info(mat, list(attrs_to_collect), logger=self.log)
 
@@ -77,7 +78,7 @@ class AttributeConverter:
             try:
                 plug_exists = cmds.objExists(plug)
             except Exception as exc:
-                self.log.warn(f"Failed to query {plug}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to query {plug}: {exc}", source=_SOURCE, nodes=(target_mat,))
                 continue
 
             if not plug_exists:
@@ -85,7 +86,7 @@ class AttributeConverter:
 
             alpha_plug = self._trace_alpha_plug(plug)
             if not alpha_plug:
-                self.log.debug(f"No alpha source traced for {plug}", source=_SOURCE)
+                self.log.debug(f"No alpha source traced for {plug}", source=_SOURCE, nodes=(target_mat,))
                 continue
 
             tex_node = alpha_plug.split(".")[0]
@@ -94,19 +95,19 @@ class AttributeConverter:
                         and not cmds.getAttr(f"{tex_node}.alphaIsLuminance")):
                     cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
                     fixed.append(tex_node)
-                    self.log.debug(f"Enabled Alpha Is Luminance on {tex_node}", source=_SOURCE)
+                    self.log.debug(f"Enabled Alpha Is Luminance on {tex_node}", source=_SOURCE, nodes=(tex_node,))
             except Exception as exc:
-                self.log.warn(f"Failed to enable alphaIsLuminance on {tex_node}: {exc}", source=_SOURCE)
+                self.log.warn(f"Failed to enable alphaIsLuminance on {tex_node}: {exc}", source=_SOURCE, nodes=(tex_node,))
 
         if fixed:
-            self.log.info(f"Enabled Alpha Is Luminance on {len(fixed)} texture node(s)", source=_SOURCE)
+            self.log.info(f"Enabled Alpha Is Luminance on {len(fixed)} texture node(s)", source=_SOURCE, nodes=tuple(fixed))
 
     def _trace_alpha_plug(self, start, visited=None, depth=0):
         """Recursively trace upstream from an attribute/node to find the bitmap texture
         source plug feeding *.outAlpha.
         """
         if depth > 10 or not start:
-            self.log.debug(f"Alpha trace stopped at {start!r} (depth={depth})", source=_SOURCE)
+            self.log.debug(f"Alpha trace stopped at {start!r} (depth={depth})", source=_SOURCE, nodes=(self.utils.node_name_from_plug(start),))
             return None
         if visited is None:
             visited = set()
@@ -114,7 +115,7 @@ class AttributeConverter:
         try:
             conns = cmds.listConnections(start, plugs=True, source=True) or []
         except Exception as exc:
-            self.log.warn(f"Failed to trace alpha upstream from {start}: {exc}", source=_SOURCE)
+            self.log.warn(f"Failed to trace alpha upstream from {start}: {exc}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(start),))
             return None
 
         for conn in conns:
@@ -123,10 +124,10 @@ class AttributeConverter:
                 try:
                     has_file = cmds.attributeQuery("fileTextureName", node=node, exists=True)
                 except Exception as exc:
-                    self.log.warn(f"Failed to query fileTextureName on {node}: {exc}", source=_SOURCE)
+                    self.log.warn(f"Failed to query fileTextureName on {node}: {exc}", source=_SOURCE, nodes=(node,))
                     has_file = False
                 if has_file:
-                    self.log.debug(f"Alpha source found: {conn}", source=_SOURCE)
+                    self.log.debug(f"Alpha source found: {conn}", source=_SOURCE, nodes=(node,))
                     return conn
                 if node in visited:
                     continue
@@ -168,9 +169,9 @@ class AttributeConverter:
 
         try:
             cmds.setAttr(f"{target_mat}.{weight_attr}", 1)
-            self.log.debug(f"Enabled emission weight on {target_mat}.{weight_attr}", source=_SOURCE)
+            self.log.debug(f"Enabled emission weight on {target_mat}.{weight_attr}", source=_SOURCE, nodes=(target_mat,))
         except Exception as exc:
-            self.log.warn(f"Failed to set emission weight on {target_mat}.{weight_attr}: {exc}", source=_SOURCE)
+            self.log.warn(f"Failed to set emission weight on {target_mat}.{weight_attr}: {exc}", source=_SOURCE, nodes=(target_mat,))
 
     def transfer_all(self, target_mat, source_config, target_config, target_renderer,
                      attr_info, cc_cache):
@@ -192,13 +193,14 @@ class AttributeConverter:
                 self.log.debug(
                     f"{common_attr}: unmapped (src={src_maya_attr!r}, tgt={tgt_maya_attr!r})",
                     source=_SOURCE,
+                    nodes=(target_mat,),
                 )
                 skipped += 1
                 continue
 
             src_data = attr_info.get(src_maya_attr)
             if not src_data:
-                self.log.debug(f"{common_attr}: no source data for {src_maya_attr}", source=_SOURCE)
+                self.log.debug(f"{common_attr}: no source data for {src_maya_attr}", source=_SOURCE, nodes=(target_mat,))
                 skipped += 1
                 continue
 
@@ -213,6 +215,7 @@ class AttributeConverter:
         self.log.info(
             f"Attribute transfer finished: {transferred} transferred, {skipped} skipped",
             source=_SOURCE,
+            nodes=(target_mat,),
         )
 
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
@@ -221,11 +224,11 @@ class AttributeConverter:
         try:
             plug_exists = cmds.objExists(target_plug)
         except Exception as exc:
-            self.log.warn(f"Failed to query {target_plug}: {exc}", source=_SOURCE)
+            self.log.warn(f"Failed to query {target_plug}: {exc}", source=_SOURCE, nodes=(target_mat,))
             return False
 
         if not plug_exists:
-            self.log.skip(f"{src_attr_name}: target plug {target_plug} does not exist", source=_SOURCE)
+            self.log.skip(f"{src_attr_name}: target plug {target_plug} does not exist", source=_SOURCE, nodes=(target_mat,))
             return False
 
         connection = src_data.get("connection")
@@ -240,7 +243,7 @@ class AttributeConverter:
                 if chain_plug and not self.utils.is_cc_node(
                         chain_plug.split(".")[0], self.config, logger=self.log):
                     self.utils.smart_connect(chain_plug, target_plug, logger=self.log)
-                self.log.debug(f"{src_attr_name}: transferred CC chain to {target_plug}", source=_SOURCE)
+                self.log.debug(f"{src_attr_name}: transferred CC chain to {target_plug}", source=_SOURCE, nodes=(target_mat, self.utils.node_name_from_plug(chain_plug)))
                 return True
 
             src_conn_plug = connection.get("plug")
@@ -248,13 +251,14 @@ class AttributeConverter:
                 self.log.warn(
                     f"{src_attr_name}: source connection has no plug for {target_plug}",
                     source=_SOURCE,
+                    nodes=(target_mat,),
                 )
                 return False
 
             if self.utils.smart_connect(src_conn_plug, target_plug, logger=self.log):
-                self.log.debug(f"{src_attr_name}: connected {src_conn_plug} -> {target_plug}", source=_SOURCE)
+                self.log.debug(f"{src_attr_name}: connected {src_conn_plug} -> {target_plug}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(src_conn_plug), target_mat))
                 return True
-            self.log.warn(f"{src_attr_name}: failed to connect {src_conn_plug} -> {target_plug}", source=_SOURCE)
+            self.log.warn(f"{src_attr_name}: failed to connect {src_conn_plug} -> {target_plug}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(src_conn_plug), target_mat))
             return False
 
         if isinstance(value, (int, float)):
@@ -262,30 +266,32 @@ class AttributeConverter:
                 attr_type = cmds.getAttr(target_plug, type=True)
                 if attr_type in ("float3", "double3"):
                     cmds.setAttr(target_plug, value, value, value)
-                    self.log.debug(f"{src_attr_name}: broadcast float {value} -> {target_plug}", source=_SOURCE)
+                    self.log.debug(f"{src_attr_name}: broadcast float {value} -> {target_plug}", source=_SOURCE, nodes=(target_mat,))
                 else:
                     cmds.setAttr(target_plug, value)
-                    self.log.debug(f"{src_attr_name}: set {target_plug} = {value}", source=_SOURCE)
+                    self.log.debug(f"{src_attr_name}: set {target_plug} = {value}", source=_SOURCE, nodes=(target_mat,))
                 return True
             except Exception as exc:
-                self.log.warn(f"{src_attr_name}: failed to set float value on {target_plug}: {exc}", source=_SOURCE)
+                self.log.warn(f"{src_attr_name}: failed to set float value on {target_plug}: {exc}", source=_SOURCE, nodes=(target_mat,))
                 return False
 
         if isinstance(value, (tuple, list)) and len(value) >= 3:
             try:
                 cmds.setAttr(target_plug, *value)
-                self.log.debug(f"{src_attr_name}: set color {target_plug} = {tuple(value)}", source=_SOURCE)
+                self.log.debug(f"{src_attr_name}: set color {target_plug} = {tuple(value)}", source=_SOURCE, nodes=(target_mat,))
                 return True
             except Exception as first_exc:
                 self.log.debug(
                     f"{src_attr_name}: color set failed on {target_plug}, trying first channel: {first_exc}",
                     source=_SOURCE,
+                    nodes=(target_mat,),
                 )
                 try:
                     cmds.setAttr(target_plug, value[0])
                     self.log.info(
                         f"{src_attr_name}: color fell back to first channel on {target_plug}",
                         source=_SOURCE,
+                        nodes=(target_mat,),
                     )
                     return True
                 except Exception as second_exc:
@@ -293,8 +299,9 @@ class AttributeConverter:
                         f"{src_attr_name}: failed to set color value on {target_plug}: "
                         f"first={first_exc}, second={second_exc}",
                         source=_SOURCE,
+                        nodes=(target_mat,),
                     )
                     return False
 
-        self.log.skip(f"{src_attr_name}: unsupported value type {type(value).__name__}", source=_SOURCE)
+        self.log.skip(f"{src_attr_name}: unsupported value type {type(value).__name__}", source=_SOURCE, nodes=(target_mat,))
         return False
