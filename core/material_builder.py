@@ -162,7 +162,6 @@ class MaterialBuilder:
     def _build_color_chain(self, m_node, renderer, base_name, make_tex, mat_config,
                            use_full_chain, input_paths, common_attr, name_key):
         if common_attr not in input_paths:
-            self.log.debug(f"{common_attr}: not in input paths, skipped", source=_SOURCE)
             return False
         attr_name = mat_config.get_maya_attr(common_attr)
         if not attr_name:
@@ -180,7 +179,6 @@ class MaterialBuilder:
     def _build_scalar_chain(self, m_node, base_name, make_tex, mat_config, common_attr,
                             name_key, input_paths, use_full_chain=False, invert=False):
         if common_attr not in input_paths:
-            self.log.debug(f"{common_attr}: not in input paths, skipped", source=_SOURCE)
             return False
         attr_name = mat_config.get_maya_attr(common_attr)
         if not attr_name:
@@ -227,7 +225,6 @@ class MaterialBuilder:
             return False
 
         if 'normal_bump' not in input_paths:
-            self.log.debug("normal_bump: not in input paths, skipped", source=_SOURCE)
             return False
 
         tex_nb = make_tex('normal_bump', nb_key, is_alpha=not is_normal)

@@ -8,6 +8,7 @@
 - 结构化日志节点：`LogRecord.nodes` 在日志写入时携带可选择的 Maya 节点名；Log 面板中带节点的日志可右键 `Select Node(s)` 直接选择
 
 ### 变更
+- `MaterialBuilder` 不再为输入纹理集中缺失的通道记录 `DEBUG` "not in input paths, skipped"——这是每次构建的正常分支，不是值得展示的事件；配置缺失类 `SKIP` 日志（如 no target attribute mapping）仍保留
 - LogViewer 拉取从 `Logger.poll()` 切换为 `Logger.drain()`：环形缓冲中淘汰的行通过正确的 Qt model 信号从表格移除；reset 时整体替换
 - 级别过滤复选框统一为单一 `_LEVEL_UI` 配置表（标签/颜色/默认勾选）；OK 与 Debug 默认仍不勾选
 - 复制到剪贴板的日志每行附带时间戳、source 上下文键值与级别

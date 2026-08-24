@@ -8,6 +8,7 @@
 - Structured log nodes: `LogRecord.nodes` carries selectable Maya node names attached at log time; Log rows with nodes can right-click `Select Node(s)` in the Log tab
 
 ### Changed
+- `MaterialBuilder` no longer logs `DEBUG` "not in input paths, skipped" for channels absent from the input texture set — a normal per-build branch, not an event worth surfacing; `SKIP` logs for missing config mappings (e.g. no target attribute mapping) are kept
 - LogViewer switched from `Logger.poll()` to `Logger.drain()`: rows evicted from the ring buffer are removed from the table via proper Qt model signals; wholesale replace on reset
 - Level filter checkboxes unified into a single `_LEVEL_UI` config table (label/color/default checked); OK and Debug remain unchecked by default
 - "Copy" now includes a timestamp, source context key/values and level per line
