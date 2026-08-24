@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-25
+
+### Added
+- Single-consumer `Logger.drain(after_seq)` API: returns new records plus the seqs evicted since the previous drain (`evicted_seqs`); when the caller is more than one full buffer behind it returns `reset=True` with a full snapshot for wholesale resync
+- `LogModel.replace_records()` / `remove_by_seqs()`: the UI log model now mirrors the logger ring buffer exactly instead of keeping stale rows already evicted by critical-record replacement
+
+### Changed
+- LogViewer switched from `Logger.poll()` to `Logger.drain()`: rows evicted from the ring buffer are removed from the table via proper Qt model signals; wholesale replace on reset
+- Level filter checkboxes unified into a single `_LEVEL_UI` config table (label/color/default checked); OK and Debug remain unchecked by default
+- "Copy" now includes a timestamp, source context key/values and level per line
+- `node_utils.identify_node_type()` / `create_cc_node()` / `create_target_material()` accept an optional injected `logger`; converter/bump/cc callers pass their instance logger instead of falling back to the global one
+
+### Fixed
+- `dropped_critical` was not incremented when a non-critical write evicted a critical record from the middle of the ring buffer (and was miscounted in the reverse case)
+
 ## 2026-08-23
 
 ### Added

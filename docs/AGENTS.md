@@ -41,9 +41,9 @@ exec(open(r"你的路径\materialConvert\main.py").read())
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
 - 颜色校正节点类型以 `config/colorCorrection.json` 为单一来源；`node_utils.is_cc_node()` 通过 `ConfigLoader.get_all_cc_types()` 判断，禁止在 Python 中维护 CC 节点类型列表
 - 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数
-- 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`
+- 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`；节点识别/创建类函数（`identify_node_type` / `create_cc_node` / `create_target_material`）接受可选 `logger` 参数，调用方应传入实例 logger，未传时回落到 `get_logger()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
-- 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过 `poll(after_seq)` 批量拉取
+- 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
 - 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页：Converter / Builder / Batch Builder / Node Tools / Log）
 - 样式：`ui/styles.py`（QSS 暗色主题）
@@ -72,9 +72,9 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 ### 日志规则
 - 所有 `except` 必须使用 `as exc` 并写入 logger（至少 WARN）；禁止 `except: pass`、静默 early return、静默 fallback。
 - core 业务代码禁止直接 `print()` 和 `cmds.warning()`，统一写入 `core.logger.get_logger()`。
-- UI 日志只通过 `ui/log_panel.py` 的 `LogViewer.poll()` 批量拉取；Log 标签页隐藏时暂停 drain，切回时一次性补拉。
+- UI 日志只通过 `ui/log_panel.py` 的 `LogViewer.drain()` 单消费者拉取；Log 标签页隐藏时暂停拉取，切回时一次性补拉（必要时整体重同步）。
 - 默认可见级别为 ERROR/WARN/SKIP/INFO；属性级细节用 DEBUG（默认隐藏，用户可勾选）。
-- Logger 与 UI `LogModel` 共用 `DEFAULT_MAX_RECORDS`（20,000），两侧都必须有界；LogModel 超限时从头部淘汰旧行。
+- Logger 与 UI `LogModel` 共用 `DEFAULT_MAX_RECORDS`（20,000），两侧都必须有界；UI 通过 drain 返回的 `evicted_seqs` 同步移除 Logger 已淘汰的行，保持两侧内容一致。
 - `Logger.scope(source=...)` 是词法作用域：显式 source 覆盖外层，空 source 继承外层，单条日志的 `source=` 优先级最高；退出 scope 后恢复。
 - 性能优先：日志只追加到环形缓冲，批量转换期间每 5 个材质（或 150ms）才 `processEvents()` 一次。
 
