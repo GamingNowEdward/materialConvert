@@ -3,6 +3,7 @@
 ## 2026-08-25
 
 ### Added
+- 61 new unit tests (110 total, no Maya required): `config_loader` spec rules and common-section merging, `texture_scanner` alias matching (short-token only, underscore-skipping with boundary checks, long-alias priority), `node_utils` hue offset conversion across renderers and `smart_connect` fallback chain, `config_validator` plugin-failure SKIP behavior and cleanup, `attribute` converter float broadcast / color first-channel fallback / black-color zeroing, `batch_builder` channel mapping, and `MaterialBuilder` silence regression tests
 - Single-consumer `Logger.drain(after_seq)` API: returns new records plus the seqs evicted since the previous drain (`evicted_seqs`); when the caller is more than one full buffer behind it returns `reset=True` with a full snapshot for wholesale resync
 - `LogModel.replace_records()` / `remove_by_seqs()`: the UI log model now mirrors the logger ring buffer exactly instead of keeping stale rows already evicted by critical-record replacement
 - Structured log nodes: `LogRecord.nodes` carries selectable Maya node names attached at log time; Log rows with nodes can right-click `Select Node(s)` in the Log tab
@@ -16,6 +17,7 @@
 - `MaterialBuilder` p2d → file connections use `BuilderContext.connect(..., quiet=True)` and one aggregate DEBUG per file node instead of one DEBUG per connection
 
 ### Fixed
+- `node_utils.node_name_from_plug()` crashed with `AttributeError` when handed `None` (reached via the `smart_connect` empty-plug warning path); it now tolerates falsy input
 - `dropped_critical` was not incremented when a non-critical write evicted a critical record from the middle of the ring buffer (and was miscounted in the reverse case)
 
 ## 2026-08-23

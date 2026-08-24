@@ -3,6 +3,7 @@
 ## 2026-08-25
 
 ### 新增
+- 新增 61 个单元测试（共 110 个，无需 Maya）：`config_loader` 规范硬性规则与 common 段合并、`texture_scanner` 别名匹配（短词仅 token、下划线穿插+边界、长别名优先）、`node_utils` hue 跨渲染器换算与 `smart_connect` 回退链、`config_validator` 插件失败整组 SKIP 与清理、attribute 转换器 float 广播/color 首通道回退/黑色归零、`batch_builder` 通道映射、`MaterialBuilder` 静默回归
 - 单消费者拉取 API `Logger.drain(after_seq)`：返回新记录 + 上次 drain 之后被逐出的记录序号（`evicted_seqs`）；落后超过一个完整缓冲区时返回 `reset=True` 全量快照用于整体重同步
 - `LogModel.replace_records()` / `remove_by_seqs()`：UI 日志模型现在精确镜像 Logger 环形缓冲区，不再保留已被关键记录替换淘汰的过期行
 - 结构化日志节点：`LogRecord.nodes` 在日志写入时携带可选择的 Maya 节点名；Log 面板中带节点的日志可右键 `Select Node(s)` 直接选择
@@ -16,6 +17,7 @@
 - `MaterialBuilder` 的 p2d → file 连接使用 `BuilderContext.connect(..., quiet=True)`，每个 file 节点只发一条汇总 DEBUG，不再逐连接刷屏
 
 ### 修复
+- `node_utils.node_name_from_plug()` 收到 `None` 时崩溃（`smart_connect` 空 plug 警告路径触发）；现在容忍空值输入
 - 非关键写入从环形缓冲中部淘汰关键记录时 `dropped_critical` 计数未自增（反向场景误自增）
 
 ## 2026-08-23

@@ -17,7 +17,7 @@ def node_name_from_plug(plug):
     from its attribute path.  Only pass actual Maya plug strings such as
     ``"pSphere1.tx"`` or ``"pSphere1.rotatePivot.translateX"``.
     """
-    return plug.split(".", 1)[0]
+    return (plug or "").split(".", 1)[0]
 
 
 def get_materials_from_selection(logger=None):
