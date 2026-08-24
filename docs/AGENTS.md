@@ -76,7 +76,7 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 - 默认可见级别为 ERROR/WARN/SKIP/INFO；属性级细节用 DEBUG（默认隐藏，用户可勾选）。
 - Logger 与 UI `LogModel` 共用 `DEFAULT_MAX_RECORDS`（20,000），两侧都必须有界；UI 通过 drain 返回的 `evicted_seqs` 同步移除 Logger 已淘汰的行，保持两侧内容一致。
 - `Logger.scope(source=...)` 是词法作用域：显式 source 覆盖外层，空 source 继承外层，单条日志的 `source=` 优先级最高；退出 scope 后恢复。
-- 需要右键选节点的日志，必须在写入时通过 `nodes=` 传入节点；UI 只读取 `record.nodes`，禁止解析 `message` 提取节点。`Logger` 只对节点做清洗去重，不拆分 plug；plug 转节点名使用 `core.node_utils.node_name_from_plug()`。
+- 需要右键选节点的日志，必须在写入时通过 `nodes=` 传入节点；UI 只读取 `record.nodes`，禁止解析 `message` 提取节点。`Logger` 只对节点做清洗去重（`None` 项忽略），不拆分 plug；plug 转节点名使用 `core.node_utils.node_name_from_plug()`。
 - 日志节点是一次性快照，不保证时效性。右键选择直接执行 `cmds.select`，不做存在性判断。
 - 高频循环连接（如 p2d → file）应在循环内使用 `BuilderContext.connect(..., quiet=True)` 静默逐条成功 DEBUG，循环后只发一条带 `nodes` 的汇总 DEBUG；`quiet` 只静默成功路径，失败仍必须写带 `nodes` 的 ERROR。
 - 性能优先：日志只追加到环形缓冲，批量转换期间每 5 个材质（或 150ms）才 `processEvents()` 一次。

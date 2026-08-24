@@ -44,8 +44,9 @@ class DrainResult:
 def _normalize_nodes(nodes):
     """Clean and deduplicate node identifiers at log time.
 
-    ``nodes`` is normalized into a tuple of strings.  Values are converted
-    to ``str``, stripped, filtered, and deduplicated in first-seen order.
+    ``nodes`` is normalized into a tuple of strings.  ``None`` items are
+    ignored; remaining values are converted to ``str``, stripped, filtered,
+    and deduplicated in first-seen order.
     Nested iterables are intentionally not flattened; they are stringified.
     Plug strings are intentionally not split here.  Callers must pass actual
     Maya node names (see ``node_utils.node_name_from_plug`` for plug inputs).
