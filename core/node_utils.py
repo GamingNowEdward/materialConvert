@@ -64,9 +64,9 @@ def get_materials_from_selection(logger=None):
     return materials
 
 
-def identify_node_type(material):
+def identify_node_type(material, logger=None):
     node_type = cmds.nodeType(material)
-    get_logger().debug(f"Identified {material} as {node_type}", source=_SOURCE)
+    _log_or_default(logger).debug(f"Identified {material} as {node_type}", source=_SOURCE)
     return node_type
 
 
@@ -193,12 +193,12 @@ def collect_cc_chain_params(cc_node, cc_config, logger=None):
     return params, input_plug
 
 
-def create_cc_node(cc_config, base_name=None):
+def create_cc_node(cc_config, base_name=None, logger=None):
     kwargs = {"asUtility": True}
     if base_name:
         kwargs["name"] = base_name
     node = cmds.shadingNode(cc_config.node_type, **kwargs)
-    get_logger().debug(f"Created CC node {node}", source=_SOURCE)
+    _log_or_default(logger).debug(f"Created CC node {node}", source=_SOURCE)
     return node
 
 
@@ -227,9 +227,9 @@ def set_cc_params(cc_node, params, cc_config, logger=None):
             log.warn(f"Failed to set {target_attr} on {cc_node}: {exc}", source=_SOURCE)
 
 
-def create_target_material(node_type, base_name):
+def create_target_material(node_type, base_name, logger=None):
     node = cmds.shadingNode(node_type, asShader=True, name=base_name)
-    get_logger().debug(f"Created material node {node} ({node_type})", source=_SOURCE)
+    _log_or_default(logger).debug(f"Created material node {node} ({node_type})", source=_SOURCE)
     return node
 
 

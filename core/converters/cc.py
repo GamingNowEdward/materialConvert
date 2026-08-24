@@ -113,7 +113,7 @@ class CCConverter:
         else:
             renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
             base_name = src_cc_name + "_" + renderer_short if src_cc_name else None
-            cc_node = self.utils.create_cc_node(cc_config, base_name)
+            cc_node = self.utils.create_cc_node(cc_config, base_name, logger=self.log)
             self.utils.set_cc_params(cc_node, cc_entry["params"], cc_config, logger=self.log)
 
             input_plug = cc_entry.get("input_plug")

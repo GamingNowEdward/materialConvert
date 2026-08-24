@@ -92,3 +92,29 @@ def test_model_polling_after_logger_rollover(app):
     messages = [model.record_at(i).message for i in range(model.rowCount())]
     assert messages == ["m4", "m5", "m6"]
     assert len(messages) == len(set(messages))
+
+def test_model_mirrors_logger_with_critical_eviction(app):
+    from core.logger import Logger
+
+    logger = Logger(max_records=3)
+    model = LogModel(max_records=3)
+
+    logger.error("e_old")
+    logger.debug("d1")
+    logger.debug("d2")
+
+    result = logger.drain(0)
+    model.replace_records(result.records)
+    assert [model.record_at(i).message for i in range(model.rowCount())] == ["e_old", "d1", "d2"]
+
+    cursor = logger.last_seq
+    logger.error("e_new")
+    result = logger.drain(cursor)
+
+    model.remove_by_seqs(result.evicted_seqs)
+    model.append_records(result.records)
+
+    assert [model.record_at(i).message for i in range(model.rowCount())] == ["e_old", "d2", "e_new"]
+    assert [model.record_at(i).message for i in range(model.rowCount())] == [
+        r.message for r in logger.poll(0)
+    ]

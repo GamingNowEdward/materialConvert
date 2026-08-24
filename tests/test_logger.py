@@ -224,6 +224,74 @@ def test_production_scale_rollover():
     assert [r.message for r in tail] == ["after-rollover"]
 
 
+def test_drain_returns_evicted_seqs_for_consumed_rows():
+    log = Logger(max_records=3)
+    log.error("e_old")
+    log.debug("d1")
+    log.debug("d2")
+    cursor = log.last_seq
+    log.error("e_new")
+
+    result = log.drain(cursor)
+    assert [r.message for r in result.records] == ["e_new"]
+    assert result.evicted_seqs == [2]  # d1 was evicted from the middle
+    assert result.reset is False
+
+
+def test_drain_reset_when_cursor_far_behind():
+    log = Logger(max_records=3)
+    for i in range(10):
+        log.info(f"m{i}")
+
+    result = log.drain(0)
+    assert result.reset is True
+    assert [r.message for r in result.records] == ["m7", "m8", "m9"]
+
+
+def test_drain_does_not_return_duplicate_evictions():
+    log = Logger(max_records=3)
+    log.error("e_old")
+    log.debug("d1")
+    log.debug("d2")
+    cursor = log.last_seq
+    log.error("e_new")
+
+    first = log.drain(cursor)
+    assert first.evicted_seqs == [2]
+
+    second = log.drain(first.records[-1].seq)
+    assert second.records == []
+    assert second.evicted_seqs == []
+
+
+def test_dropped_critical_counts_critical_evicted_by_noncritical_write():
+    log = Logger(max_records=2)
+    log.error("e1")
+    log.info("i1")
+    log.info("i2")
+
+    assert log.dropped == 1
+    assert log.dropped_critical == 1
+    assert [r.message for r in log.poll(0)] == ["i1", "i2"]
+
+def test_node_utils_identify_node_type_uses_injected_logger():
+    import core.node_utils as node_utils
+
+    log = Logger()
+    node_utils.identify_node_type("mat", logger=log)
+    assert [r.message for r in log.poll(0)] == ["Identified mat as None"]
+
+
+def test_dropped_critical_not_incremented_when_critical_write_evicts_noncritical():
+    log = Logger(max_records=2)
+    log.info("i1")
+    log.error("e1")
+    log.error("e2")
+
+    assert log.dropped == 1
+    assert log.dropped_critical == 0
+    assert [r.message for r in log.poll(0)] == ["e1", "e2"]
+
 def test_record_shape():
     rec = get_logger().info("x", source="s", a=1)
     assert isinstance(rec, LogRecord)

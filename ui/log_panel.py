@@ -5,17 +5,18 @@ from ui import QtCore, QtGui, QtWidgets
 
 from core.logger import DEFAULT_MAX_RECORDS, LogLevel, get_logger
 
-_LEVEL_COLORS = {
-    LogLevel.ERROR: "#E06C75",
-    LogLevel.WARN: "#E5C07B",
-    LogLevel.OK: "#98C379",
-    LogLevel.SKIP: "#6A737D",
-    LogLevel.INFO: "#61AFEF",
-    LogLevel.DEBUG: "#8A9199",
+_LEVEL_UI = {
+    LogLevel.ERROR: {"label": "Error", "color": "#E06C75", "default_checked": True},
+    LogLevel.WARN: {"label": "Warn", "color": "#E5C07B", "default_checked": True},
+    LogLevel.SKIP: {"label": "Skip", "color": "#6A737D", "default_checked": True},
+    LogLevel.INFO: {"label": "Info", "color": "#61AFEF", "default_checked": True},
+    LogLevel.OK: {"label": "Ok", "color": "#98C379", "default_checked": False},
+    LogLevel.DEBUG: {"label": "Debug", "color": "#8A9199", "default_checked": False},
 }
 
-_FILTER_ORDER = (LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO, LogLevel.OK, LogLevel.DEBUG)
-_DEFAULT_CHECKED = {LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO}
+_LEVEL_COLORS = {level: cfg["color"] for level, cfg in _LEVEL_UI.items()}
+_FILTER_ORDER = tuple(_LEVEL_UI)
+_DEFAULT_CHECKED = {level for level, cfg in _LEVEL_UI.items() if cfg["default_checked"]}
 _VALIDATION_LEVELS = {LogLevel.ERROR, LogLevel.WARN, LogLevel.SKIP, LogLevel.INFO}
 _ERRORS_ONLY_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
@@ -38,6 +39,41 @@ class LogModel(QtCore.QAbstractTableModel):
         self.beginResetModel()
         self._records.clear()
         self.endResetModel()
+
+    def replace_records(self, records):
+        """Replace the model contents with *records*."""
+        self.beginResetModel()
+        self._records = deque(records[-self._max_records:])
+        self.endResetModel()
+
+    def remove_by_seqs(self, seqs):
+        """Remove rows whose record seq is in *seqs*.
+
+        Removal is grouped into contiguous row ranges and performed from the
+        end backwards so earlier row indices remain valid.
+        """
+        if not seqs:
+            return
+        remove = set(seqs)
+        rows = [idx for idx, record in enumerate(self._records) if record.seq in remove]
+        if not rows:
+            return
+
+        groups = []
+        start = prev = rows[0]
+        for row in rows[1:]:
+            if row == prev + 1:
+                prev = row
+            else:
+                groups.append((start, prev))
+                start = prev = row
+        groups.append((start, prev))
+
+        for start, end in reversed(groups):
+            self.beginRemoveRows(QtCore.QModelIndex(), start, end)
+            for _ in range(end - start + 1):
+                del self._records[start]
+            self.endRemoveRows()
 
     def append_records(self, records):
         if not records:
@@ -160,7 +196,7 @@ class LogFilterProxy(QtCore.QSortFilterProxyModel):
 class LogViewer(QtWidgets.QWidget):
     """Embedded global log viewer used by the Log tab.
 
-    The viewer polls ``Logger.poll(after_seq)`` with a QTimer.  While the
+    The viewer drains ``Logger.drain(after_seq)`` with a QTimer.  While the
     parent tab is hidden, polling can be paused with ``set_active(False)`` so
     large batch conversions never update a hidden table.
     """
@@ -192,9 +228,9 @@ class LogViewer(QtWidgets.QWidget):
         level_row.addWidget(QtWidgets.QLabel("Filter:"))
         self._filters = {}
         for level in _FILTER_ORDER:
-            cb = QtWidgets.QCheckBox(level.title())
+            cb = QtWidgets.QCheckBox(_LEVEL_UI[level]["label"])
             cb.setChecked(level in _DEFAULT_CHECKED)
-            cb.setStyleSheet(f"QCheckBox {{ color: {_LEVEL_COLORS[level]}; }}")
+            cb.setStyleSheet(f"QCheckBox {{ color: {_LEVEL_UI[level]['color']}; }}")
             cb.stateChanged.connect(self._refresh_filters)
             self._filters[level] = cb
             level_row.addWidget(cb)
@@ -333,13 +369,22 @@ class LogViewer(QtWidgets.QWidget):
     # Data polling
     # ------------------------------------------------------------------
     def _drain_logs(self):
-        records = self.logger.poll(self._last_seq)
-        if records:
-            self._last_seq = records[-1].seq
-            self.model.append_records(records)
-            self._update_source_combo(records)
+        result = self.logger.drain(self._last_seq)
+        if result.reset:
+            self._last_seq = self.logger.last_seq
+            self.model.replace_records(result.records)
+            self._update_source_combo(result.records)
             if self.auto_scroll.isChecked():
                 self._scroll_to_bottom()
+        else:
+            if result.evicted_seqs:
+                self.model.remove_by_seqs(result.evicted_seqs)
+            if result.records:
+                self._last_seq = result.records[-1].seq
+                self.model.append_records(result.records)
+                self._update_source_combo(result.records)
+                if self.auto_scroll.isChecked():
+                    self._scroll_to_bottom()
         self._update_status()
 
     def _update_source_combo(self, records):
@@ -387,7 +432,10 @@ class LogViewer(QtWidgets.QWidget):
             src = self.proxy.mapToSource(self.proxy.index(row, 0))
             record = self.model.record_at(src.row())
             if record:
-                records.append(f"[{record.level}] {record.source} {record.message}")
+                local = time.localtime(record.ts)
+                ts = time.strftime("%Y-%m-%d %H:%M:%S", local) + f".{int(record.ts % 1 * 1000):03d}"
+                context = " ".join(f"{k}={v}" for k, v in record.context.items())
+                records.append(f"{ts} [{record.level}] {record.source} {context} {record.message}".strip())
         QtWidgets.QApplication.clipboard().setText("\n".join(records))
 
     def showEvent(self, event):

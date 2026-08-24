@@ -58,7 +58,7 @@ class BumpConverter:
             return
 
         try:
-            source_type = self.utils.identify_node_type(source_mat)
+            source_type = self.utils.identify_node_type(source_mat, logger=self.log)
         except Exception as exc:
             self.log.warn(f"Failed to identify source material {source_mat}: {exc}", source=_SOURCE)
             return
@@ -72,7 +72,7 @@ class BumpConverter:
             return
 
         try:
-            target_type = self.utils.identify_node_type(new_mat)
+            target_type = self.utils.identify_node_type(new_mat, logger=self.log)
         except Exception as exc:
             self.log.warn(f"Failed to identify target material {new_mat}: {exc}", source=_SOURCE)
             return
@@ -214,7 +214,7 @@ class BumpConverter:
         scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
         input_plug = self._read_bn_attrs(bn_node, bn_cfg, "source_connection", is_connection=True)
 
-        common_config = self.config.get_material_config(self.utils.identify_node_type(material))
+        common_config = self.config.get_material_config(self.utils.identify_node_type(material, logger=self.log))
         bump_attr_name = common_config.attr_map.get("normal_bump", "") if common_config else ""
 
         self.log.debug(
@@ -232,7 +232,7 @@ class BumpConverter:
 
     def _find_bn_node(self, material, bn_mapping):
         try:
-            material_type = self.utils.identify_node_type(material)
+            material_type = self.utils.identify_node_type(material, logger=self.log)
         except Exception as exc:
             self.log.warn(f"Failed to identify material {material}: {exc}", source=_SOURCE)
             return None

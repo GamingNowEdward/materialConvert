@@ -27,7 +27,7 @@ class MaterialConverter:
 
         with self.logger.scope(source=_SOURCE, material=source_mat, target=target_node_type):
             try:
-                source_node_type = node_utils.identify_node_type(source_mat)
+                source_node_type = node_utils.identify_node_type(source_mat, logger=self.logger)
             except Exception as exc:
                 self.logger.error(f"Failed to identify source material type for {source_mat}: {exc}")
                 return None
@@ -60,7 +60,7 @@ class MaterialConverter:
             suffix = target_config.short_name or "converted"
             base_name = source_mat + "_" + suffix
             try:
-                new_mat = node_utils.create_target_material(target_node_type, base_name)
+                new_mat = node_utils.create_target_material(target_node_type, base_name, logger=self.logger)
             except Exception as exc:
                 self.logger.error(f"Failed to create target material {target_node_type} ({base_name}): {exc}")
                 return None
@@ -133,7 +133,7 @@ class MaterialConverter:
             for mat in materials:
                 with self.logger.scope(source=_SOURCE, material=mat, target=target_node_type):
                     try:
-                        source_type = node_utils.identify_node_type(mat)
+                        source_type = node_utils.identify_node_type(mat, logger=self.logger)
                     except Exception as exc:
                         msg = f"Skipped {mat}: failed to identify node type: {exc}"
                         self.logger.warn(msg)

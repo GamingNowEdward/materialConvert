@@ -2,7 +2,7 @@
 
 The logger is intentionally UI-agnostic.  It only appends structured records
 into a bounded ring buffer; UI code polls new records at its own pace with
-``poll(after_seq)``.  There is no per-record callback, so emitting thousands
+``poll(after_seq)`` / ``drain(after_seq)``.  There is no per-record callback, so emitting thousands
 of records during a 500-material batch never touches Qt directly.
 """
 
@@ -33,6 +33,13 @@ class LogRecord:
     message: str = ""
 
 
+
+@dataclass(frozen=True)
+class DrainResult:
+    records: list
+    evicted_seqs: list
+    reset: bool
+
 DEFAULT_MAX_RECORDS = 20000
 _CRITICAL_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
@@ -46,6 +53,9 @@ class Logger:
         self._seq = 0
         self._dropped = 0
         self._dropped_critical = 0
+        self._evicted_seqs = deque(maxlen=self._max_records)
+        self._evicted_total = 0
+        self._drain_evicted_cursor = 0
         self._lock = threading.RLock()
 
     def log(self, level: str, message: str, source: str = "", **context):
@@ -61,7 +71,10 @@ class Logger:
 
         with self._lock:
             if len(self._records) >= self._max_records:
-                self._evict_for(level)
+                evicted_seq = self._evict_for(level)
+                if evicted_seq is not None:
+                    self._evicted_seqs.append(evicted_seq)
+                    self._evicted_total += 1
             self._seq += 1
             record = LogRecord(
                 seq=self._seq,
@@ -125,6 +138,44 @@ class Logger:
             records = [r for r in self._records if r.seq > after_seq]
             return records
 
+    def drain(self, after_seq: int = 0):
+        """Return records and evicted seqs needed to mirror this buffer.
+
+        This is a single-consumer API intended for the UI log model.  ``records``
+        contains current records with ``seq > after_seq``.  ``evicted_seqs``
+        contains seqs evicted since the previous drain that the caller may
+        already hold, so it can remove exactly those rows.  When the caller is
+        more than one full buffer behind, ``reset`` is True and ``records`` is
+        a full snapshot of the current buffer; the caller should replace its
+        model wholesale.
+        """
+        with self._lock:
+            if after_seq < 0:
+                after_seq = 0
+            if after_seq >= self._seq:
+                return DrainResult(records=[], evicted_seqs=[], reset=False)
+
+            reset = after_seq < self._seq - self._max_records
+            missing_evictions = (
+                self._drain_evicted_cursor
+                < self._evicted_total - len(self._evicted_seqs)
+            )
+            if reset or missing_evictions:
+                self._drain_evicted_cursor = self._evicted_total
+                return DrainResult(records=list(self._records), evicted_seqs=[], reset=True)
+
+            new_evictions = self._evicted_total - self._drain_evicted_cursor
+            evicted_seqs = []
+            if new_evictions:
+                evicted_seqs = [
+                    seq
+                    for seq in list(self._evicted_seqs)[-new_evictions:]
+                    if seq <= after_seq
+                ]
+            self._drain_evicted_cursor = self._evicted_total
+            records = [r for r in self._records if r.seq > after_seq]
+            return DrainResult(records=records, evicted_seqs=evicted_seqs, reset=False)
+
     def clear(self):
         """Clear buffered records.  ``seq`` is intentionally monotonic so UI
         cursors never start missing records after a clear."""
@@ -138,6 +189,9 @@ class Logger:
             self._seq = 0
             self._dropped = 0
             self._dropped_critical = 0
+            self._evicted_seqs.clear()
+            self._evicted_total = 0
+            self._drain_evicted_cursor = 0
 
     @property
     def dropped(self):
@@ -168,20 +222,24 @@ class Logger:
         return merged
 
     def _evict_for(self, level):
-        """Make room for *level*, preferring to drop non-critical records."""
+        """Make room for *level* and return the evicted record's seq."""
         if level in _CRITICAL_LEVELS:
             for idx in range(len(self._records)):
-                if self._records[idx].level not in _CRITICAL_LEVELS:
+                record = self._records[idx]
+                if record.level not in _CRITICAL_LEVELS:
                     del self._records[idx]
                     self._dropped += 1
-                    return
-            self._records.popleft()
+                    return record.seq
+            record = self._records.popleft()
             self._dropped += 1
             self._dropped_critical += 1
-            return
+            return record.seq
 
-        self._records.popleft()
+        record = self._records.popleft()
         self._dropped += 1
+        if record.level in _CRITICAL_LEVELS:
+            self._dropped_critical += 1
+        return record.seq
 
 
 _log_context = contextvars.ContextVar("material_converter_log_context", default={})
