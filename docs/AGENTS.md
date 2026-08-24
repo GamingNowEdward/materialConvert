@@ -132,7 +132,8 @@ renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为
 2. 在 Maya Script Editor 中重新 `exec()` 加载
 3. 如果模块缓存问题持续存在，关闭窗口后重新运行
 4. 运行纯 Python 测试（无需 Maya）：`python -m pytest tests/ -v`
-5. 需要 Maya 的验证脚本：复用 `C:\Users\morgan\AppData\Local\Temp\opencode\` 下的 `builder_verify.py` / `converter_verify.py`（需要 Maya commandPort 7001）
+5. 提交后由 GitHub Actions（`.github/workflows/test.yml`，Python 3.11 + PySide6）自动跑 `pytest` 与守卫脚本，本地验证命令与 CI 一致
+6. 需要 Maya 的验证脚本：复用 `C:\Users\morgan\AppData\Local\Temp\opencode\` 下的 `builder_verify.py` / `converter_verify.py`（需要 Maya commandPort 7001）
 
 ## 常见陷阱
 
