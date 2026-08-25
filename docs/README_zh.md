@@ -101,7 +101,7 @@ materialConvert/
 │   │   ├── RedshiftOpenPBRMaterial.json
 │   │   ├── RedshiftStandardMaterial.json
 │   │   └── VRayMtl.json
-│   ├── bumpNormal.json              # 凹凸/法线节点映射
+│   ├── bumpNormal.json              # 凹凸/法线节点映射（input/output 统一 schema）
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
 │   ├── texture_channels.json       # Batch Builder 文件名→通道规则

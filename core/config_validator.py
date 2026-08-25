@@ -272,7 +272,7 @@ class ConfigValidator:
                 return
             for label, attr in (("scale", mapping.scale),
                                 ("input", mapping.input),
-                                ("input_type", mapping.input_type)):
+                                ("is_normal", mapping.is_normal)):
                 if not attr:
                     continue
                 if not defined(label):
@@ -293,8 +293,8 @@ class ConfigValidator:
             return
 
         for label, attr in (("scale", mapping.scale),
-                            ("source_connection", mapping.source_connection),
-                            ("target_connection", mapping.target_connection),
+                            ("input", mapping.input),
+                            ("output", mapping.output),
                             ("is_normal", mapping.is_normal)):
             if not attr:
                 continue
@@ -341,8 +341,8 @@ class ConfigValidator:
             def material_defined(field):
                 return field in material_data
 
-            for label, attr in (("target_connection", cc.target_connection),
-                                ("source_connection", cc.source_connection)):
+            for label, attr in (("output", cc.output),
+                                ("input", cc.input)):
                 if not attr:
                     continue
                 if not material_defined(label):

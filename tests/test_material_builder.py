@@ -57,3 +57,22 @@ def test_channel_without_mapping_emits_skip():
     assert len(records) == 1
     assert records[0].level == LogLevel.SKIP
     assert "no target attribute mapping" in records[0].message
+
+
+def test_create_qss_names_from_material_node(monkeypatch):
+    """QSS 名由唯一化后的材质节点名派生，不依赖 Maya 自动改名。"""
+    log = Logger()
+    builder = _make_builder(log)
+    calls = []
+
+    def fake_sets(nodes, name=None):
+        calls.append(name)
+        return name
+
+    monkeypatch.setattr("maya.cmds.sets", fake_sets)
+    actual = builder._create_qss("M_Material1", ["M_Material1", "M_Material1SG"])
+    assert actual == "QS_M_Material1"
+    assert calls == ["QS_M_Material1"]
+    records = log.poll(0)
+    assert len(records) == 1
+    assert "QS_M_Material1" in records[0].message

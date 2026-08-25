@@ -20,6 +20,17 @@
 - `node_utils.node_name_from_plug()` 收到 `None` 时崩溃（`smart_connect` 空 plug 警告路径触发）；现在容忍空值输入
 - 非关键写入从环形缓冲中部淘汰关键记录时 `dropped_critical` 计数未自增（反向场景误自增）
 
+### 重构
+- `bumpNormal.json` / `colorCorrection.json`：连接字段统一为 `input`/`output`（取代 `source_connection`/`target_connection`）；vray 段 `input_type`/`input_type_value` 统一为 `is_normal`/`is_normal_value` 并删除 `node_type: ""`；`bumpNormal.json` common 段删除无消费方的 `input`/`output` 死键
+- 删除无消费方字段：`config/material/*.json` 的 `material.target_connection`
+- `config/builder_naming.json`：修正 disp 前缀大小写（`disP_` → `disp_`）
+- 同步：`config_loader.py`（NodeMapping/ColorCorrectionConfig 字段）、`bump.py`（删 input_type 双分支）、`material_builder.py`、`config_validator.py`、`node_utils.py`、`cc.py`、`test_config_loader.py`
+- 文档：`AGENTS.md` 新增 `bumpNormal.json` 统一 Schema 与渲染器 tex node 扩展点说明
+
+### 修复
+- Builder 横幅日志不再显示误导性 `Unknown`：`qt_maya_logger` 改为必填 `label` 参数，调用点标注操作名（Builder / P2D File）
+- 快速选择集命名改为由唯一化后的材质节点名派生（`QS_` + 节点名）：不再依赖 Maya 自动改名，日志与场景一致，重复构建同名材质时集合名确定
+
 ## 2026-08-23
 
 ### 新增

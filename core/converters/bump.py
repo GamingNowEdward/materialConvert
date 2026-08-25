@@ -92,7 +92,7 @@ class BumpConverter:
                 self.log.skip(f"No source bump connection on {source_mat}.{src_bump_attr}", source=_SOURCE, nodes=(source_mat,))
                 return
             src_node = conns[0]
-            cmds.connectAttr(f"{src_node}.{src_bn_config.bump.target_connection}",
+            cmds.connectAttr(f"{src_node}.{src_bn_config.bump.output}",
                              f"{new_mat}.{new_bump_attr}", force=True)
             self.log.info(
                 f"Bump/Normal: reconnected existing {src_node} -> {new_mat}.{new_bump_attr}",
@@ -151,8 +151,6 @@ class BumpConverter:
     def _read_material_bn(self, source_mat, bn_mapping):
         scale_attr = bn_mapping.scale
         input_attr = bn_mapping.input
-        input_type_attr = bn_mapping.input_type
-        input_type_value = bn_mapping.input_type_value
 
         scale_val = None
         if scale_attr:
@@ -175,19 +173,7 @@ class BumpConverter:
                 self.log.warn(f"Failed to read bump/normal input on {source_mat}.{input_attr}: {exc}", source=_SOURCE, nodes=(source_mat,))
 
         should_skip = False
-        if input_type_attr and input_type_value is not None:
-            try:
-                actual = cmds.getAttr(f"{source_mat}.{input_type_attr}")
-                if actual != input_type_value:
-                    should_skip = True
-                    self.log.debug(
-                        f"{source_mat}.{input_type_attr}={actual!r} != {input_type_value!r}; skipping",
-                        source=_SOURCE,
-                        nodes=(source_mat,),
-                    )
-            except Exception as exc:
-                self.log.warn(f"Failed to read {source_mat}.{input_type_attr}: {exc}", source=_SOURCE, nodes=(source_mat,))
-        elif bn_mapping.is_normal:
+        if bn_mapping.is_normal:
             try:
                 actual = cmds.getAttr(f"{source_mat}.{bn_mapping.is_normal}")
                 if actual != bn_mapping.is_normal_value:
@@ -217,7 +203,7 @@ class BumpConverter:
 
         is_normal = self._detect_bn_mode(bn_node, node_actual_type, bn_renderer, mode)
         scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
-        input_plug = self._read_bn_attrs(bn_node, bn_cfg, "source_connection", is_connection=True)
+        input_plug = self._read_bn_attrs(bn_node, bn_cfg, "input", is_connection=True)
 
         common_config = self.config.get_material_config(self.utils.identify_node_type(material, logger=self.log))
         bump_attr_name = common_config.attr_map.get("normal_bump", "") if common_config else ""
@@ -273,11 +259,11 @@ class BumpConverter:
         self.log.debug(f"Scanning {len(all_nodes)} bump/normal node(s) for {material}", source=_SOURCE, nodes=tuple(all_nodes))
         for node in all_nodes:
             try:
-                out_conns = cmds.listConnections(f"{node}.{bn_mapping.target_connection}",
+                out_conns = cmds.listConnections(f"{node}.{bn_mapping.output}",
                                                  destination=True, source=False) or []
             except Exception as exc:
                 self.log.warn(
-                    f"Failed to list outputs for {node}.{bn_mapping.target_connection}: {exc}",
+                    f"Failed to list outputs for {node}.{bn_mapping.output}: {exc}",
                     source=_SOURCE,
                     nodes=(node,),
                 )
@@ -361,8 +347,6 @@ class BumpConverter:
     def _convert_to_material(self, bn_info, target_mat, tgt_mapping, input_plug):
         scale_attr = tgt_mapping.scale
         input_attr = tgt_mapping.input
-        input_type_attr = getattr(tgt_mapping, "input_type", "")
-        input_type_value = getattr(tgt_mapping, "input_type_value", None)
 
         if scale_attr and bn_info.get("scale") is not None:
             try:
@@ -377,13 +361,7 @@ class BumpConverter:
             else:
                 self.log.warn(f"Failed to connect {input_plug} -> {target_mat}.{input_attr}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(input_plug), target_mat))
 
-        if input_type_attr and input_type_value is not None:
-            try:
-                cmds.setAttr(f"{target_mat}.{input_type_attr}", input_type_value)
-                self.log.debug(f"Set {target_mat}.{input_type_attr} = {input_type_value!r}", source=_SOURCE, nodes=(target_mat,))
-            except Exception as exc:
-                self.log.warn(f"Failed to set [{input_type_attr}] on {target_mat}: {exc}", source=_SOURCE, nodes=(target_mat,))
-        elif tgt_mapping.is_normal:
+        if tgt_mapping.is_normal:
             try:
                 cmds.setAttr(f"{target_mat}.{tgt_mapping.is_normal}", tgt_mapping.is_normal_value)
                 self.log.debug(
@@ -411,16 +389,16 @@ class BumpConverter:
             except Exception as exc:
                 self.log.warn(f"Failed to set scale on {bn_node}: {exc}", source=_SOURCE, nodes=(bn_node,))
 
-        if tgt_mapping.source_connection:
-            if self.utils.smart_connect(input_plug, f"{bn_node}.{tgt_mapping.source_connection}", logger=self.log):
+        if tgt_mapping.input:
+            if self.utils.smart_connect(input_plug, f"{bn_node}.{tgt_mapping.input}", logger=self.log):
                 self.log.debug(
-                    f"Connected bump/normal source {input_plug} -> {bn_node}.{tgt_mapping.source_connection}",
+                    f"Connected bump/normal source {input_plug} -> {bn_node}.{tgt_mapping.input}",
                     source=_SOURCE,
                     nodes=(self.utils.node_name_from_plug(input_plug), bn_node),
                 )
             else:
                 self.log.warn(
-                    f"Failed to connect {input_plug} -> {bn_node}.{tgt_mapping.source_connection}",
+                    f"Failed to connect {input_plug} -> {bn_node}.{tgt_mapping.input}",
                     source=_SOURCE,
                     nodes=(self.utils.node_name_from_plug(input_plug), bn_node),
                 )
@@ -446,7 +424,7 @@ class BumpConverter:
             bump_attr = common_config.attr_map.get("normal_bump", "")
             if bump_attr:
                 try:
-                    cmds.connectAttr(f"{bn_node}.{tgt_mapping.target_connection}",
+                    cmds.connectAttr(f"{bn_node}.{tgt_mapping.output}",
                                      f"{target_mat}.{bump_attr}", force=True)
                     self.log.info(
                         f"Bump/Normal: connected {bn_node} -> {target_mat}.{bump_attr}",

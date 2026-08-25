@@ -13,8 +13,8 @@
   "maya": {
     "material": {
       "node_type": "colorCorrect",
-      "target_connection": "outColor",
-      "source_connection": "inColor"
+      "input": "inColor",
+      "output": "outColor"
     },
     "base": {
       "gamma": "",
@@ -31,8 +31,8 @@
   "arnold": {
     "material": {
       "node_type": "aiColorCorrect",
-      "target_connection": "outColor",
-      "source_connection": "input"
+      "input": "input",
+      "output": "outColor"
     },
     "base": {
       "gamma": "gamma",
@@ -49,8 +49,8 @@
   "redshift": {
     "material": {
       "node_type": "RedshiftColorCorrection",
-      "target_connection": "outColor",
-      "source_connection": "input"
+      "input": "input",
+      "output": "outColor"
     },
     "base": {
       "gamma": "gamma",
@@ -67,8 +67,8 @@
   "vray": {
     "material": {
       "node_type": "VRayColorCorrection",
-      "target_connection": "outColor",
-      "source_connection": "texture_map"
+      "input": "texture_map",
+      "output": "outColor"
     },
     "base": {
       "gamma": "",

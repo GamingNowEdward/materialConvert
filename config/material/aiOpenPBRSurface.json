@@ -1,7 +1,6 @@
 {
   "material": {
     "node_type": "aiOpenPBRSurface",
-    "target_connection": "surfaceShader",
     "plugin": "mtoa",
     "short_name": "aiPBR",
     "uiPanel_display_name": "Arnold OpenPBR Surface",

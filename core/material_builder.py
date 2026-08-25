@@ -123,13 +123,23 @@ class MaterialBuilder:
 
         qss_nodes = list(self.ctx._current_build_nodes)
         if use_qss and qss_nodes:
-            qss_name = f"{self.ctx.get_naming()['qss_prefix']}{base_name}"
-            cmds.sets(qss_nodes, name=qss_name)
-            self.log.info(f"Created quick select set {qss_name} with {len(qss_nodes)} node(s)", source=_SOURCE, nodes=tuple(qss_nodes))
+            self._create_qss(m_node, qss_nodes)
 
         cmds.select(m_node)
         self.log.info(f"Built {len(built_channels)} channel(s): {', '.join(built_channels)}", source=_SOURCE, nodes=(m_node,))
         return m_node
+
+    def _create_qss(self, m_node, nodes):
+        """Quick select set named after the (uniquified) material node:
+        ``QS_<m_node>`` — no name conflicts, no stale sets."""
+        qss_name = f"{self.ctx.get_naming()['qss_prefix']}{m_node}"
+        actual = cmds.sets(nodes, name=qss_name)
+        self.log.info(
+            f"Created quick select set {actual} with {len(nodes)} node(s)",
+            source=_SOURCE,
+            nodes=tuple(nodes),
+        )
+        return actual
 
     def _apply_material_prereqs(self, m_node, mat_config):
         from core.prerequisites import apply_prerequisites
@@ -141,8 +151,8 @@ class MaterialBuilder:
         if use_full_chain and cc_config and cc_config.node_type:
             cc = self.ctx.create_node(cc_config.node_type, 'cc', base_name, name_key)
             lyr = self.ctx.build_layered_node(base_name, name_key)
-            self.ctx.connect(tex, "outColor", cc, cc_config.source_connection)
-            self.ctx.connect(cc, cc_config.target_connection, lyr, "inputs[1].color")
+            self.ctx.connect(tex, "outColor", cc, cc_config.input)
+            self.ctx.connect(cc, cc_config.output, lyr, "inputs[1].color")
             self.ctx.connect(lyr, "outColor", m_node, attr_name)
             self.log.debug(f"Built full color chain for {common_attr}: {tex} -> {cc} -> {lyr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, cc, lyr, m_node))
         else:
@@ -235,9 +245,6 @@ class MaterialBuilder:
             if mapping.scale and mapping.default_scale is not None:
                 if cmds.attributeQuery(mapping.scale, node=m_node, exists=True):
                     cmds.setAttr(f"{m_node}.{mapping.scale}", mapping.default_scale)
-            if mapping.input_type and mapping.input_type_value is not None:
-                if cmds.attributeQuery(mapping.input_type, node=m_node, exists=True):
-                    cmds.setAttr(f"{m_node}.{mapping.input_type}", mapping.input_type_value)
             self.log.info(f"Built bump/normal as material attribute: {m_node}.{mapping.input}", source=_SOURCE, nodes=(m_node,))
             return True
 
@@ -246,10 +253,10 @@ class MaterialBuilder:
             cmds.setAttr(f"{bn_node}.{mapping.scale}", mapping.default_scale)
         if mapping.is_normal and mapping.is_normal_value is not None:
             cmds.setAttr(f"{bn_node}.{mapping.is_normal}", mapping.is_normal_value)
-        if mapping.source_connection:
-            self.ctx.connect(tex_nb, mapping.file_source, bn_node, mapping.source_connection)
-        if mapping.target_connection:
-            self.ctx.connect(bn_node, mapping.target_connection, m_node, target_attr)
+        if mapping.input:
+            self.ctx.connect(tex_nb, mapping.file_source, bn_node, mapping.input)
+        if mapping.output:
+            self.ctx.connect(bn_node, mapping.output, m_node, target_attr)
         self.log.info(f"Built bump/normal node {bn_node} -> {m_node}.{target_attr}", source=_SOURCE, nodes=(bn_node, m_node))
         return True
 

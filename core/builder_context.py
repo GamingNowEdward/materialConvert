@@ -8,29 +8,34 @@ from core.logger import get_logger
 _SOURCE = "BuilderContext"
 
 
-def qt_maya_logger(func):
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        log = getattr(self, "log", get_logger())
-        renderer = args[0] if args else "Unknown"
-        start_time = time.time()
-        log.info(f"[START] Building {renderer} Material...", source=_SOURCE)
-        try:
-            result = func(self, *args, **kwargs)
-            duration = time.time() - start_time
-            cmds.inViewMessage(
-                amg=f"Success: Action completed in <color=yellow>{duration:.2f}s</color>",
-                pos="topCenter",
-                fade=True,
-            )
-            log.info(f"[SUCCESS] Execution Time: {duration:.3f}s", source=_SOURCE)
-            return result
-        except Exception as exc:
-            log.error(f"Action Failed: {exc}", source=_SOURCE)
-            from ui import QtWidgets
-            QtWidgets.QMessageBox.critical(self, "Error", f"Operation failed:\n{exc}")
-            raise
-    return wrapper
+def qt_maya_logger(label):
+    """Wrap a builder action with start/success banners and an error dialog.
+
+    ``label`` is the action name shown in the log banner (e.g. "Builder").
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            log = getattr(self, "log", get_logger())
+            start_time = time.time()
+            log.info(f"[START] Building {label} Material...", source=_SOURCE)
+            try:
+                result = func(self, *args, **kwargs)
+                duration = time.time() - start_time
+                cmds.inViewMessage(
+                    amg=f"Success: Action completed in <color=yellow>{duration:.2f}s</color>",
+                    pos="topCenter",
+                    fade=True,
+                )
+                log.info(f"[SUCCESS] Execution Time: {duration:.3f}s", source=_SOURCE)
+                return result
+            except Exception as exc:
+                log.error(f"Action Failed: {exc}", source=_SOURCE)
+                from ui import QtWidgets
+                QtWidgets.QMessageBox.critical(self, "Error", f"Operation failed:\n{exc}")
+                raise
+        return wrapper
+    return decorator
 
 
 DEFAULT_MATERIALS = ["lambert1", "standardSurface1", "particleCloud1"]

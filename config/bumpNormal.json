@@ -2,15 +2,11 @@
   "common": {
     "bump": {
       "scale": "scale",
-      "input": "input",
-      "output": "output",
       "file_source": "outAlpha",
       "default_scale": 0.1
     },
     "normal": {
       "scale": "scale",
-      "input": "input",
-      "output": "output",
       "file_source": "outColor",
       "default_scale": 1.0
     }
@@ -19,8 +15,8 @@
     "bump": {
       "is_material_attribute": false,
       "node_type": "bump2d",
-      "target_connection": "outNormal",
-      "source_connection": "bumpValue",
+      "input": "bumpValue",
+      "output": "outNormal",
       "scale": "bumpDepth",
       "is_normal": "bumpInterp",
       "is_normal_value": 0,
@@ -30,8 +26,8 @@
     "normal": {
       "is_material_attribute": false,
       "node_type": "bump2d",
-      "target_connection": "outNormal",
-      "source_connection": "bumpValue",
+      "input": "bumpValue",
+      "output": "outNormal",
       "scale": "bumpDepth",
       "is_normal": "bumpInterp",
       "is_normal_value": 1,
@@ -43,8 +39,8 @@
     "bump": {
       "is_material_attribute": false,
       "node_type": "aiBump2d",
-      "target_connection": "outValue",
-      "source_connection": "bumpMap",
+      "input": "bumpMap",
+      "output": "outValue",
       "scale": "bumpHeight",
       "file_source": "outAlpha",
       "default_scale": 0.1
@@ -52,8 +48,8 @@
     "normal": {
       "is_material_attribute": false,
       "node_type": "aiNormalMap",
-      "target_connection": "outValue",
-      "source_connection": "input",
+      "input": "input",
+      "output": "outValue",
       "scale": "strength",
       "file_source": "outColor",
       "default_scale": 1.0
@@ -63,8 +59,8 @@
     "bump": {
       "is_material_attribute": false,
       "node_type": "RedshiftBumpMap",
-      "target_connection": "out",
-      "source_connection": "input",
+      "input": "input",
+      "output": "out",
       "scale": "scale",
       "is_normal": "inputType",
       "is_normal_value": 0,
@@ -74,8 +70,8 @@
     "normal": {
       "is_material_attribute": false,
       "node_type": "RedshiftBumpMap",
-      "target_connection": "out",
-      "source_connection": "input",
+      "input": "input",
+      "output": "out",
       "scale": "scale",
       "is_normal": "inputType",
       "is_normal_value": 1,
@@ -86,21 +82,19 @@
   "vray": {
     "bump": {
       "is_material_attribute": true,
-      "node_type": "",
       "scale": "bumpMult",
       "input": "bumpMap",
-      "input_type": "bumpMapType",
-      "input_type_value": 0,
+      "is_normal": "bumpMapType",
+      "is_normal_value": 0,
       "file_source": "outColor",
       "default_scale": 0.1
     },
     "normal": {
       "is_material_attribute": true,
-      "node_type": "",
       "scale": "bumpMult",
       "input": "bumpMap",
-      "input_type": "bumpMapType",
-      "input_type_value": 1,
+      "is_normal": "bumpMapType",
+      "is_normal_value": 1,
       "file_source": "outColor",
       "default_scale": 1.0
     }

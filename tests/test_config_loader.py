@@ -71,15 +71,13 @@ def test_bump_normal_configs_merged_from_common():
     arnold = loader.get_bump_normal_config("arnold")
     assert arnold is not None
     assert arnold.bump and arnold.normal
-    # arnold.bump 未在 JSON 定义 input -> 从 common 段合并
-    assert arnold.bump.input == "input"
+    assert arnold.bump.input == "bumpMap"
     assert arnold.normal.scale == "strength"
     vray = loader.get_bump_normal_config("vray")
     assert vray.bump.is_material_attribute is True
-    # vray 显式定义的值不被 common 覆盖
     assert vray.bump.input == "bumpMap"
-    assert vray.bump.input_type == "bumpMapType"
-    assert vray.bump.input_type_value == 0
+    assert vray.bump.is_normal == "bumpMapType"
+    assert vray.bump.is_normal_value == 0
 
 
 def test_cc_configs_and_identify():
@@ -158,7 +156,7 @@ def test_display_and_renderer_name():
 def test_builder_naming():
     loader = ConfigLoader()
     naming = loader.get_builder_naming()
-    assert naming["qss_prefix"] == "QS_M_"
+    assert naming["qss_prefix"] == "QS_"
     for key in ("material", "p2d", "file", "layered", "ramp", "cc"):
         assert naming["prefix"][key]
     assert len(naming["layered_colors"]) == len(naming["layered_blend_modes"])
@@ -170,9 +168,9 @@ def _write_temp_config(tmp_path):
     (material_dir / "common.json").write_text(json.dumps({}), encoding="utf-8")
     bn = {
         "common": {
-            "bump": {"scale": "scale", "input": "input",
+            "bump": {"scale": "scale",
                      "file_source": "outAlpha", "default_scale": 0.1},
-            "normal": {"scale": "scale", "input": "input",
+            "normal": {"scale": "scale",
                        "file_source": "outColor", "default_scale": 1.0},
         },
         "mytest": {
@@ -198,7 +196,7 @@ def test_renderer_config_common_merge(tmp_path, monkeypatch):
     assert bn.bump.input == "customInput"
     assert bn.bump.scale == "scale"
     assert bn.normal.scale == "scale"
-    assert bn.normal.input == "input"
+    assert bn.normal.input == ""
     cc = loader.get_color_correction_config("mytest")
     assert cc.node_type == "TestCC"
     assert cc.gamma == "gamma"

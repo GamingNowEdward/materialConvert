@@ -1,7 +1,6 @@
 {
   "material": {
     "node_type": "RedshiftOpenPBRMaterial",
-    "target_connection": "surfaceShader",
     "plugin": "redshift4maya",
     "short_name": "rsPBR",
     "uiPanel_display_name": "Redshift OpenPBR",

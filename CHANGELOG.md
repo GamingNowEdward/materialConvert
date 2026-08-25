@@ -20,6 +20,17 @@
 - `node_utils.node_name_from_plug()` crashed with `AttributeError` when handed `None` (reached via the `smart_connect` empty-plug warning path); it now tolerates falsy input
 - `dropped_critical` was not incremented when a non-critical write evicted a critical record from the middle of the ring buffer (and was miscounted in the reverse case)
 
+### Refactored
+- `bumpNormal.json` / `colorCorrection.json`: connection fields unified to `input`/`output` (replacing `source_connection`/`target_connection`); vray `input_type`/`input_type_value` unified to `is_normal`/`is_normal_value` and `node_type: ""` removed; dead `input`/`output` keys without consumers removed from the `common` section of `bumpNormal.json`
+- Removed unconsumed field: `material.target_connection` in `config/material/*.json`
+- `config/builder_naming.json`: fixed disp prefix casing (`disP_` → `disp_`)
+- Synced: `config_loader.py` (NodeMapping/ColorCorrectionConfig fields), `bump.py` (removed input_type dual branch), `material_builder.py`, `config_validator.py`, `node_utils.py`, `cc.py`, `test_config_loader.py`
+- Docs: `AGENTS.md` gained the unified `bumpNormal.json` schema and the renderer tex-node extension-point notes
+
+### Fixed
+- Builder banner log no longer shows a misleading `Unknown`: `qt_maya_logger` now takes a required `label` argument; call sites annotate the action name (Builder / P2D File)
+- Quick select sets are now named after the uniquified material node (`QS_` + node name): no longer relies on Maya auto-renaming, the log matches the scene, and set names are deterministic across repeated builds of the same material name
+
 ## 2026-08-23
 
 ### Added

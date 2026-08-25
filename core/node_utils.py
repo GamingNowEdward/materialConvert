@@ -189,16 +189,16 @@ def collect_cc_chain_params(cc_node, cc_config, logger=None):
             log.warn(f"Failed to read CC {cc_node}.{attr_name}: {exc}", source=_SOURCE, nodes=(cc_node,))
 
     input_plug = None
-    if cc_config.source_connection:
+    if cc_config.input:
         try:
-            conns = cmds.listConnections(f"{cc_node}.{cc_config.source_connection}", plugs=True, source=True) or []
+            conns = cmds.listConnections(f"{cc_node}.{cc_config.input}", plugs=True, source=True) or []
             if conns:
                 input_plug = conns[0]
                 log.debug(f"CC {cc_node} input connection: {input_plug}", source=_SOURCE, nodes=(cc_node,))
             else:
-                log.debug(f"CC {cc_node} has no input connection on {cc_config.source_connection}", source=_SOURCE, nodes=(cc_node,))
+                log.debug(f"CC {cc_node} has no input connection on {cc_config.input}", source=_SOURCE, nodes=(cc_node,))
         except Exception as exc:
-            log.warn(f"Failed to query CC input on {cc_node}.{cc_config.source_connection}: {exc}", source=_SOURCE, nodes=(cc_node,))
+            log.warn(f"Failed to query CC input on {cc_node}.{cc_config.input}: {exc}", source=_SOURCE, nodes=(cc_node,))
 
     return params, input_plug
 

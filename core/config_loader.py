@@ -13,14 +13,11 @@ class NodeMapping:
         self.renderer = renderer
         self.is_material_attribute = data.get("is_material_attribute", False)
         self.node_type = data.get("node_type", "")
-        self.target_connection = data.get("target_connection", "")
-        self.source_connection = data.get("source_connection", "")
-        self.scale = data.get("scale", "")
         self.input = data.get("input", "")
+        self.output = data.get("output", "")
+        self.scale = data.get("scale", "")
         self.is_normal = data.get("is_normal", "")
         self.is_normal_value = data.get("is_normal_value", None)
-        self.input_type = data.get("input_type", "")
-        self.input_type_value = data.get("input_type_value", None)
         self.file_source = data.get("file_source", "outColor")
         self.default_scale = data.get("default_scale", None)
 
@@ -42,8 +39,8 @@ class ColorCorrectionConfig:
         color_data = data.get("color", {})
 
         self.node_type = mat_data.get("node_type", "")
-        self.target_connection = mat_data.get("target_connection", "")
-        self.source_connection = mat_data.get("source_connection", "")
+        self.input = mat_data.get("input", "")
+        self.output = mat_data.get("output", "")
 
         self.gamma = base_data.get("gamma", "")
         self.contrast = base_data.get("contrast", "")
@@ -60,7 +57,6 @@ class MaterialConfig:
         mat_data = data.get("material", {})
         self.filename = filename
         self.node_type = mat_data.get("node_type", "")
-        self.target_connection = mat_data.get("target_connection", "")
         self.short_name = mat_data.get("short_name", "")
         self.uiPanel_display_name = mat_data.get("uiPanel_display_name", self.node_type)
         self.renderer = mat_data.get("renderer", "unknown")

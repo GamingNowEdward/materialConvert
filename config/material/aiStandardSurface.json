@@ -1,7 +1,6 @@
 {
   "material": {
     "node_type": "aiStandardSurface",
-    "target_connection": "surfaceShader",
     "plugin": "mtoa",
     "short_name": "aiStd",
     "uiPanel_display_name": "Arnold Standard Surface",

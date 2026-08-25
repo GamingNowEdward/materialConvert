@@ -67,6 +67,37 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 ### 新增渲染器材质
 只需在 `config/material/` 目录下添加对应的 JSON 文件，包含 `node_type`、`uiPanel_display_name`、`renderer` 和属性映射。无需修改任何 Python 代码，UI 下拉框和转换逻辑自动支持。
 
+### `bumpNormal.json` 统一 Schema
+每个渲染器的 bump/normal 段使用**统一字段**（按数据流方向排列）：
+
+| 字段 | 说明 |
+|---|---|
+| `is_material_attribute` | `false`=独立节点模式（maya/arnold/redshift）；`true`=材质内嵌模式（V-Ray，bump 为材质自身属性） |
+| `node_type` | 独立节点模式的节点类型；材质内嵌模式省略 |
+| `input` | 接收上游贴图的输入属性（统一后的命名，取代旧 `source_connection`） |
+| `output` | 连向下游材质的输出属性（取代旧 `target_connection`） |
+| `scale` | 强度属性 |
+| `is_normal` / `is_normal_value` | 可选，必须成对；模式开关属性及 normal 模式的取值（Maya `bumpInterp`、Redshift `inputType`、V-Ray `bumpMapType` 均为 0=bump/1=normal） |
+| `file_source` | 贴图节点输出属性（默认 `outColor`） |
+| `default_scale` | 构建时设置的默认强度 |
+
+`common` 段仅作缺失字段的默认值兜底。**新增字段必须接入消费代码**，禁止添加无消费方的键（`ConfigValidator` 会校验属性拼写，但不会校验字段本身是否被消费——接入渲染器时对照上表）。
+
+### 已知扩展点：渲染器纹理节点（tex node）
+当前构建路径（`MaterialBuilder.make_tex`）固定创建 Maya `file` 节点 + p2d 连接。若未来渲染器的 bump/normal 输入要求使用其自带的 tex node（而非 file）：
+
+- **转换方向（converter）已天然适配**：采集读取上游 `input` plug、`smart_connect` 通用回退（outColor→outAlpha），不依赖 file 节点
+- **构建方向需要扩展**：给 bump/normal 段增加可选字段
+
+| 字段 | 缺省 | 说明 |
+|---|---|---|
+| `texture_node` | `"file"` | 输入源节点类型（如 `RedshiftTexture`） |
+| `texture_path_attr` | `"fileTextureName"` | 设置贴图路径的属性名 |
+| `texture_use_p2d` | `true` | 渲染器 tex node 通常自带 UV，可设 `false` |
+| `texture_out` | `"outColor"` | tex node 的输出属性，供转换回读 |
+
+实施点：`make_tex` 参数化 `node_type`/`path_attr`/`use_p2d`；`alphaIsLuminance` 与 p2d 连接仅对 `file` 节点生效。**状态：未实施**，作为已知扩展点记录；实施后此小节应移除。
+
 ## 关键规则
 
 ### 日志规则

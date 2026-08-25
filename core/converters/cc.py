@@ -77,11 +77,11 @@ class CCConverter:
 
         cc_out_dests = []
         try:
-            cc_out_dests = cmds.listConnections(f"{h_node}.{cc_config.target_connection}",
+            cc_out_dests = cmds.listConnections(f"{h_node}.{cc_config.output}",
                                                 plugs=True, source=False) or []
         except Exception as exc:
             self.log.warn(
-                f"Failed to list CC destinations on {h_node}.{cc_config.target_connection}: {exc}",
+                f"Failed to list CC destinations on {h_node}.{cc_config.output}: {exc}",
                 source=_SOURCE,
                 nodes=(h_node,),
             )
@@ -119,10 +119,10 @@ class CCConverter:
             self.utils.set_cc_params(cc_node, cc_entry["params"], cc_config, logger=self.log)
 
             input_plug = cc_entry.get("input_plug")
-            if input_plug and cc_config.source_connection:
-                if not self.utils.smart_connect(input_plug, f"{cc_node}.{cc_config.source_connection}", logger=self.log):
+            if input_plug and cc_config.input:
+                if not self.utils.smart_connect(input_plug, f"{cc_node}.{cc_config.input}", logger=self.log):
                     self.log.warn(
-                        f"Failed to connect CC input {input_plug} -> {cc_node}.{cc_config.source_connection}",
+                        f"Failed to connect CC input {input_plug} -> {cc_node}.{cc_config.input}",
                         source=_SOURCE,
                         nodes=(cc_node, self.utils.node_name_from_plug(input_plug)),
                     )
@@ -151,13 +151,13 @@ class CCConverter:
             self._restore_shared_source_chain(cc_entry)
             for dest in cc_out_dests:
                 try:
-                    cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", dest, force=True)
+                    cmds.connectAttr(f"{cc_node}.{cc_config.output}", dest, force=True)
                     self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest_node))
                 except Exception as exc:
                     self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest_node))
         else:
             try:
-                cmds.connectAttr(f"{cc_node}.{cc_config.target_connection}", target_plug, force=True)
+                cmds.connectAttr(f"{cc_node}.{cc_config.output}", target_plug, force=True)
                 self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
             except Exception as exc:
                 self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
@@ -184,7 +184,7 @@ class CCConverter:
             self.log.warn(f"Source CC node {src_cc_name} is not a known CC type", source=_SOURCE, nodes=(src_cc_name,))
             return
         src_cfg = self.config.get_color_correction_config(src_renderer)
-        if not src_cfg or not src_cfg.target_connection:
+        if not src_cfg or not src_cfg.output:
             self.log.warn(f"No source CC config for {src_cc_name}", source=_SOURCE, nodes=(src_cc_name,))
             return
 
@@ -206,7 +206,7 @@ class CCConverter:
                 continue
             if self.config.get_material_config(dest_type):
                 try:
-                    cmds.connectAttr(f"{src_cc_name}.{src_cfg.target_connection}", dest_plug, force=True)
+                    cmds.connectAttr(f"{src_cc_name}.{src_cfg.output}", dest_plug, force=True)
                     self.log.info(f"Restored source CC chain to {dest_plug}", source=_SOURCE, nodes=(src_cc_name, dest_node))
                 except Exception as exc:
                     self.log.warn(f"Failed to restore source chain to {dest_plug}: {exc}", source=_SOURCE, nodes=(src_cc_name, dest_node))

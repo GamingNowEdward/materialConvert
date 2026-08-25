@@ -1,7 +1,6 @@
 {
   "material": {
     "node_type": "RedshiftMaterial",
-    "target_connection": "surfaceShader",
     "plugin": "redshift4maya",
     "prerequisites": {
       "refl_brdf": {

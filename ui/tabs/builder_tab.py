@@ -137,7 +137,7 @@ class BuilderTab:
             line_edit.setText(file_path)
             self.log.debug(f"Selected texture path: {file_path}", source=_SOURCE)
 
-    @qt_maya_logger
+    @qt_maya_logger("Builder")
     def _create_material_logic(self):
         node_type = self.mat_combo.currentData()
         if not node_type:
@@ -172,7 +172,7 @@ class BuilderTab:
                                   use_qss=self.cb_qss.isChecked(),
                                   channel_options=channel_options)
 
-    @qt_maya_logger
+    @qt_maya_logger("P2D File")
     def _create_file_from_p2d(self):
         import maya.cmds as cmds
         sel = cmds.ls(selection=True)
