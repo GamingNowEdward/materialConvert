@@ -4,6 +4,8 @@
 
 **Conversion Specification:** [English](docs/CONVERSION_SPEC.md) | [简体中文](docs/CONVERSION_SPEC_zh.md)
 
+**Renderer JSON Config Guide:** [English](docs/CONFIG_GUIDE.md) | [简体中文](docs/CONFIG_GUIDE_zh.md)
+
 Maya toolkit for PBR material conversion, building, and scene management across Arnold / Redshift / V-Ray.
 
 ## Installation
@@ -136,6 +138,8 @@ materialConvert/
 │   ├── AGENTS.md                    # AI Agent development guide
 │   ├── CONVERSION_SPEC.md           # Full conversion specification
 │   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
+│   ├── CONFIG_GUIDE.md              # Renderer JSON config authoring guide
+│   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文版）
 │   └── README_zh.md                 # 中文版 README
 ├── main.py                          # Entry script
 ├── copy_launch.bat                  # Double-click to copy launch command
@@ -148,6 +152,8 @@ materialConvert/
 
 - [CONVERSION_SPEC.md](docs/CONVERSION_SPEC.md) — Full conversion specification
 - [CONVERSION_SPEC_zh.md](docs/CONVERSION_SPEC_zh.md) — 中文版转换规格说明
+- [CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md) — Renderer JSON config authoring guide
+- [CONFIG_GUIDE_zh.md](docs/CONFIG_GUIDE_zh.md) — 渲染器 JSON 配置编写指南（中文版）
 
 ## License
 

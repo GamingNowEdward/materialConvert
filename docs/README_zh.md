@@ -4,6 +4,8 @@
 
 **转换规格说明：** [简体中文](CONVERSION_SPEC_zh.md) | [English](CONVERSION_SPEC.md)
 
+**渲染器 JSON 配置指南：** [简体中文](CONFIG_GUIDE_zh.md) | [English](CONFIG_GUIDE.md)
+
 Maya 工具包，支持 Arnold / Redshift / V-Ray 之间的 PBR 材质转换、构建和场景管理。
 
 ## 安装
@@ -135,6 +137,8 @@ materialConvert/
 │   ├── AGENTS.md                    # AI Agent 开发指南
 │   ├── CONVERSION_SPEC.md           # 转换规格说明（英文）
 │   ├── CONVERSION_SPEC_zh.md        # 转换规格说明（中文）
+│   ├── CONFIG_GUIDE.md              # 渲染器 JSON 配置编写指南（英文）
+│   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文）
 │   └── README_zh.md                 # 本文件
 ├── main.py                          # 入口脚本
 ├── copy_launch.bat                  # 双击复制启动命令
@@ -147,6 +151,8 @@ materialConvert/
 
 - [CONVERSION_SPEC.md](CONVERSION_SPEC.md) — 转换规格说明（英文）
 - [CONVERSION_SPEC_zh.md](CONVERSION_SPEC_zh.md) — 转换规格说明（中文）
+- [CONFIG_GUIDE.md](CONFIG_GUIDE.md) — 渲染器 JSON 配置编写指南（英文）
+- [CONFIG_GUIDE_zh.md](CONFIG_GUIDE_zh.md) — 渲染器 JSON 配置编写指南（中文）
 
 ## License
 
