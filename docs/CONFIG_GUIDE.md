@@ -4,7 +4,7 @@
 
 ## Overview
 
-This tool is **config-driven**: all renderer mappings live in JSON files under `config/`, with zero hardcoded attribute names in Python code. Adding support for a new renderer material = **adding JSON files, no business code changes required**.
+The tool's **attribute mapping is config-driven**: all renderer attribute mappings are defined in JSON files under `config/`, with zero hardcoded attribute names in Python code (conversion behavior itself is implemented in code). Adding support for a new renderer material = **adding JSON files, no business code changes required**.
 
 **Data flow:**
 
@@ -76,7 +76,7 @@ Create a new JSON file under `config/material/`. **The file name is not used for
 | Field | Required | Description |
 |---|---|---|
 | `node_type` | ✅ | Maya node type name, **must exactly match the real type (case-sensitive)**. It is also the primary key of the whole config system: conversion target selection, material identification, and the Builder dropdown all rely on it |
-| `renderer` | ✅ | Renderer identifier, must be one of `"arnold"` / `"redshift"` / `"vray"`. Used to look up sections in `bumpNormal.json` / `colorCorrection.json`, and for per-renderer logic such as Alpha Is Luminance |
+| `renderer` | ✅ | Renderer lookup key. Built-in values are `"arnold"`, `"redshift"`, and `"vray"`; custom renderer keys are allowed. Looks up sections in `bumpNormal.json` / `colorCorrection.json` and drives per-renderer logic such as Alpha Is Luminance |
 | `uiPanel_display_name` | ✅ | Display name in UI dropdowns (falls back to `node_type` if absent) |
 | `short_name` | Recommended | Naming suffix for converted materials: `{source_material}_{short_name}` (defaults to `"converted"`). Existing conventions: `aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | Recommended | Renderer plugin module name (e.g. `mtoa` / `redshift4maya` / `vrayformaya`). Used only by Debug validation: checks plugin load state; if not installed, the whole renderer group is SKIPped instead of misreported as spelling errors |
@@ -187,7 +187,7 @@ Copy and modify this template directly; placeholders are marked `<...>`:
     },
     "short_name": "<suffix>",
     "uiPanel_display_name": "<Display Name>",
-    "renderer": "<arnold|redshift|vray>"
+    "renderer": "<rendererKey>"
   },
   "base": {
     "baseColor": "<attr or empty string>",
@@ -271,7 +271,7 @@ Each renderer's `bump` / `normal` sections share one **unified field schema** (o
 
 | Field | Description |
 |---|---|
-| `is_material_attribute` | `false` = standalone node mode (maya/arnold/redshift); `true` = embedded mode (V-Ray, bump is an attribute of the material itself) |
+| `is_material_attribute` | `false` = standalone node mode (maya/arnold/redshift); `true` = material-embedded mode; no dedicated bump/normal node is created (V-Ray) |
 | `node_type` | Node type for standalone mode; omitted in embedded mode |
 | `input` | Input attribute receiving the upstream texture |
 | `output` | Output attribute connecting downstream to the material; omitted in embedded mode |
@@ -440,7 +440,7 @@ E.g. bump nodes `{source}_{short}{Bump|Nrm}`, CC nodes `{sourceCC}_{short}`, dis
 Complete list for adding a new renderer material type:
 
 - [ ] Verified the real Maya node type name via `cmds.createNode` (case-sensitive)
-- [ ] `config/material/<NodeType>.json`: `material` block contains `node_type` / `renderer` (one of arnold/redshift/vray) / `uiPanel_display_name`
+- [ ] `config/material/<NodeType>.json`: `material` block contains `node_type` / `renderer` (built-in: arnold/redshift/vray) / `uiPanel_display_name`
 - [ ] Attribute section keys match the universal attribute table exactly; unsupported entries use `""` or omit the section
 - [ ] Attributes needing toggles/defaults have prerequisites configured (material-level or attribute-level)
 - [ ] `displacement` block filled correctly per sentinel semantics (or confirmed unsupported)

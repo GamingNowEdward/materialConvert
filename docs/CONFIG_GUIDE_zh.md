@@ -4,7 +4,7 @@
 
 ## 概述
 
-本工具采用**配置驱动**架构：所有渲染器映射全部定义在 `config/` 目录的 JSON 文件中，Python 代码中零硬编码属性名。新增渲染器材质支持 = **添加 JSON 文件，不需要修改任何业务代码**。
+本工具的**属性映射采用配置驱动**：所有渲染器属性映射全部定义在 `config/` 目录的 JSON 文件中，Python 代码中零硬编码属性名（转换行为本身由代码实现）。新增渲染器材质支持 = **添加 JSON 文件，不需要修改任何业务代码**。
 
 **数据流：**
 
@@ -76,7 +76,7 @@
 | 字段 | 必填 | 说明 |
 |---|---|---|
 | `node_type` | ✅ | Maya 节点类型名，**必须与实际类型精确一致（区分大小写）**。同时是整个配置体系的主键：转换目标选择、材质识别、Builder 下拉框都以此为准 |
-| `renderer` | ✅ | 渲染器归属标识，取值必须是 `"arnold"` / `"redshift"` / `"vray"`。用于在 `bumpNormal.json` / `colorCorrection.json` 中查找对应段，以及 Alpha Is Luminance 等按渲染器的特殊逻辑 |
+| `renderer` | ✅ | 渲染器查找键。内置取值为 `"arnold"`、`"redshift"`、`"vray"`；也允许自定义键。用于在 `bumpNormal.json` / `colorCorrection.json` 中查找对应段，以及 Alpha Is Luminance 等按渲染器的特殊逻辑 |
 | `uiPanel_display_name` | ✅ | UI 下拉框显示名称（缺省回落到 `node_type`） |
 | `short_name` | 建议 | 转换后新材质的命名后缀：`{源材质名}_{short_name}`（缺省用 `"converted"`）。现有约定：`aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | 建议 | 渲染器插件模块名（如 `mtoa` / `redshift4maya` / `vrayformaya`）。仅 Debug 校验使用：检测插件加载状态，未安装则该渲染器整组 SKIP，不会误报拼写错误 |
@@ -187,7 +187,7 @@
     },
     "short_name": "<suffix>",
     "uiPanel_display_name": "<Display Name>",
-    "renderer": "<arnold|redshift|vray>"
+    "renderer": "<rendererKey>"
   },
   "base": {
     "baseColor": "<attr or empty string>",
@@ -271,7 +271,7 @@ V-Ray 的 base/specular 段（注意属性名的差异与不支持项的处理�
 
 | 字段 | 说明 |
 |---|---|
-| `is_material_attribute` | `false` = 独立节点模式（maya/arnold/redshift）；`true` = 材质内嵌模式（V-Ray，凹凸是材质自身的属性） |
+| `is_material_attribute` | `false` = 独立节点模式（maya/arnold/redshift）；`true` = 材质内嵌模式；不创建专用凹凸/法线节点（V-Ray） |
 | `node_type` | 独立节点模式的节点类型；材质内嵌模式省略 |
 | `input` | 接收上游贴图的输入属性 |
 | `output` | 连向下游材质的输出属性；内嵌模式省略 |
@@ -440,7 +440,7 @@ arnold → ai    redshift → rs    vray → vray
 新增一个渲染器材质类型的完整清单：
 
 - [ ] 已用 `cmds.createNode` 验证 Maya 实际节点类型名（区分大小写）
-- [ ] `config/material/<NodeType>.json`：`material` 块含 `node_type` / `renderer`（arnold/redshift/vray 之一）/ `uiPanel_display_name`
+- [ ] `config/material/<NodeType>.json`：`material` 块含 `node_type` / `renderer`（内置：arnold/redshift/vray）/ `uiPanel_display_name`
 - [ ] 属性段的键与通用属性总表完全一致；不支持项写 `""` 或整段省略
 - [ ] 需要开关/默认值的属性已配置 prerequisites（材质级或属性级）
 - [ ] `displacement` 块已按哨兵值语义正确填写（或确认不支持）
