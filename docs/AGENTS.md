@@ -46,6 +46,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
 - 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页：Converter / Builder / Batch Builder / Node Tools / Log）
+- 操作反馈：`ui/feedback.py` — `qt_maya_logger(label)` 操作反馈装饰器（START/成功横幅 + 错误弹窗）。**所有反馈均为 best-effort**：logger / 弹窗 / 横幅任一环节失败都不能改变业务控制流——logger 失败回退 `_report_terminal`（stderr 通道，不依赖 logger/UI/Maya），弹窗失败记录 WARN；原始异常始终重新抛出。core 层禁止 import ui 包，反馈装饰器只能放 UI 层
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
 - Builder 配置：**复用 Convert 配置体系**（`config/material/*.json` 的 `node_type`/`plugin`/属性映射 + `bumpNormal.json` + `colorCorrection.json`）+ `config/builder_naming.json`（命名约定）。无独立渲染器规格文件，新增材质即自动出现在 Builder 下拉框
@@ -102,6 +103,7 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 
 ### 日志规则
 - 所有 `except` 必须使用 `as exc` 并写入 logger（至少 WARN）；禁止 `except: pass`、静默 early return、静默 fallback。
+- 反馈链防护（`ui/feedback.py`）：日志/弹窗/横幅等反馈环节自身失败时不得掩盖原始异常——logger 失败回退 `_report_terminal`（stderr，永不假设 logger 可靠），弹窗失败记录 WARN（此时 logger 未失败，假设成立）；反馈永远不能改变业务控制流，`raise` 必须始终执行。
 - core 业务代码禁止直接 `print()` 和 `cmds.warning()`，统一写入 `core.logger.get_logger()`。
 - UI 日志只通过 `ui/log_panel.py` 的 `LogViewer.drain()` 单消费者拉取；Log 标签页隐藏时暂停拉取，切回时一次性补拉（必要时整体重同步）。
 - 默认可见级别为 ERROR/WARN/SKIP/INFO；属性级细节用 DEBUG（默认隐藏，用户可勾选）。

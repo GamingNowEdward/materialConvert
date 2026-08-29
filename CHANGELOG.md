@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-30
+
+### Fixed
+- Builder 操作失败时的错误处理链二次异常：`qt_maya_logger` 把非 QWidget 的 `BuilderTab` 实例传给 `QMessageBox.critical(parent, ...)`，必然抛 `TypeError`，且在 `raise` 之前逃逸——原始异常 traceback 被掩盖，日志与弹窗反馈全部失效
+- 错误反馈重构为 best-effort：logger / 弹窗 / 横幅任一环节失败都不再改变业务控制流——logger 失败回退到 stderr（`_report_terminal`，不依赖 logger/UI/Maya），弹窗失败记录 WARN；所有路径仍重新抛出原始异常。START / SUCCESS 日志与 inViewMessage 横幅同样防护
+
+### Refactored
+- `qt_maya_logger` 从 `core/builder_context.py` 迁移到 `ui/feedback.py`（操作反馈属 UI 层职责）：`core.builder_context` 恢复零 UI 依赖，可在无 UI/PySide 环境下独立 import（新增守护测试）
+- `QMessageBox.critical` parent 改为 `None`，消除对调用方实例类型的隐式依赖
+- 新增测试：`tests/test_builder_context.py`（8 个）、`tests/test_feedback.py`（9 个，错误链全路径：业务异常 / 弹窗失败 / logger 失败 / START 与成功路径反馈失败）
+
 ## 2026-08-25
 
 ### Added

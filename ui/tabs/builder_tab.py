@@ -1,5 +1,6 @@
 from ui import QtWidgets
-from core.builder_context import qt_maya_logger, BuilderContext
+from ui.feedback import qt_maya_logger
+from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.material_builder import MaterialBuilder
 from core.config_loader import ConfigLoader
