@@ -251,8 +251,9 @@ class MaterialBuilder:
         bn_node = self.ctx.create_node(mapping.node_type, nb_key, base_name)
         if mapping.scale and mapping.default_scale is not None:
             cmds.setAttr(f"{bn_node}.{mapping.scale}", mapping.default_scale)
-        if mapping.is_normal and mapping.is_normal_value is not None:
-            cmds.setAttr(f"{bn_node}.{mapping.is_normal}", mapping.is_normal_value)
+        mode_val = mapping.effective_mode_value()
+        if mapping.is_normal and mode_val is not None:
+            cmds.setAttr(f"{bn_node}.{mapping.is_normal}", mode_val)
         if mapping.input:
             self.ctx.connect(tex_nb, mapping.file_source, bn_node, mapping.input)
         if mapping.output:

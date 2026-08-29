@@ -276,7 +276,7 @@ Each renderer's `bump` / `normal` sections share one **unified field schema** (o
 | `input` | Input attribute receiving the upstream texture |
 | `output` | Output attribute connecting downstream to the material; omitted in embedded mode |
 | `scale` | Strength attribute |
-| `is_normal` / `is_normal_value` | Optional, **must appear as a pair**; mode-switch attribute and its value in normal mode (Maya `bumpInterp`, Redshift `inputType`, V-Ray `bumpMapType` are all 0=bump / 1=normal) |
+| `is_normal` / `is_normal_value` | Optional, **must appear as a pair**; mode-switch attribute and its value(s) in normal mode. `is_normal_value` may be a scalar or an array (an array means every listed value is a normal mode; the first element is written when enabling the mode). Maya `bumpInterp`: 0=Bump, 1=Tangent Space Normals, 2=Object Space Normals (normal section uses `[1, 2]`); Redshift `inputType`, V-Ray `bumpMapType`: 0=bump / 1=normal |
 | `file_source` | Texture node output attribute (default `outColor`) |
 | `default_scale` | Default strength applied by the Builder |
 

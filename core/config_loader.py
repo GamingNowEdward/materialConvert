@@ -21,6 +21,26 @@ class NodeMapping:
         self.file_source = data.get("file_source", "outColor")
         self.default_scale = data.get("default_scale", None)
 
+    def matches_mode_value(self, actual):
+        """Whether an is_normal switch value matches this mapping's mode value(s).
+
+        ``is_normal_value`` may be a scalar (Redshift ``inputType``, V-Ray
+        ``bumpMapType``) or a list (Maya ``bumpInterp``: 1=Tangent Space
+        Normals, 2=Object Space Normals are both normal modes).
+        """
+        value = self.is_normal_value
+        if isinstance(value, (list, tuple)):
+            return actual in value
+        return actual == value
+
+    def effective_mode_value(self):
+        """Concrete value to write when enabling this mode: the scalar itself,
+        or the first element of a list (the preferred mode variant)."""
+        value = self.is_normal_value
+        if isinstance(value, (list, tuple)):
+            return value[0] if value else None
+        return value
+
 
 class BumpNormalConfig:
     def __init__(self, data, renderer):

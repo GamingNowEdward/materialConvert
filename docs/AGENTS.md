@@ -78,7 +78,7 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 | `input` | 接收上游贴图的输入属性（统一后的命名，取代旧 `source_connection`） |
 | `output` | 连向下游材质的输出属性（取代旧 `target_connection`） |
 | `scale` | 强度属性 |
-| `is_normal` / `is_normal_value` | 可选，必须成对；模式开关属性及 normal 模式的取值（Maya `bumpInterp`、Redshift `inputType`、V-Ray `bumpMapType` 均为 0=bump/1=normal） |
+| `is_normal` / `is_normal_value` | 可选，必须成对；模式开关属性及 normal 模式的取值。`is_normal_value` 可为标量或数组（数组表示多个取值均为 normal 模式，写入时取第一个元素）。Maya `bumpInterp`：0=Bump、1=Tangent Space Normals、2=Object Space Normals（normal 段配置 `[1, 2]`）；Redshift `inputType`、V-Ray `bumpMapType`：0=bump / 1=normal |
 | `file_source` | 贴图节点输出属性（默认 `outColor`） |
 | `default_scale` | 构建时设置的默认强度 |
 

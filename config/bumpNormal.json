@@ -30,7 +30,7 @@
       "output": "outNormal",
       "scale": "bumpDepth",
       "is_normal": "bumpInterp",
-      "is_normal_value": 1,
+      "is_normal_value": [1, 2],
       "file_source": "outColor",
       "default_scale": 1.0
     }
