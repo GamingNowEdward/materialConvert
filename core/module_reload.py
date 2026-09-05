@@ -17,23 +17,20 @@ import sys
 def is_project_module(mod, root):
     """Return whether *mod* physically lives under *root*.
 
-    Modules without an own ``__file__`` (builtins, namespace packages,
+    Modules without an own string ``__file__`` (builtins, namespace packages,
     ``None``) are never considered project modules, even when their name
-    suggests otherwise.
+    suggests otherwise.  The check is intentionally exception-free: "not ours"
+    is a normal outcome here, not an error condition to log.
     """
     if mod is None:
         return False
-    try:
-        path = getattr(mod, "__file__", None)
-    except Exception:
+    path = getattr(mod, "__file__", None)
+    if not isinstance(path, str) or not path:
         return False
-    if not path:
+    if not isinstance(root, str) or not root:
         return False
-    try:
-        module_path = os.path.normcase(os.path.abspath(path))
-        root_path = os.path.normcase(os.path.abspath(root))
-    except Exception:
-        return False
+    module_path = os.path.normcase(os.path.abspath(path))
+    root_path = os.path.normcase(os.path.abspath(root))
     return module_path == root_path or module_path.startswith(root_path + os.sep)
 
 
