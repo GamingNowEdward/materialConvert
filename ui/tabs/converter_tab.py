@@ -4,6 +4,7 @@ import maya.cmds as cmds
 from core.config_loader import ConfigLoader
 from core.converter import MaterialConverter
 from core.logger import get_logger
+from core.results import summarize_results
 import core.node_utils as node_utils
 
 _SOURCE = "ConverterTab"
@@ -165,31 +166,29 @@ class ConverterTab:
         self.progress_bar.setVisible(True)
         QtWidgets.QApplication.processEvents()
 
-        results = self.converter_obj.convert_all(self.current_materials, target_node_type)
-
-        converted = 0
-        skipped = 0
-        failed = 0
-
-        for i, r in enumerate(results):
-            if (i + 1) % 5 == 0 or i == total - 1:
-                self.progress_bar.setValue(i + 1)
+        def _on_progress(done, total_count, result):
+            # Throttle repaints: roughly every 5 materials and always the last one.
+            if done == total_count or done % 5 == 0:
+                self.progress_bar.setValue(done)
                 QtWidgets.QApplication.processEvents()
-            if r.get("skipped"):
-                skipped += 1
-            elif r.get("success"):
-                converted += 1
-            else:
-                failed += 1
 
-        summary = f"DONE: {converted} converted, {skipped} skipped"
-        if failed:
-            summary += f", {failed} failed"
+        results = self.converter_obj.convert_all(
+            self.current_materials, target_node_type, on_progress=_on_progress
+        )
+
+        counts = summarize_results(results)
+
+        summary = f"DONE: {counts['converted']} converted, {counts['skipped']} skipped, {counts['failed']} failed"
+        if counts["unwired"]:
+            summary += f" ({counts['unwired']} created but NOT wired to any shading engine)"
+        if counts["partial_wired"]:
+            summary += f" ({counts['partial_wired']} wired only partially)"
         self.log.info(f"--- {summary} ---", source=_SOURCE)
 
+        self.progress_bar.setValue(total)
         self.progress_bar.setVisible(False)
 
-        new_mats = [r["new_material"] for r in results if r.get("success") and r.get("new_material")]
+        new_mats = [r.new_material for r in results if r.converted and r.new_material]
         if new_mats:
             try:
                 cmds.select(new_mats)

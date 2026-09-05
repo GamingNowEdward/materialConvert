@@ -291,6 +291,10 @@ file → 新CC → layeredTexture → 目标材质
 
 Arnold ↔ V-Ray 互转时不创建置换节点（跳过）。
 
+### 4.6 多 ShadingEngine 置换
+
+置换挂在 **shadingEngine** 上而不是材质上。当一个材质同时驱动多个 SG 时，转换现在**按 SG 逐一执行**：转换器枚举源材质驱动的全部 `shadingEngine` 并分别转换其置换。共享同一份源置换（相同纹理插头 + scale）的 SG 复用同一个目标置换节点；各自独立置换的 SG 分别获得转换后的节点。
+
 ---
 
 ## 五、节点创建与 Hypershade 注册
@@ -331,5 +335,11 @@ UI 支持同时批量转换多个材质：
 3. 已是目标类型的材质自动跳过
 4. 其余材质依次转换
 5. 转换完成后自动选中新创建的材质
+
+**结果语义**（见 `core/results.py`）：每个材质产出一个 `ConversionResult`
+（`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`）。
+**所有** SG 接线均失败的转换计为失败（而非静默成功）——因为场景仍在使用旧材质。
+`convert_all(..., on_progress=...)` 会在批量过程中逐材质向 UI 汇报进度，
+界面在批次运行期间实时刷新进度条，而不是等全部完成后一次性拨动。
 
 ---

@@ -291,6 +291,15 @@ New displacement node naming: `{source_material_name}_{renderer_short}Disp`
 
 Arnold ↔ V-Ray conversion does not create displacement nodes (skipped).
 
+### 4.6 Multi-Shading-Engine Displacement
+
+Displacement lives on the **shading engine**, not on the material. When a
+material feeds several shading engines, conversion now runs **per SG**: the
+converter enumerates every `shadingEngine` fed by the source material and
+converts displacement on each one. SGs that share the same source displacement
+(same texture plug + scale) reuse a single target displacement node; SGs with
+their own displacement each get their own converted node.
+
 ---
 
 ## 5. Node Creation & Hypershade Registration
@@ -331,5 +340,13 @@ UI supports batch conversion of multiple materials:
 3. Materials already in target type are automatically skipped
 4. Remaining materials are converted sequentially
 5. Newly created materials are automatically selected after conversion
+
+**Result semantics** (see `core/results.py`): each material produces a
+`ConversionResult` (`created` / `converted` / `wired` / `total_sgs` /
+`skipped` / `reason`). A conversion whose shading-engine reconnection failed
+for **every** SG is reported as failed (not a silent success), because the
+scene would still render the old material. Conversion run by `convert_all(...,
+on_progress=...)` reports per-material progress to the UI, which repaints the
+progress bar during the batch instead of after it completes.
 
 ---

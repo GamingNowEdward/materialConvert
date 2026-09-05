@@ -1,10 +1,6 @@
 import os
 import sys
 
-for mod in list(sys.modules.keys()):
-    if mod.startswith("core") or mod.startswith("ui"):
-        del sys.modules[mod]
-
 try:
     _ROOT = os.path.dirname(os.path.abspath(__file__))
 except NameError:
@@ -12,6 +8,13 @@ except NameError:
 
 if _ROOT and _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
+
+# Reload only this project's own modules on re-exec (path-based, not name
+# prefix based), so foreign packages named core/ui in the same Maya session
+# are never touched.
+if _ROOT:
+    from core.module_reload import purge_project_modules
+    purge_project_modules(root=_ROOT)
 
 from ui.converter_ui import show
 

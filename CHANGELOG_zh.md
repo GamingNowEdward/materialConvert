@@ -1,5 +1,19 @@
 # 更新日志
 
+## 2026-09-06
+
+### 修复
+- **SG 连接失败不再静默计为成功**：`MaterialConverter.convert()` 改为返回结构化 `ConversionResult`（`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`）；创建成功但**所有** shadingEngine 接线均失败的材质计入 failed（unwired）——场景仍在渲染旧材质时绝不显示为成功
+- **置换按"逐 shadingEngine"转换**：同一材质挂多个 SG 时不再只处理第一个（此前 `node_utils.get_shading_engine()` 只取首个 SG，导致部分模型置换缺失/错配）；源置换相同（纹理插头 + scale）的 SG 复用同一目标置换节点
+
+### 变更
+- `convert_all(..., on_progress=...)` 新增可选逐材质进度回调（core 不依赖 Qt）；Converter 页注入节流回调，在批次运行期间实时推进进度条并 `processEvents()`，不再等全部完成后一次性拨动
+- 结果模型提取为纯模块 `core/results.py`（`ConversionResult` + `summarize_results`），core 与 UI 共用、可在无 Maya 环境单测
+- `main.py` 启动模块清理改为按文件物理路径判断（`core/module_reload.py`），不再按 `core`/`ui` 名称前缀删除，避免误伤同一 Maya 会话中同名的其他工具包；`node_utils.get_shading_engine()`（取首个 SG 的反模式）移除
+
+### 新增
+- 测试：`tests/test_conversion_results.py`（结果分类语义：unwired / partial_wired / 无 SG 浮动材质等）、`tests/test_module_reload.py`（路径清理只删本项目模块）
+
 ## 2026-08-30
 
 ### 修复

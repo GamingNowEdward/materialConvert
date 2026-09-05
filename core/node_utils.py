@@ -285,19 +285,6 @@ def smart_connect(src_plug, dst_plug, logger=None):
     return False
 
 
-def get_shading_engine(material, logger=None):
-    log = _log_or_default(logger)
-    try:
-        sgs = cmds.listConnections(f"{material}.outColor", type="shadingEngine") or []
-        if sgs:
-            log.debug(f"Shading engine for {material}: {sgs[0]}", source=_SOURCE, nodes=(material, sgs[0]))
-            return sgs[0]
-        log.debug(f"No shading engine connected to {material}.outColor", source=_SOURCE, nodes=(material,))
-    except Exception as exc:
-        log.warn(f"Failed to query shading engine for {material}: {exc}", source=_SOURCE, nodes=(material,))
-    return None
-
-
 def get_displacement_node_from_sg(shading_engine, logger=None):
     log = _log_or_default(logger)
     try:

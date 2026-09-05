@@ -13,94 +13,133 @@ class DisplacementConverter:
         self.utils = utils
         self.log = logger or get_logger()
 
-    def convert(self, source_mat, target_mat, source_config, target_config, target_renderer):
-        sg = self.utils.get_shading_engine(source_mat, logger=self.log)
-        if not sg:
+    def convert(self, source_mat, target_mat, source_config, target_config, target_renderer, sgs=None):
+        """Convert displacement for *every* shading engine fed by *source_mat*.
+
+        Displacement lives on the shading engine, so a material bound to several
+        SGs must be converted per SG.  SGs that share the same source
+        displacement (same texture plug + scale) reuse a single target
+        displacement node instead of duplicating networks.
+        """
+        sgs = list(sgs or [])
+        if not sgs:
             self.log.skip(f"No shading engine found for {source_mat}; displacement skipped", source=_SOURCE, nodes=(source_mat,))
             return
 
-        src_disp_data = self._collect(source_mat, sg, source_config)
-        if not src_disp_data:
-            self.log.skip(f"No source displacement data found for {source_mat}", source=_SOURCE, nodes=(source_mat,))
-            return
-
-        if not target_config.displacement_node_type and not target_config.displacement_texture:
+        disp_type = target_config.displacement_node_type
+        disp_in = target_config.displacement_texture
+        if not disp_type or not disp_in:
             self.log.skip("Target material has no displacement configuration", source=_SOURCE)
             return
 
-        is_real_type = target_config.displacement_node_type and target_config.displacement_node_type not in ("displacementShader", "")
+        is_real_type = disp_type not in ("", "displacementShader")
         if not is_real_type and source_config.displacement_node_type == "displacementShader":
             self.log.skip("Source and target both use native displacementShader; nothing to convert", source=_SOURCE)
             return
 
-        texture_plug = src_disp_data.get("texture_plug")
-        scale_val = src_disp_data.get("scale", 1.0)
-
         renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
+        disp_by_source = {}
+        converted = 0
+        skipped = 0
 
-        if is_real_type:
-            base_name = source_mat + "_" + renderer_short + "Disp"
+        for sg in sgs:
+            src_disp_data = self._collect(source_mat, sg, source_config)
+            if not src_disp_data:
+                self.log.skip(f"No source displacement data for {source_mat} on {sg}", source=_SOURCE, nodes=(source_mat, sg))
+                skipped += 1
+                continue
+
+            key = (src_disp_data.get("texture_plug"), src_disp_data.get("scale"))
+            disp_node = disp_by_source.get(key)
+            if disp_node is None:
+                base_name = f"{source_mat}_{renderer_short}Disp"
+                disp_node = self._create_node(
+                    disp_type, disp_in, target_config.displacement_scale,
+                    base_name, src_disp_data, source_mat,
+                )
+                if disp_node is None:
+                    skipped += 1
+                    continue
+                disp_by_source[key] = disp_node
+
+            if self._connect_to_sg(disp_node, sg, target_config.displacement_output):
+                converted += 1
+            else:
+                skipped += 1
+
+        self.log.info(
+            f"Displacement conversion finished for {source_mat}: {converted} shading engine(s) "
+            f"converted, {skipped} skipped",
+            source=_SOURCE,
+            nodes=(source_mat,),
+        )
+
+    def _create_node(self, disp_type, disp_in, disp_scale, base_name, src_disp_data, source_mat):
+        try:
+            disp_node = cmds.shadingNode(disp_type, asUtility=True, name=base_name)
+        except Exception as exc:
+            self.log.error(f"Failed to create {disp_type}: {exc}", source=_SOURCE, nodes=(source_mat,))
+            return None
+        self.log.debug(f"Created displacement node {disp_node}", source=_SOURCE, nodes=(disp_node,))
+
+        texture_plug = src_disp_data.get("texture_plug")
+        if texture_plug and disp_in:
+            if self.utils.smart_connect(texture_plug, f"{disp_node}.{disp_in}", logger=self.log):
+                self.log.debug(
+                    f"Connected displacement texture {texture_plug} -> {disp_node}.{disp_in}",
+                    source=_SOURCE,
+                    nodes=(self.utils.node_name_from_plug(texture_plug), disp_node),
+                )
+            else:
+                self.log.warn(
+                    f"Failed to connect displacement texture {texture_plug} -> {disp_node}.{disp_in}",
+                    source=_SOURCE,
+                    nodes=(self.utils.node_name_from_plug(texture_plug), disp_node),
+                )
+
+        scale_val = src_disp_data.get("scale")
+        if disp_scale and scale_val is not None:
             try:
-                disp_node = cmds.shadingNode(target_config.displacement_node_type, asUtility=True, name=base_name)
+                cmds.setAttr(f"{disp_node}.{disp_scale}", scale_val)
+                self.log.debug(f"Set {disp_node}.{disp_scale} = {scale_val!r}", source=_SOURCE, nodes=(disp_node,))
             except Exception as exc:
-                self.log.error(f"Failed to create {target_config.displacement_node_type}: {exc}", source=_SOURCE, nodes=(source_mat,))
-                return
-            self.log.debug(f"Created displacement node {disp_node}", source=_SOURCE, nodes=(disp_node,))
+                self.log.warn(f"Failed to set displacement scale on {disp_node}: {exc}", source=_SOURCE, nodes=(disp_node,))
+        return disp_node
 
-            if texture_plug and target_config.displacement_texture:
-                if self.utils.smart_connect(texture_plug, f"{disp_node}.{target_config.displacement_texture}", logger=self.log):
-                    self.log.debug(f"Connected displacement texture {texture_plug} -> {disp_node}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(texture_plug), disp_node))
-                else:
-                    self.log.warn(f"Failed to connect displacement texture {texture_plug} -> {disp_node}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(texture_plug), disp_node))
+    def _connect_to_sg(self, disp_node, sg, output_attr):
+        """Bind *disp_node* to ``sg.displacementShader`` via a usable output plug.
 
-            if target_config.displacement_scale and scale_val is not None:
-                try:
-                    cmds.setAttr(f"{disp_node}.{target_config.displacement_scale}", scale_val)
-                    self.log.debug(f"Set {disp_node}.{target_config.displacement_scale} = {scale_val!r}", source=_SOURCE, nodes=(disp_node,))
-                except Exception as exc:
-                    self.log.warn(f"Failed to set displacement scale on {disp_node}: {exc}", source=_SOURCE, nodes=(disp_node,))
+        The configured ``output`` attribute (e.g. ``displacement`` for native
+        displacementShader, ``out`` for RedshiftDisplacement) is tried first,
+        then generic fallbacks for robustness.
+        """
+        attempts = []
+        if output_attr:
+            attempts.append(output_attr)
+        for fallback in ("outDisplacement", "out", "outColor"):
+            if fallback not in attempts:
+                attempts.append(fallback)
 
+        for attr in attempts:
             try:
-                for out_attr in ["outDisplacement", "out", "outColor"]:
-                    if cmds.objExists(f"{disp_node}.{out_attr}"):
-                        cmds.connectAttr(f"{disp_node}.{out_attr}", f"{sg}.displacementShader", force=True)
-                        self.log.info(f"Connected displacement {disp_node}.{out_attr} -> {sg}.displacementShader", source=_SOURCE, nodes=(disp_node, sg))
-                        break
-                else:
-                    self.log.warn(f"No valid displacement output attribute found on {disp_node}", source=_SOURCE, nodes=(disp_node,))
+                if not cmds.objExists(f"{disp_node}.{attr}"):
+                    continue
+                cmds.connectAttr(f"{disp_node}.{attr}", f"{sg}.displacementShader", force=True)
+                self.log.info(
+                    f"Connected displacement {disp_node}.{attr} -> {sg}.displacementShader",
+                    source=_SOURCE,
+                    nodes=(disp_node, sg),
+                )
+                return True
             except Exception as exc:
-                self.log.error(f"Failed to connect displacement {disp_node} -> {sg}: {exc}", source=_SOURCE, nodes=(disp_node, sg))
+                self.log.warn(
+                    f"Failed to connect {disp_node}.{attr} -> {sg}.displacementShader: {exc}",
+                    source=_SOURCE,
+                    nodes=(disp_node, sg),
+                )
 
-            self.log.info(f"Displacement: converted to {target_config.displacement_node_type}", source=_SOURCE, nodes=(disp_node,))
-        else:
-            base_name = source_mat + "_" + renderer_short + "Disp"
-            try:
-                disp_node = cmds.shadingNode("displacementShader", asUtility=True, name=base_name)
-            except Exception as exc:
-                self.log.error(f"Failed to create displacementShader: {exc}", source=_SOURCE, nodes=(source_mat,))
-                return
-            self.log.debug(f"Created displacementShader node {disp_node}", source=_SOURCE, nodes=(disp_node,))
-
-            if texture_plug:
-                if self.utils.smart_connect(texture_plug, f"{disp_node}.displacement", logger=self.log):
-                    self.log.debug(f"Connected displacement texture {texture_plug} -> {disp_node}.displacement", source=_SOURCE, nodes=(self.utils.node_name_from_plug(texture_plug), disp_node))
-                else:
-                    self.log.warn(f"Failed to connect displacement texture {texture_plug} -> {disp_node}.displacement", source=_SOURCE, nodes=(self.utils.node_name_from_plug(texture_plug), disp_node))
-
-            if scale_val is not None:
-                try:
-                    cmds.setAttr(f"{disp_node}.scale", scale_val)
-                    self.log.debug(f"Set {disp_node}.scale = {scale_val!r}", source=_SOURCE, nodes=(disp_node,))
-                except Exception as exc:
-                    self.log.warn(f"Failed to set scale on {disp_node}: {exc}", source=_SOURCE, nodes=(disp_node,))
-
-            try:
-                cmds.connectAttr(f"{disp_node}.displacement", f"{sg}.displacementShader", force=True)
-                self.log.info(f"Connected displacementShader {disp_node} -> {sg}.displacementShader", source=_SOURCE, nodes=(disp_node, sg))
-            except Exception as exc:
-                self.log.error(f"Failed to connect {disp_node} -> {sg}.displacementShader: {exc}", source=_SOURCE, nodes=(disp_node, sg))
-
-            self.log.info("Displacement: converted to displacementShader", source=_SOURCE)
+        self.log.warn(f"No usable displacement output attribute found on {disp_node}", source=_SOURCE, nodes=(disp_node,))
+        return False
 
     def _collect(self, source_mat, sg, source_config):
         src_disp_node = self.utils.get_displacement_node_from_sg(sg, logger=self.log)

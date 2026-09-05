@@ -26,7 +26,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 本项目**零外部依赖**，不需要 pip install。分发给他人时只需拷贝文件夹并告诉对方改 shelf 按钮路径即可。
 
-如果修改代码后没生效，关掉窗口重新点击按钮即可。
+如果修改代码后没生效，关掉窗口重新点击按钮即可。重新加载时 `main.py` 只清理**本项目自身**的已导入模块（`core/module_reload.py` 按文件物理路径判断），不会误删同一 Maya 会话中其他以 `core`/`ui` 开头的工具包。
 
 ## 架构
 
@@ -38,9 +38,10 @@ exec(open(r"你的路径\materialConvert\main.py").read())
   - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（按目标配置实际属性名扫描、递归上游追踪、opacity 豁免、Redshift 跳过）
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
-  - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）
+  - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）；**逐 shadingEngine 转换**（置换挂在 SG 上），转换器一次性枚举源材质全部 SG 传入，源置换相同的 SG 复用同一目标节点
 - 颜色校正节点类型以 `config/colorCorrection.json` 为单一来源；`node_utils.is_cc_node()` 通过 `ConfigLoader.get_all_cc_types()` 判断，禁止在 Python 中维护 CC 节点类型列表
-- 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数
+- 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数；`convert()` 返回结构化 `ConversionResult`，`convert_all(..., on_progress=...)` 提供可选逐材质进度回调（core 不依赖 Qt，回调异常只记 WARN 不中断批次）
+- 转换结果模型：`core/results.py` — `ConversionResult`（`created`/`converted`/`wired`/`total_sgs`/`skipped`/`reason`）+ `summarize_results()`，纯 Python 可单测，core 与 UI 共用。**语义**：创建成功但全部 SG 接线失败 = `unwired`（计入失败，场景仍渲染旧材质，绝不静默报成功）；`total_sgs==0` 的浮动材质不计入失败
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`；节点识别/创建类函数（`identify_node_type` / `create_cc_node` / `create_target_material`）接受可选 `logger` 参数，调用方应传入实例 logger，未传时回落到 `get_logger()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
