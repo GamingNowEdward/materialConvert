@@ -416,7 +416,7 @@ Finally reload the tool in Maya and do a round-trip conversion test (materials w
 
 ### colorSpace Auto-expansion
 
-Attribute keywords used by color-space auto matching (Auto Match Selected) expand **dynamically** from all material JSON mappings; new renderers need no manual edits to `config/colorSpace.json`.
+Attribute keywords used by the Colorspace tab's automatic matching (Channel Driver) expand **dynamically** from all material JSON mappings; new renderers need no manual edits to `config/colorSpace.json`.
 
 ### Naming Suffix Conventions
 

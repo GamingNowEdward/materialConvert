@@ -62,11 +62,17 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
 
 
+### Colorspace
+- Dedicated **Colorspace** tab — the single UI entry point for all file-node color-space operations (Node Tools no longer exposes any color-space UI)
+- **File Node List**: scans all scene `file` nodes into a sortable table (File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic); the Diagnostic column carries the match state (e.g. `CONFLICT: ...`) and sorts by severity, not alphabetically
+- **Refresh**: evaluates automatic matching for every file node **without modifying the scene**
+- **Automatic Matching** driven by two drivers: **Name Driver** (filename keywords from `config/texture_channels.json`) and **Channel Driver** (BFS-tracing all downstream connections against `commonAttributeRoles` + `config/material/*.json` expanded keywords); final states `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`
+- **Apply Selected** / **Apply All Matched**: apply only `MATCHED` results to `file.colorSpace` (single undo chunk); `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` are never auto-applied
+- **Manual Colorspace Assignment**: pick from the actual Maya input spaces and apply to selected rows only — never alters matcher rules or config
+- Selecting a row syncs the Maya selection to the corresponding file node(s); utility button sets `ignoreColorSpaceFileRules` on all file nodes
+
 ### Node Tools
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
-- **Set File Color Space**: Batch set color space on selected file nodes
-- **Auto Match Selected**: Automatically match color space — filename keywords from `config/texture_channels.json` (grouped by channel type), channel match via BFS-tracing all downstream connections (single-channel/outAlpha/intermediate nodes) with normalized attribute keywords from `commonAttributeRoles` + `config/material/*.json` expansion; ambiguous nodes (filename role ≠ channel role) are skipped (color space unchanged) and the selection is replaced with them for manual review
-- **Color Management**: Set ignoreColorSpaceFileRules on all file nodes
 - **Rename Shading Engine**: Batch rename SG to match material names
 
 ### Debug
@@ -123,15 +129,17 @@ materialConvert/
 │   ├── texture_scanner.py           # Directory scanning / filename-to-channel parsing
 │   ├── batch_builder.py             # Batch build orchestration
 │   ├── material_builder.py          # Material Builder core logic
+│   ├── colorspace.py                # Color-space match core (name/channel drivers + resolver + matcher)
 │   └── config_validator.py          # JSON config validation (Log tab)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget)
 │   ├── log_panel.py                 # Embedded global log viewer (polling, filters, QTableView)
 │   ├── styles.py                    # QSS dark theme
-│   └── tabs/                        # Five functional tabs
+│   └── tabs/                        # Six functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
 │       ├── batch_builder_tab.py    # Batch Builder
+│       ├── colorspace_tab.py        # Colorspace (file-node color-space management)
 │       ├── node_tools_tab.py        # Node Tools
 │       └── log_tab.py               # Log (global log viewer + config validation)
 ├── docs/                            # Documentation

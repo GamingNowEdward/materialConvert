@@ -1,5 +1,17 @@
 # 更新日志
 
+## 2026-09-07
+
+### 重构
+- **Colorspace 功能从 Node Tools 迁移为独立标签页**：`Node Tools` 删除全部 colorspace UI 与操作（Set File Color Space / Auto Match Selected / Color Management），只保留 Select Nodes 与 Rename Shading Engine；colorspace 功能唯一入口迁移到新 **Colorspace** 标签页（`ui/tabs/colorspace_tab.py`），`ignoreColorSpaceFileRules` 工具同步迁入
+- **主窗口标签页顺序调整**：Converter → Material Builder → Batch Builder → **Colorspace** → Node Tools → Log（Colorspace 为第 4 个标签页）
+
+### 新增
+- 单一 matcher 核心 `core/colorspace.py`：`NameDriver`（文件名关键词，来自 `config/texture_channels.json`）+ `ChannelDriver`（BFS 下游通道追踪，保留 depth/budget 遍历保护与材质缓存）+ `ColorSpaceResolver`（role→alias→实际 Maya colorspace，available spaces 按 Refresh 缓存）+ `ColorSpaceMatcher`（`MATCHED`/`CONFLICT`/`AMBIGUOUS`/`UNMATCHED`/`INVALID` 五态 + prematch 预测 + diagnostic）；配置仍以 `colorSpace.json` / `texture_channels.json` 为单一来源，不引入第二套规则
+- Colorspace 标签页：场景 file 节点列表（File Node / File Path / Colorspace / Prematch / Diagnostic，状态词并入 Diagnostic 列并按严重度排序，去掉独立 State 列）、Refresh（只评估不改 scene）、Apply Selected / Apply All Matched（仅应用 `MATCHED`，undo chunk 包裹）、Manual Colorspace Assignment（Maya 实际 input spaces）、行选择同步 Maya 节点选择
+- 行为收紧（文档要求）：Name/Channel driver 内部多角色命中显式标记 `AMBIGUOUS`（不再静默取第一个）；无匹配不再回退默认 `raw`（`UNMATCHED` 不自动应用）；role 无法解析到实际 Maya colorspace 时为 `INVALID`，无静默 fallback
+- 测试：`tests/test_colorspace.py`（drivers / matcher / resolver，含从 `test_node_tools_trace.py` 迁入的 BFS 预算与跳过用例）、`tests/test_colorspace_tab.py`（UI 集成：Refresh 不改 scene、Apply 仅 MATCHED、Manual 生效、Node Tools 旧 colorspace 已移除）
+
 ## 2026-09-06
 
 ### 修复

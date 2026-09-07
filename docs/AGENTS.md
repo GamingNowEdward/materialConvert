@@ -46,7 +46,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
 - 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法）
-- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，5 个标签页：Converter / Builder / Batch Builder / Node Tools / Log）
+- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，6 个标签页：Converter / Builder / Batch Builder / Colorspace / Node Tools / Log）
 - 操作反馈：`ui/feedback.py` — `qt_maya_logger(label)` 操作反馈装饰器（START/成功横幅 + 错误弹窗）。**所有反馈均为 best-effort**：logger / 弹窗 / 横幅任一环节失败都不能改变业务控制流——logger 失败回退 `_report_terminal`（stderr 通道，不依赖 logger/UI/Maya），弹窗失败记录 WARN；原始异常始终重新抛出。core 层禁止 import ui 包，反馈装饰器只能放 UI 层
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络；`core/builder_context.py`（命名/建节点工具）
@@ -55,7 +55,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **Builder 可扩展边界**：转换器（Convert）可由属性 JSON 扩展，但 Builder 只支持已实现的通道策略（color、float、roughness、normal_bump、displacement）。颜色通道经 `_build_color_chain(common_attr, name_key, ...)` 参数化构建，标量通道（roughness/metallic/opacity）经 `_build_scalar_chain(...)` 构建；新增"普通属性"仍需在 `MaterialBuilder` 中添加或扩展 Python 建链函数，不能仅靠 JSON 配置
 - Batch Builder：`core/texture_scanner.py`（读取 `config/texture_channels.json`，按文件名解析通道、按材质名分组）+ `core/batch_builder.py`（将扫描结果按规范通用属性名传给 `MaterialBuilder`）+ `ui/tabs/batch_builder_tab.py`（面板）
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
-- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名
+- 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；唯一 matcher 核心在 `core/colorspace.py`（`ColorSpaceMatcher` = `NameDriver` + `ChannelDriver` + `ColorSpaceResolver`，`MatchResult` 携带 state/prematch/diagnostic），UI 入口为 Colorspace 标签页（`ui/tabs/colorspace_tab.py`），Node Tools 不再提供任何 colorspace 操作；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名，保留 depth/budget 遍历保护；表格行选择同步 Maya 节点选择（填充期间屏蔽同步）
 - Log/Debug：`core/config_validator.py`（`ConfigValidator` 读取全部 JSON 配置，在 Maya 中创建临时节点校验 node_type 与属性拼写，结束后清理临时节点；插件检测用 `pluginInfo(loaded)` + `loadPlugin`，加载失败（未安装/不兼容）时**整组忽略（SKIP）**，不误报为拼写错误）+ `ui/tabs/log_tab.py`（Log 标签页：顶部 Config Validation 控件 + 全局 `LogViewer`，两者共用同一日志表）
 
 ### 统一导入

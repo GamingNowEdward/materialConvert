@@ -62,11 +62,17 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
 
 
+### Colorspace
+- 独立 **Colorspace** 标签页——file 节点色彩空间操作的**唯一 UI 入口**（Node Tools 不再提供任何 colorspace UI）
+- **File Node List**：扫描场景全部 `file` 节点为可排序表格（File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic）；Diagnostic 列承载匹配状态（如 `CONFLICT: ...`）并按问题严重度排序而非字母序
+- **Refresh**：对每个 file 节点评估自动匹配，**不修改 scene**
+- **自动匹配** 由两个 driver 驱动：**Name Driver**（文件名关键词来自 `config/texture_channels.json`）与 **Channel Driver**（BFS 追踪全部下游连接，匹配 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词）；最终状态 `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`
+- **Apply Selected** / **Apply All Matched**：仅将 `MATCHED` 结果应用到 `file.colorSpace`（单步 undo chunk）；`CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` 一律不自动应用
+- **Manual Colorspace Assignment**：从 Maya 实际可用的 input spaces 中选择并只应用到选中行——不修改匹配规则或配置
+- 选中行会同步 Maya 选择到对应 file 节点；工具按钮可对所有 file 节点设置 `ignoreColorSpaceFileRules`
+
 ### Node Tools
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
-- **Set File Color Space**：批量设置 file 节点颜色空间
-- **Auto Match Selected**：自动匹配色彩空间——文件名关键词来自 `config/texture_channels.json`（按通道 type 分组），通道匹配通过 BFS 追踪 file 全部下游连接（单通道/outAlpha/中间节点）并对 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词规范化匹配；歧义节点（文件名角色 ≠ 通道角色）自动跳过（色彩空间不变），并**将当前选择替换为这些歧义节点**供手动复核
-- **Color Management**：批量设置 file 节点的 ignoreColorSpaceFileRules
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 
 ### Debug
@@ -123,14 +129,16 @@ materialConvert/
 │   ├── texture_scanner.py           # 目录扫描 / 文件名→通道解析
 │   ├── batch_builder.py             # 批量构建编排
 │   ├── material_builder.py          # Material Builder 核心逻辑
-│   └── config_validator.py          # JSON 配置校验（Debug 标签页）
+│   ├── colorspace.py                # 色彩空间匹配核心（name/channel driver + resolver + matcher）
+│   └── config_validator.py          # JSON 配置校验（Log 标签页）
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QMainWindow + QTabWidget)
 │   ├── styles.py                    # QSS 暗色主题
-│   └── tabs/                        # 五个功能标签页
+│   └── tabs/                        # 六个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
 │       ├── batch_builder_tab.py    # Batch Builder
+│       ├── colorspace_tab.py        # Colorspace（file 节点色彩空间管理）
 │       ├── node_tools_tab.py        # Node Tools
 │       └── log_tab.py               # Log（全局日志查看器 + 配置校验）
 ├── docs/                            # 文档

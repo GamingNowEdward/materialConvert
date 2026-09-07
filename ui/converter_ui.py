@@ -2,7 +2,7 @@ from ui import QtWidgets, shiboken
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from ui.styles import FULL_STYLESHEET
-from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, BatchBuilderTab, LogTab)
+from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, ColorspaceTab, BatchBuilderTab, LogTab)
 
 
 def _maya_main_window(logger=None):
@@ -32,6 +32,7 @@ class ConverterWindow(QtWidgets.QMainWindow):
         self.converter_tab = ConverterTab(logger=self.logger)
         self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
         self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger)
+        self.colorspace_tab = ColorspaceTab(logger=self.logger)
         self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
         self.log_tab = LogTab(logger=self.logger)
 
@@ -59,6 +60,7 @@ class ConverterWindow(QtWidgets.QMainWindow):
         self.tab_widget.addTab(self.converter_tab.build_ui(), "  Converter  ")
         self.tab_widget.addTab(self.builder_tab.build_ui(), "  Material Builder  ")
         self.tab_widget.addTab(self.batch_builder_tab.build_ui(), "  Batch Builder  ")
+        self.tab_widget.addTab(self.colorspace_tab.build_ui(), "  Colorspace  ")
         self.tab_widget.addTab(self.node_tools_tab.build_ui(), "  Node Tools  ")
 
         self.log_tab_widget = self.log_tab.build_ui()

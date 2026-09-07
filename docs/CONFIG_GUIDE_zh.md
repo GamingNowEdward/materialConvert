@@ -416,7 +416,7 @@ python -m pytest tests/ -v
 
 ### colorSpace 自动扩展
 
-色彩空间自动匹配（Auto Match Selected）使用的属性关键词会根据所有材质 JSON 的属性映射**动态扩展**，新渲染器无需手动维护 `config/colorSpace.json`。
+Colorspace 标签页自动匹配（Channel Driver）使用的属性关键词会根据所有材质 JSON 的属性映射**动态扩展**，新渲染器无需手动维护 `config/colorSpace.json`。
 
 ### 命名后缀约定
 
