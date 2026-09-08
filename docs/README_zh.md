@@ -75,11 +75,11 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 
-### Debug
-- 在 Maya 中校验全部 JSON 配置的拼写是否正确（材质 / `bumpNormal.json` / `colorCorrection.json`）
+### Log
+- 全局结构化日志查看器，支持按级别、来源和文本过滤
+- 面板顶部提供 Config Validation，可在 Maya 中校验全部 JSON 配置的拼写（材质 / `bumpNormal.json` / `colorCorrection.json`）
 - 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites 与 displacement），结束后自动清理
 - 未安装插件的渲染器尽可能自动加载，加载失败则整组跳过（绝不误报为拼写错误）
-- 校验结果写入统一的 Log 标签页（支持按级别、来源和文本过滤）
 
 ## 架构
 

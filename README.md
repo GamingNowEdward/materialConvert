@@ -75,11 +75,11 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
 - **Rename Shading Engine**: Batch rename SG to match material names
 
-### Debug
-- Validate all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
+### Log
+- Global structured log viewer with level, source, and text filters
+- Config Validation controls for checking all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
 - Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
 - Renderers without an installed plugin are auto-loaded when possible, otherwise skipped entirely (never misreported as spelling errors)
-- Validation results go to the unified Log tab (filterable by level, source and text)
 
 ## Architecture
 
