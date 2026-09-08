@@ -131,7 +131,7 @@ class ColorspaceTab:
 
     def _populate_manual_combo(self):
         current = self.manual_combo.currentText()
-        available = sorted(self.matcher.resolver.available_spaces())
+        available = sorted(self.matcher.available_spaces())
         self.manual_combo.clear()
         self.manual_combo.addItems(available)
         if current and current in available:
@@ -139,28 +139,21 @@ class ColorspaceTab:
 
     def _refresh(self):
         try:
-            file_nodes = cmds.ls(type="file") or []
+            results = self.matcher.scan()
         except Exception as exc:
-            self.log.error(f"Failed to list file nodes: {exc}", source=_SOURCE)
+            self.log.error(f"Failed to scan file nodes: {exc}", source=_SOURCE)
             self.status_label.setText(f"Error scanning scene: {exc}")
             return
 
-        self.matcher.reset()
         self._populate_manual_combo()
-        self._populate_table(file_nodes)
+        self._populate_table(results)
 
-    def _populate_table(self, file_nodes):
+    def _populate_table(self, results):
         self._loading = True
         self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
 
-        for node in file_nodes:
-            try:
-                result = self.matcher.match(node)
-            except Exception as exc:
-                self.log.error(f"Failed to match colorspace for {node}: {exc}", source=_SOURCE)
-                continue
-
+        for result in results:
             row = self.table.rowCount()
             self.table.insertRow(row)
 
@@ -186,7 +179,7 @@ class ColorspaceTab:
                         item.setBackground(QtGui.QColor("#4a2b2b"))
 
         self.table.setSortingEnabled(True)
-        self._update_status(len(file_nodes))
+        self._update_status(len(results))
         self._loading = False
 
     def _update_status(self, total):
@@ -248,41 +241,14 @@ class ColorspaceTab:
         self._apply_rows(rows, "Apply All Matched")
 
     def _apply_rows(self, rows, label):
-        try:
-            cmds.undoInfo(openChunk=True)
-        except Exception as exc:
-            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
-
-        applied = 0
-        skipped = 0
-        try:
-            for data in rows:
-                node = data["node"]
-                state = data["state"]
-                prematch = data.get("prematch") or ""
-                if state == MatchState.MATCHED.value and prematch:
-                    try:
-                        cmds.setAttr(f"{node}.colorSpace", prematch, type="string")
-                        applied += 1
-                        self._set_colorspace_column(node, prematch)
-                        self.log.debug(f"Set {node}.colorSpace = {prematch}", source=_SOURCE)
-                    except Exception as exc:
-                        self.log.warn(f"Failed to set color space on {node}: {exc}", source=_SOURCE)
-                else:
-                    skipped += 1
-                    self.log.warn(
-                        f"Skipped {node}: state {state} is not auto-applicable "
-                        "(only MATCHED can be applied automatically).",
-                        source=_SOURCE,
-                    )
-        finally:
-            try:
-                cmds.undoInfo(closeChunk=True)
-            except Exception as exc:
-                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
+        outcome = self.matcher.apply_matched(rows)
+        for node, colorspace in outcome["applied"]:
+            self._set_colorspace_column(node, colorspace)
 
         self.log.info(
-            f"{label}: applied {applied}, skipped {skipped} non-MATCHED row(s).",
+            f"{label}: applied {len(outcome['applied'])}, "
+            f"skipped {outcome['skipped']} non-MATCHED row(s), "
+            f"failed {len(outcome['failed'])}.",
             source=_SOURCE,
         )
 
@@ -296,30 +262,16 @@ class ColorspaceTab:
             self.log.warn("Please select file node rows first.", source=_SOURCE)
             return
 
-        try:
-            cmds.undoInfo(openChunk=True)
-        except Exception as exc:
-            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
-
-        applied = 0
-        try:
-            for data in rows:
-                node = data["node"]
-                try:
-                    cmds.setAttr(f"{node}.colorSpace", cs, type="string")
-                    applied += 1
-                    self._set_colorspace_column(node, cs)
-                    self.log.debug(f"Set {node}.colorSpace = {cs}", source=_SOURCE)
-                except Exception as exc:
-                    self.log.warn(f"Failed to set color space on {node}: {exc}", source=_SOURCE)
-        finally:
-            try:
-                cmds.undoInfo(closeChunk=True)
-            except Exception as exc:
-                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
+        outcome = self.matcher.set_colorspace(
+            [data["node"] for data in rows], cs
+        )
+        for node, colorspace in outcome["applied"]:
+            self._set_colorspace_column(node, colorspace)
 
         self.log.info(
-            f"Manual assignment: set '{cs}' on {applied}/{len(rows)} file node(s).",
+            f"Manual assignment: set '{cs}' on "
+            f"{len(outcome['applied'])}/{len(rows)} file node(s), "
+            f"failed {len(outcome['failed'])}.",
             source=_SOURCE,
         )
 
@@ -335,22 +287,17 @@ class ColorspaceTab:
 
     def _ignore_color_space_rules(self):
         try:
-            file_nodes = cmds.ls(type="file") or []
+            outcome = self.matcher.ignore_color_space_file_rules()
         except Exception as exc:
-            self.log.error(f"Failed to list file nodes: {exc}", source=_SOURCE)
+            self.log.error(f"Failed to set color space file rules: {exc}", source=_SOURCE)
             return
+        file_nodes = outcome["nodes"]
         if not file_nodes:
             self.log.warn("No file nodes found in scene.", source=_SOURCE)
             return
-        count = 0
-        for f in file_nodes:
-            try:
-                cmds.setAttr(f"{f}.ignoreColorSpaceFileRules", 1)
-                count += 1
-            except Exception as exc:
-                self.log.warn(f"Failed to set ignoreColorSpaceFileRules on {f}: {exc}", source=_SOURCE)
         cmds.select(file_nodes, replace=True)
         self.log.info(
-            f"Set ignoreColorSpaceFileRules=1 on {count}/{len(file_nodes)} file nodes.",
+            f"Set ignoreColorSpaceFileRules=1 on "
+            f"{len(outcome['applied'])}/{len(file_nodes)} file nodes.",
             source=_SOURCE,
         )

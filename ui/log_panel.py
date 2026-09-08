@@ -164,17 +164,35 @@ class LogFilterProxy(QtCore.QSortFilterProxyModel):
         self._source = ""
         self._text = ""
 
+    def _invalidate_filter(self):
+        begin_filter_change = getattr(self, "beginFilterChange", None)
+        end_filter_change = getattr(self, "endFilterChange", None)
+        if begin_filter_change is not None and end_filter_change is not None:
+            begin_filter_change()
+            direction = getattr(QtCore.QSortFilterProxyModel, "Direction", None)
+            if direction is not None:
+                end_filter_change(direction.Rows)
+            else:
+                end_filter_change()
+            return
+
+        invalidate_rows_filter = getattr(self, "invalidateRowsFilter", None)
+        if invalidate_rows_filter is not None:
+            invalidate_rows_filter()
+            return
+        self.invalidateFilter()
+
     def set_levels(self, levels):
         self._levels = set(levels)
-        self.invalidateFilter()
+        self._invalidate_filter()
 
     def set_source(self, source):
         self._source = source or ""
-        self.invalidateFilter()
+        self._invalidate_filter()
 
     def set_text(self, text):
         self._text = (text or "").lower()
-        self.invalidateFilter()
+        self._invalidate_filter()
 
     def filterAcceptsRow(self, source_row, source_parent):
         model = self.sourceModel()

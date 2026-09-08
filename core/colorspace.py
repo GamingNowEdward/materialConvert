@@ -290,6 +290,75 @@ class ColorSpaceMatcher:
         self.resolver.reset()
         self.channel_driver.reset()
 
+    def available_spaces(self):
+        return self.resolver.available_spaces()
+
+    def scan(self):
+        file_nodes = cmds.ls(type="file") or []
+        self.reset()
+        return [self.match(node) for node in file_nodes]
+
+    def apply_matched(self, rows):
+        return self._set_colorspaces(
+            [
+                (data["node"], data.get("prematch") or "")
+                for data in rows
+                if data.get("state") == MatchState.MATCHED.value
+            ],
+            skip_count=sum(
+                1 for data in rows if data.get("state") != MatchState.MATCHED.value
+            ),
+        )
+
+    def set_colorspace(self, nodes, colorspace):
+        return self._set_colorspaces([(node, colorspace) for node in nodes])
+
+    def ignore_color_space_file_rules(self):
+        file_nodes = cmds.ls(type="file") or []
+        applied = []
+        failed = []
+        for node in file_nodes:
+            try:
+                cmds.setAttr(f"{node}.ignoreColorSpaceFileRules", 1)
+                applied.append(node)
+            except Exception as exc:
+                failed.append((node, exc))
+                self.log.warn(
+                    f"Failed to set ignoreColorSpaceFileRules on {node}: {exc}",
+                    source=_SOURCE,
+                )
+        return {"nodes": file_nodes, "applied": applied, "failed": failed}
+
+    def _set_colorspaces(self, assignments, skip_count=0):
+        applied = []
+        failed = []
+        try:
+            cmds.undoInfo(openChunk=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
+
+        try:
+            for node, colorspace in assignments:
+                if not colorspace:
+                    skip_count += 1
+                    continue
+                try:
+                    cmds.setAttr(f"{node}.colorSpace", colorspace, type="string")
+                    applied.append((node, colorspace))
+                except Exception as exc:
+                    failed.append((node, exc))
+                    self.log.warn(
+                        f"Failed to set color space on {node}: {exc}",
+                        source=_SOURCE,
+                    )
+        finally:
+            try:
+                cmds.undoInfo(closeChunk=True)
+            except Exception as exc:
+                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
+
+        return {"applied": applied, "failed": failed, "skipped": skip_count}
+
     def match(self, file_node):
         """Compute the match result for a single Maya file node. Read-only."""
         errors = []
