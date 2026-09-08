@@ -5,6 +5,7 @@
 ### Refactored
 - **Colorspace 功能从 Node Tools 迁移为独立标签页**：`Node Tools` 删除全部 colorspace UI 与操作（Set File Color Space / Auto Match Selected / Color Management），只保留 Select Nodes 与 Rename Shading Engine；colorspace 功能唯一入口迁移到新 **Colorspace** 标签页（`ui/tabs/colorspace_tab.py`），`ignoreColorSpaceFileRules` 工具同步迁入
 - **主窗口标签页顺序调整**：Converter → Material Builder → Batch Builder → **Colorspace** → Node Tools → Log（Colorspace 为第 4 个标签页）
+- **Further centralized Colorspace responsibilities**: `ColorspaceTab` now only handles presentation, table selection, and interaction; scene scanning, automatic/manual color-space assignment, `ignoreColorSpaceFileRules`, and undo handling are centralized in `ColorSpaceMatcher`, with unified applied / failed / skipped results
 
 ### Added
 - 单一 matcher 核心 `core/colorspace.py`：`NameDriver`（文件名关键词，来自 `config/texture_channels.json`）+ `ChannelDriver`（BFS 下游通道追踪，保留 depth/budget 遍历保护与材质缓存）+ `ColorSpaceResolver`（role→alias→实际 Maya colorspace，available spaces 按 Refresh 缓存）+ `ColorSpaceMatcher`（`MATCHED`/`CONFLICT`/`AMBIGUOUS`/`UNMATCHED`/`INVALID` 五态 + prematch 预测 + diagnostic）；配置仍以 `colorSpace.json` / `texture_channels.json` 为单一来源，不引入第二套规则
