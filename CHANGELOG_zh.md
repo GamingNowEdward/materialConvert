@@ -2,6 +2,9 @@
 
 ## 2026-09-10
 
+### 修复
+- `ColorSpaceMatcher.ignore_color_space_file_rules()` 的逐节点 `setAttr` 现在包在单个 undo chunk 中（`core/colorspace.py`），与 `_set_colorspaces()` 一致；Colorspace 页"Set ignoreColorSpaceFileRules on All File Nodes"现为单步撤销
+
 ### 重构
 - **Batch Builder 批量编排下沉 core**：新增 `BatchBuilder.build_all(materials, ..., on_progress=...)`（`core/batch_builder.py`），undo chunk、逐材质异常隔离（`_build_one_safe`，失败记 ERROR 不中断批次）、进度回调异常防护与批次汇总日志全部由 core 负责；`BatchBuilderTab._build_materials` 只保留选择过滤、进度条与结果展示，不再直接调用 `cmds.undoInfo`
 - 新增纯 stdlib 结果模型 `BuildResult` + `summarize_build_results()`（`core/results.py`），与 `ConversionResult` 并列，core/UI 共用

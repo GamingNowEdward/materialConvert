@@ -324,16 +324,28 @@ class ColorSpaceMatcher:
         file_nodes = cmds.ls(type="file") or []
         applied = []
         failed = []
-        for node in file_nodes:
+        try:
+            cmds.undoInfo(openChunk=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
+
+        try:
+            for node in file_nodes:
+                try:
+                    cmds.setAttr(f"{node}.ignoreColorSpaceFileRules", 1)
+                    applied.append(node)
+                except Exception as exc:
+                    failed.append((node, exc))
+                    self.log.warn(
+                        f"Failed to set ignoreColorSpaceFileRules on {node}: {exc}",
+                        source=_SOURCE,
+                    )
+        finally:
             try:
-                cmds.setAttr(f"{node}.ignoreColorSpaceFileRules", 1)
-                applied.append(node)
+                cmds.undoInfo(closeChunk=True)
             except Exception as exc:
-                failed.append((node, exc))
-                self.log.warn(
-                    f"Failed to set ignoreColorSpaceFileRules on {node}: {exc}",
-                    source=_SOURCE,
-                )
+                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
+
         return {"nodes": file_nodes, "applied": applied, "failed": failed}
 
     def _set_colorspaces(self, assignments, skip_count=0):

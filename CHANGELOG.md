@@ -2,6 +2,9 @@
 
 ## 2026-09-10
 
+### Fixed
+- `ColorSpaceMatcher.ignore_color_space_file_rules()` now wraps its per-node `setAttr` loop in a single undo chunk (`core/colorspace.py`), matching `_set_colorspaces()`; the Colorspace tab's "Set ignoreColorSpaceFileRules on All File Nodes" is now a single undo step
+
 ### Refactored
 - **Batch Builder batch orchestration moved into core**: added `BatchBuilder.build_all(materials, ..., on_progress=...)` (`core/batch_builder.py`) — undo chunk, per-material failure isolation (`_build_one_safe`, errors logged without aborting the batch), progress-callback protection and batch summary logging now live in core; `BatchBuilderTab._build_materials` keeps only selection filtering, the progress bar and result presentation, and no longer calls `cmds.undoInfo` directly
 - Added the pure-stdlib result model `BuildResult` + `summarize_build_results()` (`core/results.py`), alongside `ConversionResult`, shared by core and UI
