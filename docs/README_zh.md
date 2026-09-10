@@ -134,7 +134,7 @@ materialConvert/
 │   ├── colorspace.py                # 色彩空间匹配核心（name/channel driver + resolver + matcher）
 │   └── config_validator.py          # JSON 配置校验（Log 标签页）
 ├── ui/                              # 用户界面
-│   ├── converter_ui.py              # 主窗口 (QMainWindow + QTabWidget)
+│   ├── main_window.py               # 主窗口 (QMainWindow + QTabWidget)
 │   ├── feedback.py                  # best-effort 操作反馈装饰器
 │   ├── log_panel.py                 # 嵌入式全局日志查看器（拉取、过滤、QTableView）
 │   ├── styles.py                    # QSS 暗色主题
@@ -171,6 +171,11 @@ materialConvert/
 - [CONVERSION_SPEC_zh.md](CONVERSION_SPEC_zh.md) — 转换规格说明（中文）
 - [CONFIG_GUIDE.md](CONFIG_GUIDE.md) — 渲染器 JSON 配置编写指南（英文）
 - [CONFIG_GUIDE_zh.md](CONFIG_GUIDE_zh.md) — 渲染器 JSON 配置编写指南（中文）
+
+## 开发
+
+- 纯 Python 测试（无需 Maya）：`python -m pytest tests/ -v`
+- CI（`.github/workflows/test.yml`）在 Python 3.11 + PySide6 下运行同一套 pytest 与 `scripts/check_no_silent_pass.py` 守卫脚本
 
 ## License
 

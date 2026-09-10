@@ -339,6 +339,7 @@ UI 支持同时批量转换多个材质：
 **结果语义**（见 `core/results.py`）：每个材质产出一个 `ConversionResult`
 （`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`）。
 **所有** SG 接线均失败的转换计为失败（而非静默成功）——因为场景仍在使用旧材质。
+仅接线到**部分** SG 的转换仍计为成功，但会标记为 `partial_wired`，批次汇总会发出 WARN。
 `convert_all(..., on_progress=...)` 会在批量过程中逐材质向 UI 汇报进度，
 界面在批次运行期间实时刷新进度条，而不是等全部完成后一次性拨动。
 

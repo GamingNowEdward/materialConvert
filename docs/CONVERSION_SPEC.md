@@ -345,7 +345,9 @@ UI supports batch conversion of multiple materials:
 `ConversionResult` (`created` / `converted` / `wired` / `total_sgs` /
 `skipped` / `reason`). A conversion whose shading-engine reconnection failed
 for **every** SG is reported as failed (not a silent success), because the
-scene would still render the old material. Conversion run by `convert_all(...,
+scene would still render the old material. A conversion wired to only **some**
+of its SGs still counts as converted but is flagged as `partial_wired`, and
+the batch summary warns about it. Conversion run by `convert_all(...,
 on_progress=...)` reports per-material progress to the UI, which repaints the
 progress bar during the batch instead of after it completes.
 

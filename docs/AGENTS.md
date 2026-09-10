@@ -41,12 +41,12 @@ exec(open(r"你的路径\materialConvert\main.py").read())
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）；**逐 shadingEngine 转换**（置换挂在 SG 上），转换器一次性枚举源材质全部 SG 传入，源置换相同的 SG 复用同一目标节点
 - 颜色校正节点类型以 `config/colorCorrection.json` 为单一来源；`node_utils.is_cc_node()` 通过 `ConfigLoader.get_all_cc_types()` 判断，禁止在 Python 中维护 CC 节点类型列表
 - 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数；`convert()` 返回结构化 `ConversionResult`，`convert_all(..., on_progress=...)` 提供可选逐材质进度回调（core 不依赖 Qt，回调异常只记 WARN 不中断批次）
-- 转换结果模型：`core/results.py` — `ConversionResult`（`created`/`converted`/`wired`/`total_sgs`/`skipped`/`reason`）+ `summarize_results()`，以及 Builder 用的 `BuildResult`（`material`/`new_material`/`built`/`reason`）+ `summarize_build_results()`，纯 Python 可单测，core 与 UI 共用。**语义**：创建成功但全部 SG 接线失败 = `unwired`（计入失败，场景仍渲染旧材质，绝不静默报成功）；`total_sgs==0` 的浮动材质不计入失败
+- 转换结果模型：`core/results.py` — `ConversionResult`（`created`/`converted`/`wired`/`total_sgs`/`skipped`/`reason`）+ `summarize_results()`，以及 Builder 用的 `BuildResult`（`material`/`new_material`/`built`/`reason`）+ `summarize_build_results()`，纯 Python 可单测，core 与 UI 共用。**语义**：创建成功但全部 SG 接线失败 = `unwired`（计入失败，场景仍渲染旧材质，绝不静默报成功）；仅部分 SG 接线 = `partially_wired`（计入成功但批次 WARN）；`total_sgs==0` 的浮动材质不计入失败
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`；节点识别/创建类函数（`identify_node_type` / `create_cc_node` / `create_target_material`）接受可选 `logger` 参数，调用方应传入实例 logger，未传时回落到 `get_logger()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
-- 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法；由 `ConverterWindow` 创建唯一实例并注入 `BuilderContext` / `ConverterTab` / `ColorspaceTab` / `NodeToolsTab`，其余组件经 `ctx.config` 共享）
-- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，6 个标签页：Converter / Material Builder / Batch Builder / Colorspace / Node Tools / Log）；目标材质下拉框统一经 `ui/widgets.py:populate_material_targets()` 从 `ConfigLoader` 填充
+- 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法；由 `MainWindow` 创建唯一实例并注入 `BuilderContext` / `ConverterTab` / `ColorspaceTab` / `NodeToolsTab`，其余组件经 `ctx.config` 共享）
+- 界面：`ui/main_window.py`（QMainWindow + QTabWidget，6 个标签页：Converter / Material Builder / Batch Builder / Colorspace / Node Tools / Log）；目标材质下拉框统一经 `ui/widgets.py:populate_material_targets()` 从 `ConfigLoader` 填充
 - 操作反馈：`ui/feedback.py` — `qt_maya_logger(label)` 操作反馈装饰器（START/成功横幅 + 错误弹窗）。**所有反馈均为 best-effort**：logger / 弹窗 / 横幅任一环节失败都不能改变业务控制流——logger 失败回退 `_report_terminal`（stderr 通道，不依赖 logger/UI/Maya），弹窗失败记录 WARN；原始异常始终重新抛出。core 层禁止 import ui 包，反馈装饰器只能放 UI 层
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络（不含 `use_nrm`/`use_disp` 参数：normal/bump 模式由 `channel_options` 推导、缺省 normal，置换由 `input_paths` 是否含 `displacementTexture` 决定）；`core/builder_context.py`（命名/建节点工具，持有 `config`）
@@ -62,7 +62,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：
 ```python
 from ui import QtWidgets, QtCore, QtGui, cmds       # tabs
-from ui import QtWidgets, shiboken    # converter_ui.py
+from ui import QtWidgets, shiboken    # main_window.py
 ```
 PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一行 import。
 

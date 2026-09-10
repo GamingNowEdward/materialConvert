@@ -134,7 +134,7 @@ materialConvert/
 │   ├── colorspace.py                # Color-space match core (name/channel drivers + resolver + matcher)
 │   └── config_validator.py          # JSON config validation (Log tab)
 ├── ui/                              # User interface
-│   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget)
+│   ├── main_window.py               # Main window (QMainWindow + QTabWidget)
 │   ├── feedback.py                  # Best-effort operation feedback decorator
 │   ├── log_panel.py                 # Embedded global log viewer (polling, filters, QTableView)
 │   ├── styles.py                    # QSS dark theme
@@ -171,6 +171,11 @@ materialConvert/
 - [CONVERSION_SPEC_zh.md](docs/CONVERSION_SPEC_zh.md) — 中文版转换规格说明
 - [CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md) — Renderer JSON config authoring guide
 - [CONFIG_GUIDE_zh.md](docs/CONFIG_GUIDE_zh.md) — 渲染器 JSON 配置编写指南（中文版）
+
+## Development
+
+- Pure-Python tests (no Maya required): `python -m pytest tests/ -v`
+- CI (`.github/workflows/test.yml`) runs the same pytest suite plus `scripts/check_no_silent_pass.py` on Python 3.11 + PySide6
 
 ## License
 

@@ -16,7 +16,7 @@ if _ROOT:
     from core.module_reload import purge_project_modules
     purge_project_modules(root=_ROOT)
 
-from ui.converter_ui import show
+from ui.main_window import show
 
 if __name__ == "__main__":
     show()

@@ -13,13 +13,13 @@ def _maya_main_window(logger=None):
             if widget.objectName() == "MayaWindow":
                 return widget
         except Exception as exc:
-            log.debug(f"Failed to inspect top-level widget {widget}: {exc}", source="ConverterWindow")
+            log.debug(f"Failed to inspect top-level widget {widget}: {exc}", source="MainWindow")
     return None
 
 
-class ConverterWindow(QtWidgets.QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
 
-    WINDOW_NAME = "pbrConverterWindow"
+    WINDOW_NAME = "materialConvertWindow"
     WINDOW_TITLE = "Material Builder & Converter"
 
     def __init__(self, parent=None):
@@ -44,7 +44,7 @@ class ConverterWindow(QtWidgets.QMainWindow):
 
         self._build_ui()
         self._apply_style()
-        self.logger.debug("Converter window initialized", source="ConverterWindow")
+        self.logger.debug("Main window initialized", source="MainWindow")
 
     def _apply_style(self):
         self.setStyleSheet(FULL_STYLESHEET)
@@ -79,7 +79,7 @@ class ConverterWindow(QtWidgets.QMainWindow):
 
 
 def show():
-    global _converter_window
+    global _main_window
     logger = get_logger()
 
     if shiboken is not None:
@@ -89,20 +89,20 @@ def show():
                 for child in maya_win.children():
                     try:
                         if (isinstance(child, QtWidgets.QWidget) and
-                                child.objectName() == ConverterWindow.WINDOW_NAME):
+                                child.objectName() == MainWindow.WINDOW_NAME):
                             child.close()
                             child.deleteLater()
                     except Exception as exc:
-                        logger.debug(f"Failed to clean up old converter window child: {exc}", source="ConverterWindow")
+                        logger.debug(f"Failed to clean up old converter window child: {exc}", source="MainWindow")
         except Exception as exc:
-            logger.warn(f"Failed to locate Maya main window during cleanup: {exc}", source="ConverterWindow")
+            logger.warn(f"Failed to locate Maya main window during cleanup: {exc}", source="MainWindow")
 
     try:
-        _converter_window.close()
-        _converter_window.deleteLater()
+        _main_window.close()
+        _main_window.deleteLater()
     except Exception as exc:
-        logger.debug(f"No previous converter window to close: {exc}", source="ConverterWindow")
+        logger.debug(f"No previous converter window to close: {exc}", source="MainWindow")
 
-    _converter_window = ConverterWindow()
-    _converter_window.show()
-    return _converter_window
+    _main_window = MainWindow()
+    _main_window.show()
+    return _main_window
