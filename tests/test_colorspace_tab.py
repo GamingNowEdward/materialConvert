@@ -206,3 +206,12 @@ def test_node_tools_has_no_colorspace_ui(qapp):
         assert not any(forbidden in label for label in labels), (
             f"Node Tools still exposes colorspace UI: {forbidden}"
         )
+
+
+def test_node_tools_accepts_injected_config(qapp):
+    from core.config_loader import ConfigLoader
+    from ui.tabs import node_tools_tab as ntt
+
+    loader = ConfigLoader()
+    tab = ntt.NodeToolsTab(ctx=object(), logger=Logger(), config=loader)
+    assert tab.config is loader

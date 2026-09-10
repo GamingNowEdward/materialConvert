@@ -112,16 +112,18 @@ materialConvert/
 │   ├── bumpNormal.json              # 凹凸/法线节点映射（input/output 统一 schema）
 │   ├── colorCorrection.json         # 颜色校正节点映射
 │   ├── colorSpace.json              # 色彩空间自动匹配规则
-│   ├── texture_channels.json       # Batch Builder 文件名→通道规则
+│   ├── texture_channels.json        # Batch Builder 文件名→通道规则
 │   └── builder_naming.json          # Material Builder 命名约定
 ├── core/                            # 核心引擎
 │   ├── converter.py                 # MaterialConverter 调度器
+│   ├── results.py                   # ConversionResult / BuildResult 结果模型
 │   ├── converters/                  # 业务转换模块
 │   │   ├── attribute.py             # 属性收集与传递
 │   │   ├── bump.py                  # 凹凸/法线转换
 │   │   ├── cc.py                    # 颜色校正转换
 │   │   └── displacement.py          # 置换转换
 │   ├── config_loader.py             # JSON 配置解析
+│   ├── module_reload.py             # 重载时按物理路径清理本项目模块
 │   ├── node_utils.py                # Maya 节点工具函数
 │   ├── prerequisites.py             # 渲染器前提条件处理
 │   ├── logger.py                    # 统一日志模块
@@ -133,11 +135,14 @@ materialConvert/
 │   └── config_validator.py          # JSON 配置校验（Log 标签页）
 ├── ui/                              # 用户界面
 │   ├── converter_ui.py              # 主窗口 (QMainWindow + QTabWidget)
+│   ├── feedback.py                  # best-effort 操作反馈装饰器
+│   ├── log_panel.py                 # 嵌入式全局日志查看器（拉取、过滤、QTableView）
 │   ├── styles.py                    # QSS 暗色主题
+│   ├── widgets.py                   # 目标材质下拉框共用填充
 │   └── tabs/                        # 六个功能标签页
 │       ├── converter_tab.py         # 材质转换
 │       ├── builder_tab.py           # Material Builder
-│       ├── batch_builder_tab.py    # Batch Builder
+│       ├── batch_builder_tab.py     # Batch Builder
 │       ├── colorspace_tab.py        # Colorspace（file 节点色彩空间管理）
 │       ├── node_tools_tab.py        # Node Tools
 │       └── log_tab.py               # Log（全局日志查看器 + 配置校验）
@@ -148,6 +153,11 @@ materialConvert/
 │   ├── CONFIG_GUIDE.md              # 渲染器 JSON 配置编写指南（英文）
 │   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文）
 │   └── README_zh.md                 # 本文件
+├── scripts/                         # 仓库维护脚本
+│   └── check_no_silent_pass.py      # CI 守卫：core/ui 禁止静默 except/print
+├── tests/                           # 纯 Python 单元测试（无需 Maya）
+├── .github/
+│   └── workflows/test.yml           # CI：pytest + 守卫脚本（Python 3.11 + PySide6）
 ├── main.py                          # 入口脚本
 ├── copy_launch.bat                  # 双击复制启动命令
 ├── LICENSE

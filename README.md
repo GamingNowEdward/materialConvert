@@ -112,16 +112,18 @@ materialConvert/
 │   ├── bumpNormal.json              # Bump/normal node mappings
 │   ├── colorCorrection.json         # Color correction node mappings
 │   ├── colorSpace.json              # Color space auto-match rules
-│   ├── texture_channels.json       # Batch Builder filename-to-channel rules
+│   ├── texture_channels.json        # Batch Builder filename-to-channel rules
 │   └── builder_naming.json          # Material Builder naming conventions
 ├── core/                            # Core engine
 │   ├── converter.py                 # MaterialConverter dispatcher
+│   ├── results.py                   # ConversionResult / BuildResult result models
 │   ├── converters/                  # Business conversion modules
 │   │   ├── attribute.py             # Attribute collection & transfer
 │   │   ├── bump.py                  # Bump/normal conversion
 │   │   ├── cc.py                    # Color correction conversion
 │   │   └── displacement.py          # Displacement conversion
 │   ├── config_loader.py             # JSON config parser
+│   ├── module_reload.py             # Path-based purge of this project's modules on reload
 │   ├── node_utils.py                # Maya node utility functions
 │   ├── prerequisites.py             # Renderer prerequisite handling
 │   ├── logger.py                    # Unified logging module
@@ -133,12 +135,14 @@ materialConvert/
 │   └── config_validator.py          # JSON config validation (Log tab)
 ├── ui/                              # User interface
 │   ├── converter_ui.py              # Main window (QMainWindow + QTabWidget)
+│   ├── feedback.py                  # Best-effort operation feedback decorator
 │   ├── log_panel.py                 # Embedded global log viewer (polling, filters, QTableView)
 │   ├── styles.py                    # QSS dark theme
+│   ├── widgets.py                   # Shared target-combo population helper
 │   └── tabs/                        # Six functional tabs
 │       ├── converter_tab.py         # Material conversion
 │       ├── builder_tab.py           # Material Builder
-│       ├── batch_builder_tab.py    # Batch Builder
+│       ├── batch_builder_tab.py     # Batch Builder
 │       ├── colorspace_tab.py        # Colorspace (file-node color-space management)
 │       ├── node_tools_tab.py        # Node Tools
 │       └── log_tab.py               # Log (global log viewer + config validation)
@@ -149,6 +153,11 @@ materialConvert/
 │   ├── CONFIG_GUIDE.md              # Renderer JSON config authoring guide
 │   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文版）
 │   └── README_zh.md                 # 中文版 README
+├── scripts/                         # Repository maintenance scripts
+│   └── check_no_silent_pass.py      # CI guard: no silent except/print in core/ui
+├── tests/                           # Pure-Python unit tests (no Maya required)
+├── .github/
+│   └── workflows/test.yml           # CI: pytest + guard script (Python 3.11 + PySide6)
 ├── main.py                          # Entry script
 ├── copy_launch.bat                  # Double-click to copy launch command
 ├── LICENSE

@@ -33,7 +33,7 @@ class ConverterWindow(QtWidgets.QMainWindow):
 
         self.converter_tab = ConverterTab(logger=self.logger, config=self.config)
         self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
-        self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger)
+        self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger, config=self.config)
         self.colorspace_tab = ColorspaceTab(logger=self.logger, config=self.config)
         self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
         self.log_tab = LogTab(logger=self.logger)

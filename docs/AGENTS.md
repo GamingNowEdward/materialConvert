@@ -45,8 +45,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`；节点识别/创建类函数（`identify_node_type` / `create_cc_node` / `create_target_material`）接受可选 `logger` 参数，调用方应传入实例 logger，未传时回落到 `get_logger()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
 - 日志：`core/logger.py` — `Logger` 类，结构化级别（ERROR/WARN/SKIP/INFO/DEBUG/OK）+ 环形缓冲 + `scope()` 上下文；UI 不注册回调，而是由 `ui/log_panel.py` 中的嵌入式 `LogViewer` 在 Log 标签页可见时每 150ms 通过单消费者 API `drain(after_seq)` 拉取（返回新记录 + 上次 drain 后被逐出的 `evicted_seqs`；落后超过一个完整缓冲区时返回 `reset=True` 全量快照）
-- 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法；由 `ConverterWindow` 创建唯一实例并注入各 Tab 与核心组件，`BuilderContext` 通过 `config_loader=` 接收）
-- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，6 个标签页：Converter / Builder / Batch Builder / Colorspace / Node Tools / Log）；目标材质下拉框统一经 `ui/widgets.py:populate_material_targets()` 从 `ConfigLoader` 填充
+- 配置读取：`core/config_loader.py`（读取 JSON，提供公开查询方法；由 `ConverterWindow` 创建唯一实例并注入 `BuilderContext` / `ConverterTab` / `ColorspaceTab` / `NodeToolsTab`，其余组件经 `ctx.config` 共享）
+- 界面：`ui/converter_ui.py`（QMainWindow + QTabWidget，6 个标签页：Converter / Material Builder / Batch Builder / Colorspace / Node Tools / Log）；目标材质下拉框统一经 `ui/widgets.py:populate_material_targets()` 从 `ConfigLoader` 填充
 - 操作反馈：`ui/feedback.py` — `qt_maya_logger(label)` 操作反馈装饰器（START/成功横幅 + 错误弹窗）。**所有反馈均为 best-effort**：logger / 弹窗 / 横幅任一环节失败都不能改变业务控制流——logger 失败回退 `_report_terminal`（stderr 通道，不依赖 logger/UI/Maya），弹窗失败记录 WARN；原始异常始终重新抛出。core 层禁止 import ui 包，反馈装饰器只能放 UI 层
 - 样式：`ui/styles.py`（QSS 暗色主题）
 - Builder：`core/material_builder.py` — `MaterialBuilder.build(node_type, ...)` 从纹理路径组装材质网络（不含 `use_nrm`/`use_disp` 参数：normal/bump 模式由 `channel_options` 推导、缺省 normal，置换由 `input_paths` 是否含 `displacementTexture` 决定）；`core/builder_context.py`（命名/建节点工具，持有 `config`）
@@ -113,7 +113,7 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 - 需要右键选节点的日志，必须在写入时通过 `nodes=` 传入节点；UI 只读取 `record.nodes`，禁止解析 `message` 提取节点。`Logger` 只对节点做清洗去重（`None` 项忽略），不拆分 plug；plug 转节点名使用 `core.node_utils.node_name_from_plug()`。
 - 日志节点是一次性快照，不保证时效性。右键选择直接执行 `cmds.select`，不做存在性判断。
 - 高频循环连接（如 p2d → file）应在循环内使用 `BuilderContext.connect(..., quiet=True)` 静默逐条成功 DEBUG，循环后只发一条带 `nodes` 的汇总 DEBUG；`quiet` 只静默成功路径，失败仍必须写带 `nodes` 的 ERROR。
-- 性能优先：日志只追加到环形缓冲，批量转换期间每 5 个材质（或 150ms）才 `processEvents()` 一次。
+- 性能优先：日志只追加到环形缓冲，批量转换/构建期间每 5 个材质（且必定包含最后一个）才 `processEvents()` 一次。
 
 ### 材质 JSON 必须包含 `uiPanel_display_name` 和 `renderer`
 每个材质 JSON 的 `material` 块中必须包含这两个字段：

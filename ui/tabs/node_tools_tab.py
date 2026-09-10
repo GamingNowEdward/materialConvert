@@ -9,10 +9,10 @@ _SOURCE = "NodeToolsTab"
 
 class NodeToolsTab:
 
-    def __init__(self, ctx: BuilderContext, logger=None):
+    def __init__(self, ctx: BuilderContext, logger=None, config=None):
         self.ctx = ctx
         self.log = logger or get_logger()
-        self.config = ConfigLoader()
+        self.config = config or ConfigLoader()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()

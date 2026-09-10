@@ -11,9 +11,14 @@
 - `MaterialBuilder.build()` 移除冗余 `use_nrm` / `use_disp` 参数：normal/bump 模式由 `channel_options` 推导（缺省 normal），置换由 `input_paths` 是否含 `displacementTexture` 决定，UI 不再重复计算
 - `BatchBuilderTab._scan_directory` 删除与 `TextureScanner` 重复的扫描汇总与 conflict 警告日志
 - `Create File From P2D` 从 Material Builder 移至 Node Tools（新增 `Texture Tools` 分组）；反馈改为 Node Tools 现有日志风格（不再弹窗/横幅），实现与行为其余不变
+- `NodeToolsTab` 现在接受可选注入的 `ConfigLoader`（`ConverterWindow` 传入共享实例），补全"单例加载"约定；未注入时回退到自建 `ConfigLoader()`
 
 ### 新增
-- 测试：`test_batch_builder.py` 新增 `build_all` 用例（结果顺序、undo 包裹、失败隔离、回调异常不断批、空批次）、`test_conversion_results.py` 新增 `summarize_build_results` 用例、`test_colorspace.py` 新增 `apply_matched` core 用例（仅应用 MATCHED / 失败上报）、`test_builder_context.py` 新增加载器注入用例
+- 测试：`test_batch_builder.py` 新增 `build_all` 用例（结果顺序、undo 包裹、失败隔离、回调异常不断批、空批次）、`test_conversion_results.py` 新增 `summarize_build_results` 用例、`test_colorspace.py` 新增 `apply_matched` core 用例（仅应用 MATCHED / 失败上报）、`test_builder_context.py` 新增加载器注入用例、`test_colorspace_tab.py` 新增 `NodeToolsTab` 注入配置用例
+
+### 文档
+- `README.md` / `docs/README_zh.md`：项目结构树与代码同步——补 `core/results.py`、`core/module_reload.py`、`ui/feedback.py`、`ui/widgets.py`、`ui/log_panel.py`（中文版）、`tests/`、`scripts/check_no_silent_pass.py`、`.github/workflows/test.yml`
+- `docs/AGENTS.md`：修正 ConfigLoader 注入范围（含 `NodeToolsTab`）、标签页名称（`Builder` → `Material Builder`）与进度节流描述（每 5 个材质且含最后一个；删除过时的 "或 150ms"）
 
 ## 2026-09-07
 

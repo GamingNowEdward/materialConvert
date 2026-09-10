@@ -11,9 +11,14 @@
 - `MaterialBuilder.build()` dropped the redundant `use_nrm` / `use_disp` parameters: normal/bump mode is derived from `channel_options` (default normal) and displacement from `input_paths` containing `displacementTexture`; the UI no longer recomputes them
 - Removed duplicate scan summary / conflict warning logs from `BatchBuilderTab._scan_directory` (`TextureScanner` already logs them)
 - Moved `Create File From P2D` from Material Builder to Node Tools (new `Texture Tools` group); feedback now follows the Node Tools logging style (no dialog/banner), behavior otherwise unchanged
+- `NodeToolsTab` now accepts an optional injected `ConfigLoader` (`ConverterWindow` passes the shared instance), completing the single-loader policy; a self-created `ConfigLoader()` remains the fallback when none is injected
 
 ### Added
-- Tests: `build_all` cases in `test_batch_builder.py` (result order, undo wrapping, failure isolation, callback exception never aborts, empty batch), `summarize_build_results` cases in `test_conversion_results.py`, core `apply_matched` cases in `test_colorspace.py` (only MATCHED applied / failures reported), injected-loader case in `test_builder_context.py`
+- Tests: `build_all` cases in `test_batch_builder.py` (result order, undo wrapping, failure isolation, callback exception never aborts, empty batch), `summarize_build_results` cases in `test_conversion_results.py`, core `apply_matched` cases in `test_colorspace.py` (only MATCHED applied / failures reported), injected-loader case in `test_builder_context.py`, injected-config case for `NodeToolsTab` in `test_colorspace_tab.py`
+
+### Documentation
+- `README.md` / `docs/README_zh.md`: project-structure tree synced with the codebase — added `core/results.py`, `core/module_reload.py`, `ui/feedback.py`, `ui/widgets.py`, `ui/log_panel.py` (zh version), `tests/`, `scripts/check_no_silent_pass.py`, `.github/workflows/test.yml`
+- `docs/AGENTS.md`: corrected the ConfigLoader injection targets (now incl. `NodeToolsTab`), the tab name (`Builder` → `Material Builder`) and the progress-throttle description (every 5 materials incl. the last; removed stale "or 150ms")
 
 ## 2026-09-07
 
