@@ -10,6 +10,7 @@
 - Target material combo population deduplicated into `ui/widgets.py:populate_material_targets()` (shared by Converter / Builder / Batch Builder)
 - `MaterialBuilder.build()` dropped the redundant `use_nrm` / `use_disp` parameters: normal/bump mode is derived from `channel_options` (default normal) and displacement from `input_paths` containing `displacementTexture`; the UI no longer recomputes them
 - Removed duplicate scan summary / conflict warning logs from `BatchBuilderTab._scan_directory` (`TextureScanner` already logs them)
+- Moved `Create File From P2D` from Material Builder to Node Tools (new `Texture Tools` group); feedback now follows the Node Tools logging style (no dialog/banner), behavior otherwise unchanged
 
 ### Added
 - Tests: `build_all` cases in `test_batch_builder.py` (result order, undo wrapping, failure isolation, callback exception never aborts, empty batch), `summarize_build_results` cases in `test_conversion_results.py`, core `apply_matched` cases in `test_colorspace.py` (only MATCHED applied / failures reported), injected-loader case in `test_builder_context.py`

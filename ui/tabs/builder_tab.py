@@ -74,17 +74,6 @@ class BuilderTab:
         btn_build.clicked.connect(self._create_material_logic)
         layout.addWidget(btn_build)
 
-        line = QtWidgets.QFrame()
-        line.setFrameShape(QtWidgets.QFrame.HLine)
-        line.setStyleSheet("background-color: #333;")
-        layout.addWidget(line)
-
-        btn_create_file = QtWidgets.QPushButton("Create File From P2D")
-        btn_create_file.setFixedHeight(35)
-        btn_create_file.setObjectName("createFileBtn")
-        btn_create_file.clicked.connect(self._create_file_from_p2d)
-        layout.addWidget(btn_create_file)
-
         self._populate_material_list()
         return widget
 
@@ -168,18 +157,3 @@ class BuilderTab:
             use_qss=self.cb_qss.isChecked(),
             channel_options=channel_options,
         )
-
-    @qt_maya_logger("P2D File")
-    def _create_file_from_p2d(self):
-        import maya.cmds as cmds
-        sel = cmds.ls(selection=True)
-        if not sel or cmds.nodeType(sel[0]) != "place2dTexture":
-            raise RuntimeError("Please select a place2dTexture node first.")
-        p2d = sel[0]
-        f_node = cmds.shadingNode('file', asTexture=True, isColorManaged=True)
-        for attr in MaterialBuilder.P2D_ATTRS:
-            self.ctx.connect(p2d, attr, f_node, attr)
-        self.ctx.connect(p2d, "outUV", f_node, "uvCoord")
-        self.ctx.connect(p2d, "outUvFilterSize", f_node, "uvFilterSize")
-        cmds.select(f_node)
-        return "File creation from P2D"

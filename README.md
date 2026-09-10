@@ -51,7 +51,6 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Displacement node chain support
 - Material type dropdown driven by `config/material/*.json` — new materials appear automatically
 - Optional "Add To Quick Select Set" toggle
-- Create File From P2D: create file node from selected place2dTexture
 
 ### Batch Builder
 - Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
@@ -74,6 +73,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 ### Node Tools
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
 - **Rename Shading Engine**: Batch rename SG to match material names
+- **Create File From P2D**: create a `file` node from the selected `place2dTexture`, copying the 2D transform attributes and UV/filter connections
 
 ### Log
 - Global structured log viewer with level, source, and text filters

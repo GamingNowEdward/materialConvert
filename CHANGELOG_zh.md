@@ -10,6 +10,7 @@
 - 目标材质下拉列表填充去重为 `ui/widgets.py:populate_material_targets()`（Converter / Builder / Batch Builder 三处共用）
 - `MaterialBuilder.build()` 移除冗余 `use_nrm` / `use_disp` 参数：normal/bump 模式由 `channel_options` 推导（缺省 normal），置换由 `input_paths` 是否含 `displacementTexture` 决定，UI 不再重复计算
 - `BatchBuilderTab._scan_directory` 删除与 `TextureScanner` 重复的扫描汇总与 conflict 警告日志
+- `Create File From P2D` 从 Material Builder 移至 Node Tools（新增 `Texture Tools` 分组）；反馈改为 Node Tools 现有日志风格（不再弹窗/横幅），实现与行为其余不变
 
 ### 新增
 - 测试：`test_batch_builder.py` 新增 `build_all` 用例（结果顺序、undo 包裹、失败隔离、回调异常不断批、空批次）、`test_conversion_results.py` 新增 `summarize_build_results` 用例、`test_colorspace.py` 新增 `apply_matched` core 用例（仅应用 MATCHED / 失败上报）、`test_builder_context.py` 新增加载器注入用例

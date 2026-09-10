@@ -2,6 +2,7 @@ from ui import QtWidgets, cmds
 from core.builder_context import BuilderContext, DEFAULT_MATERIALS
 from core.config_loader import ConfigLoader
 from core.logger import get_logger
+from core.material_builder import MaterialBuilder
 
 _SOURCE = "NodeToolsTab"
 
@@ -64,6 +65,19 @@ class NodeToolsTab:
             sg_layout.addWidget(btn)
 
         layout.addWidget(grp_sg)
+
+        grp_texture = QtWidgets.QGroupBox("Texture Tools")
+        texture_layout = QtWidgets.QVBoxLayout(grp_texture)
+        texture_layout.setSpacing(8)
+        texture_layout.setContentsMargins(15, 20, 15, 15)
+
+        btn_create_file = QtWidgets.QPushButton("Create File From P2D")
+        btn_create_file.setFixedHeight(35)
+        btn_create_file.setObjectName("createFileBtn")
+        btn_create_file.clicked.connect(self._create_file_from_p2d)
+        texture_layout.addWidget(btn_create_file)
+
+        layout.addWidget(grp_texture)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -187,3 +201,34 @@ class NodeToolsTab:
                 self.log.info(f"{sg} renamed to {new_name}", source=_SOURCE)
             except Exception as exc:
                 self.log.warn(f"Cannot rename {sg}: {exc}", source=_SOURCE)
+
+    def _create_file_from_p2d(self):
+        try:
+            sel = cmds.ls(selection=True)
+            is_p2d = bool(sel) and cmds.nodeType(sel[0]) == "place2dTexture"
+        except Exception as exc:
+            self.log.error(f"Failed to query Maya selection: {exc}", source=_SOURCE)
+            return
+        if not is_p2d:
+            self.log.warn("Please select a place2dTexture node first.", source=_SOURCE)
+            return
+
+        p2d = sel[0]
+        try:
+            f_node = cmds.shadingNode('file', asTexture=True, isColorManaged=True)
+            for attr in MaterialBuilder.P2D_ATTRS:
+                self.ctx.connect(p2d, attr, f_node, attr)
+            self.ctx.connect(p2d, "outUV", f_node, "uvCoord")
+            self.ctx.connect(p2d, "outUvFilterSize", f_node, "uvFilterSize")
+            cmds.select(f_node)
+        except Exception as exc:
+            self.log.error(
+                f"Failed to create file node from {p2d}: {exc}", source=_SOURCE
+            )
+            return
+
+        self.log.info(
+            f"Created file node {f_node} from {p2d}",
+            source=_SOURCE,
+            nodes=(f_node, p2d),
+        )

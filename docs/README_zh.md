@@ -51,7 +51,6 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 置换节点链支持
 - 材质类型下拉框由 `config/material/*.json` 驱动——新增材质自动出现
 - 可选"加入快速选择集"开关
-- Create File From P2D：从选中的 place2dTexture 节点创建 file 节点
 
 ### Batch Builder
 - 选择目录并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）
@@ -74,6 +73,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 ### Node Tools
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
+- **Create File From P2D**：从选中的 place2dTexture 创建 file 节点，复制 2D 变换属性与 UV/Filter 连接
 
 ### Log
 - 全局结构化日志查看器，支持按级别、来源和文本过滤
