@@ -15,6 +15,7 @@
 - Removed duplicate scan summary / conflict warning logs from `BatchBuilderTab._scan_directory` (`TextureScanner` already logs them)
 - Moved `Create File From P2D` from Material Builder to Node Tools (new `Texture Tools` group); feedback now follows the Node Tools logging style (no dialog/banner), behavior otherwise unchanged
 - `NodeToolsTab` now accepts an optional injected `ConfigLoader` (`ConverterWindow` passes the shared instance), completing the single-loader policy; a self-created `ConfigLoader()` remains the fallback when none is injected
+- Batch start/finish logs are now emitted only from core (`MaterialConverter.convert_all` / `BatchBuilder.build_all`); `ConverterTab` and `BatchBuilderTab` no longer duplicate them (`--- Converting to ... ---`, `--- DONE: ... ---`, `--- Batch build started / finished ... ---` removed)
 
 ### Renamed
 - Main window module renamed for accuracy: `ui/converter_ui.py` → `ui/main_window.py`, class `ConverterWindow` → `MainWindow`, window objectName `pbrConverterWindow` → `materialConvertWindow` (the window now hosts 6 tabs, so the old "converter" naming was misleading); `main.py` import updated, shelf launch command unchanged. Windows created by older versions are not auto-closed on reload after this rename — close them manually once

@@ -4,7 +4,6 @@ from ui import QtWidgets, QtCore, QtGui
 from ui.widgets import populate_material_targets
 from core.builder_context import BuilderContext
 from core.logger import get_logger
-from core.results import summarize_build_results
 from core.texture_scanner import TextureScanner
 from core.batch_builder import BatchBuilder
 
@@ -233,12 +232,6 @@ class BatchBuilderTab:
         else:
             materials = self.scan_result["materials"]
 
-        self.log.info(
-            f"--- Batch build started: {len(materials)} material(s) -> "
-            f"{self.config.get_display_name(target_node_type)} ---",
-            source=_SOURCE,
-        )
-
         total = len(materials)
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(0)
@@ -251,7 +244,7 @@ class BatchBuilderTab:
                 self.progress_bar.setValue(done)
                 QtWidgets.QApplication.processEvents()
 
-        results = self.batch_builder.build_all(
+        self.batch_builder.build_all(
             materials,
             target_node_type,
             use_full_chain=use_full_chain,
@@ -261,10 +254,3 @@ class BatchBuilderTab:
 
         self.progress_bar.setValue(total)
         self.progress_bar.setVisible(False)
-
-        summary = summarize_build_results(results)
-        self.log.info(
-            f"--- Batch build finished: {summary['built']} built, "
-            f"{summary['failed']} failed ---",
-            source=_SOURCE,
-        )

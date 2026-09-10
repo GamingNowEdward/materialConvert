@@ -4,7 +4,6 @@ import maya.cmds as cmds
 from core.config_loader import ConfigLoader
 from core.converter import MaterialConverter
 from core.logger import get_logger
-from core.results import summarize_results
 import core.node_utils as node_utils
 from ui.widgets import populate_material_targets
 
@@ -156,9 +155,6 @@ class ConverterTab:
             self.log.error("Execution halted: Target format undefined.", source=_SOURCE)
             return
 
-        target_display = self.config.get_display_name(target_node_type)
-        self.log.info(f"--- Converting to {target_display} ---", source=_SOURCE)
-
         total = len(self.current_materials)
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(0)
@@ -174,15 +170,6 @@ class ConverterTab:
         results = self.converter_obj.convert_all(
             self.current_materials, target_node_type, on_progress=_on_progress
         )
-
-        counts = summarize_results(results)
-
-        summary = f"DONE: {counts['converted']} converted, {counts['skipped']} skipped, {counts['failed']} failed"
-        if counts["unwired"]:
-            summary += f" ({counts['unwired']} created but NOT wired to any shading engine)"
-        if counts["partial_wired"]:
-            summary += f" ({counts['partial_wired']} wired only partially)"
-        self.log.info(f"--- {summary} ---", source=_SOURCE)
 
         self.progress_bar.setValue(total)
         self.progress_bar.setVisible(False)

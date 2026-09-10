@@ -15,6 +15,7 @@
 - `BatchBuilderTab._scan_directory` 删除与 `TextureScanner` 重复的扫描汇总与 conflict 警告日志
 - `Create File From P2D` 从 Material Builder 移至 Node Tools（新增 `Texture Tools` 分组）；反馈改为 Node Tools 现有日志风格（不再弹窗/横幅），实现与行为其余不变
 - `NodeToolsTab` 现在接受可选注入的 `ConfigLoader`（`ConverterWindow` 传入共享实例），补全"单例加载"约定；未注入时回退到自建 `ConfigLoader()`
+- 批次开始/结束日志统一由 core 输出（`MaterialConverter.convert_all` / `BatchBuilder.build_all`）；`ConverterTab` / `BatchBuilderTab` 不再重复输出（删除 `--- Converting to ... ---`、`--- DONE: ... ---`、`--- Batch build started / finished ... ---`）
 
 ### 重命名
 - 主窗口模块更名：`ui/converter_ui.py` → `ui/main_window.py`，类 `ConverterWindow` → `MainWindow`，窗口 objectName `pbrConverterWindow` → `materialConvertWindow`（该窗口现已承载 6 个标签页，旧 "converter" 命名已名不副实）；`main.py` 导入同步更新，Shelf 启动命令不变。旧版本创建的窗口在改名后热重载时不会自动关闭，手动关一次即可
