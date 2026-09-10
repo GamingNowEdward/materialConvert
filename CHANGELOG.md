@@ -32,41 +32,41 @@
 ## 2026-09-07
 
 ### Refactored
-- **Colorspace 功能从 Node Tools 迁移为独立标签页**：`Node Tools` 删除全部 colorspace UI 与操作（Set File Color Space / Auto Match Selected / Color Management），只保留 Select Nodes 与 Rename Shading Engine；colorspace 功能唯一入口迁移到新 **Colorspace** 标签页（`ui/tabs/colorspace_tab.py`），`ignoreColorSpaceFileRules` 工具同步迁入
-- **主窗口标签页顺序调整**：Converter → Material Builder → Batch Builder → **Colorspace** → Node Tools → Log（Colorspace 为第 4 个标签页）
+- **Colorspace moved out of Node Tools into a dedicated tab**: `Node Tools` dropped all colorspace UI and actions (Set File Color Space / Auto Match Selected / Color Management), keeping only Select Nodes and Rename Shading Engine; the sole colorspace entry point moved to the new **Colorspace** tab (`ui/tabs/colorspace_tab.py`), with the `ignoreColorSpaceFileRules` tool migrated along
+- **Main window tab order updated**: Converter → Material Builder → Batch Builder → **Colorspace** → Node Tools → Log (Colorspace is the 4th tab)
 - **Further centralized Colorspace responsibilities**: `ColorspaceTab` now only handles presentation, table selection, and interaction; scene scanning, automatic/manual color-space assignment, `ignoreColorSpaceFileRules`, and undo handling are centralized in `ColorSpaceMatcher`, with unified applied / failed / skipped results
 
 ### Added
-- 单一 matcher 核心 `core/colorspace.py`：`NameDriver`（文件名关键词，来自 `config/texture_channels.json`）+ `ChannelDriver`（BFS 下游通道追踪，保留 depth/budget 遍历保护与材质缓存）+ `ColorSpaceResolver`（role→alias→实际 Maya colorspace，available spaces 按 Refresh 缓存）+ `ColorSpaceMatcher`（`MATCHED`/`CONFLICT`/`AMBIGUOUS`/`UNMATCHED`/`INVALID` 五态 + prematch 预测 + diagnostic）；配置仍以 `colorSpace.json` / `texture_channels.json` 为单一来源，不引入第二套规则
-- Colorspace 标签页：场景 file 节点列表（File Node / File Path / Colorspace / Prematch / Diagnostic，状态词并入 Diagnostic 列并按严重度排序，去掉独立 State 列）、Refresh（只评估不改 scene）、Apply Selected / Apply All Matched（仅应用 `MATCHED`，undo chunk 包裹）、Manual Colorspace Assignment（Maya 实际 input spaces）、行选择同步 Maya 节点选择
-- 行为收紧（文档要求）：Name/Channel driver 内部多角色命中显式标记 `AMBIGUOUS`（不再静默取第一个）；无匹配不再回退默认 `raw`（`UNMATCHED` 不自动应用）；role 无法解析到实际 Maya colorspace 时为 `INVALID`，无静默 fallback
-- 测试：`tests/test_colorspace.py`（drivers / matcher / resolver，含从 `test_node_tools_trace.py` 迁入的 BFS 预算与跳过用例）、`tests/test_colorspace_tab.py`（UI 集成：Refresh 不改 scene、Apply 仅 MATCHED、Manual 生效、Node Tools 旧 colorspace 已移除）
+- Single matcher core `core/colorspace.py`: `NameDriver` (filename keywords from `config/texture_channels.json`) + `ChannelDriver` (BFS downstream channel tracing, keeping the depth/budget traversal guards and material cache) + `ColorSpaceResolver` (role → alias → actual Maya colorspace, available spaces cached until Refresh) + `ColorSpaceMatcher` (`MATCHED`/`CONFLICT`/`AMBIGUOUS`/`UNMATCHED`/`INVALID` five states + prematch prediction + diagnostic); configuration still has a single source of truth, `colorSpace.json` / `texture_channels.json`, with no second rule set introduced
+- Colorspace tab: scene file-node list (File Node / File Path / Colorspace / Prematch / Diagnostic — the state word is merged into the Diagnostic column and sorted by severity, dropping the separate State column), Refresh (evaluates only, does not modify the scene), Apply Selected / Apply All Matched (applies `MATCHED` only, wrapped in an undo chunk), Manual Colorspace Assignment (Maya's actual input spaces), row selection synced with Maya node selection
+- Stricter behavior (per the documentation): multiple role hits inside a Name/Channel driver are explicitly flagged `AMBIGUOUS` (no longer silently taking the first); no match no longer falls back to the default `raw` (`UNMATCHED` is not auto-applied); a role that cannot be resolved to a real Maya colorspace is `INVALID`, with no silent fallback
+- Tests: `tests/test_colorspace.py` (drivers / matcher / resolver, including the BFS budget and skip cases migrated from `test_node_tools_trace.py`), `tests/test_colorspace_tab.py` (UI integration: Refresh does not modify the scene, Apply only touches `MATCHED`, Manual takes effect, old colorspace UI removed from Node Tools)
 
 ## 2026-09-06
 
 ### Fixed
-- **SG 连接失败不再静默计为成功**：`MaterialConverter.convert()` 改为返回结构化 `ConversionResult`（`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`）；创建成功但**所有** shadingEngine 接线均失败的材质计入 failed（unwired）——场景仍在渲染旧材质时绝不显示为成功
-- **置换按"逐 shadingEngine"转换**：同一材质挂多个 SG 时不再只处理第一个（此前 `node_utils.get_shading_engine()` 只取首个 SG，导致部分模型置换缺失/错配）；源置换相同（纹理插头 + scale）的 SG 复用同一目标置换节点
-- `core/module_reload.py` 通过 CI 守卫：`is_project_module` 判定改为无异常路径（isinstance 校验取代裸 `except Exception:`），不再触发 `scripts/check_no_silent_pass.py`
+- **SG connection failures are no longer silently counted as success**: `MaterialConverter.convert()` now returns a structured `ConversionResult` (`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`); a material that was created but whose **every** shadingEngine wire failed counts as failed (unwired) — never reported as success while the scene still renders the old material
+- **Displacement converted per shadingEngine**: when a material has multiple SGs, only the first is no longer processed (previously `node_utils.get_shading_engine()` took only the first SG, causing missing/mismatched displacement on some models); SGs with identical source displacement (texture plug + scale) reuse the same target displacement node
+- `core/module_reload.py` passes the CI guard: the `is_project_module` check is exception-free (`isinstance` checks instead of a bare `except Exception:`), no longer triggering `scripts/check_no_silent_pass.py`
 
 ### Changed
-- `convert_all(..., on_progress=...)` 新增可选逐材质进度回调（core 不依赖 Qt）；Converter 页注入节流回调，在批次运行期间实时推进进度条并 `processEvents()`，不再等全部完成后一次性拨动
-- 结果模型提取为纯模块 `core/results.py`（`ConversionResult` + `summarize_results`），core 与 UI 共用、可在无 Maya 环境单测
-- `main.py` 启动模块清理改为按文件物理路径判断（`core/module_reload.py`），不再按 `core`/`ui` 名称前缀删除，避免误伤同一 Maya 会话中同名的其他工具包；`node_utils.get_shading_engine()`（取首个 SG 的反模式）移除
+- `convert_all(..., on_progress=...)` gained an optional per-material progress callback (core has no Qt dependency); the Converter tab injects a throttled callback that advances the progress bar and calls `processEvents()` live during the batch instead of jumping once after everything finishes
+- Result model extracted into the pure module `core/results.py` (`ConversionResult` + `summarize_results`), shared by core and UI and unit-testable without Maya
+- `main.py` startup module cleanup now decides by physical file path (`core/module_reload.py`) instead of deleting by `core`/`ui` name prefix, avoiding collateral damage to same-named tool packages in the same Maya session; `node_utils.get_shading_engine()` (the take-the-first-SG anti-pattern) removed
 
 ### Added
-- 测试：`tests/test_conversion_results.py`（结果分类语义：unwired / partial_wired / 无 SG 浮动材质等）、`tests/test_module_reload.py`（路径清理只删本项目模块）
+- Tests: `tests/test_conversion_results.py` (result classification semantics: unwired / partial_wired / SG-less floating materials, etc.), `tests/test_module_reload.py` (path cleanup deletes only this project's modules)
 
 ## 2026-08-30
 
 ### Fixed
-- Builder 操作失败时的错误处理链二次异常：`qt_maya_logger` 把非 QWidget 的 `BuilderTab` 实例传给 `QMessageBox.critical(parent, ...)`，必然抛 `TypeError`，且在 `raise` 之前逃逸——原始异常 traceback 被掩盖，日志与弹窗反馈全部失效
-- 错误反馈重构为 best-effort：logger / 弹窗 / 横幅任一环节失败都不再改变业务控制流——logger 失败回退到 stderr（`_report_terminal`，不依赖 logger/UI/Maya），弹窗失败记录 WARN；所有路径仍重新抛出原始异常。START / SUCCESS 日志与 inViewMessage 横幅同样防护
+- Secondary exception in the error-handling chain when a Builder operation failed: `qt_maya_logger` passed a non-QWidget `BuilderTab` instance to `QMessageBox.critical(parent, ...)`, which necessarily raised `TypeError` and escaped before the re-raise — masking the original traceback and breaking both log and dialog feedback
+- Error feedback refactored to be best-effort: a failure in any of logger / dialog / banner no longer changes business control flow — a logger failure falls back to stderr (`_report_terminal`, independent of logger/UI/Maya), a dialog failure is recorded as WARN; all paths still re-raise the original exception. START / SUCCESS logs and the `inViewMessage` banner are protected the same way
 
 ### Refactored
-- `qt_maya_logger` 从 `core/builder_context.py` 迁移到 `ui/feedback.py`（操作反馈属 UI 层职责）：`core.builder_context` 恢复零 UI 依赖，可在无 UI/PySide 环境下独立 import（新增守护测试）
-- `QMessageBox.critical` parent 改为 `None`，消除对调用方实例类型的隐式依赖
-- 新增测试：`tests/test_builder_context.py`（8 个）、`tests/test_feedback.py`（9 个，错误链全路径：业务异常 / 弹窗失败 / logger 失败 / START 与成功路径反馈失败）
+- `qt_maya_logger` moved from `core/builder_context.py` to `ui/feedback.py` (operation feedback is a UI-layer responsibility): `core.builder_context` is back to zero UI dependencies and can be imported standalone in a UI/PySide-less environment (guard test added)
+- `QMessageBox.critical` parent changed to `None`, removing the implicit dependency on the caller instance type
+- Tests added: `tests/test_builder_context.py` (8) and `tests/test_feedback.py` (9, full error-chain paths: business exception / dialog failure / logger failure / START and success-path feedback failure)
 
 ## 2026-08-25
 
