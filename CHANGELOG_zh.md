@@ -10,6 +10,7 @@
 - 运行时延迟导入提到模块顶部（消除接管后延迟导入命中其它工具包的情形）：`ui/feedback.py`（`from ui import QtWidgets`）、`core/builder_context.py`（`ConfigLoader`，并删除局部 sys.path hack）、`core/material_builder.py`（`apply_prerequisites`）
 
 ### 文档
+- `README.md` / `docs/README_zh.md`：六个功能小节各新增一张 UI 预览截图（`docs/images/*.webp`），并在项目结构树中补充 `docs/images/` 目录
 - `docs/AGENTS.md`：重载时的模块处理更新为两步接管说明（foreign 顶层 + 缓存子模块），并补充与其它扁平结构工具（如 Batch Attribute Editor）共存的说明
 - `README.md` / `docs/README_zh.md`：新增"可共存的启动"设计原则
 

@@ -38,6 +38,9 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 ## Features
 
 ### Material Converter
+
+![Material Converter tab](docs/images/convert_tab.webp)
+
 - Batch convert PBR materials between Arnold / Redshift / V-Ray
 - Auto-detect material types, one-click convert all
 - Supports bump/normal nodes, color correction nodes, and displacement nodes
@@ -45,6 +48,9 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Supports 6 material types: `aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
 ### Material Builder
+
+![Material Builder tab](docs/images/materialBuilder_tab.webp)
+
 - One-click build complete PBR materials from texture paths
 - Supports Color / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission channels
 - SSS channel support (colorCorrect + layeredTexture + ramp)
@@ -53,6 +59,9 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Optional "Add To Quick Select Set" toggle
 
 ### Batch Builder
+
+![Batch Builder tab](docs/images/batchBuilder_tab.webp)
+
 - Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
 - Group textures into materials and preview which materials will be created (`Materials to Build`)
 - Show parsed channels and unparsed files in one table with a sortable Status column
@@ -62,6 +71,9 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 
 ### Colorspace
+
+![Colorspace tab](docs/images/colorSpace_tab.webp)
+
 - Dedicated **Colorspace** tab — the single UI entry point for all file-node color-space operations (Node Tools no longer exposes any color-space UI)
 - **File Node List**: scans all scene `file` nodes into a sortable table (File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic); the Diagnostic column carries the match state (e.g. `CONFLICT: ...`) and sorts by severity, not alphabetically
 - **Refresh**: evaluates automatic matching for every file node **without modifying the scene**
@@ -71,11 +83,17 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Selecting a row syncs the Maya selection to the corresponding file node(s); utility button sets `ignoreColorSpaceFileRules` on all file nodes
 
 ### Node Tools
+
+![Node Tools tab](docs/images/nodeTools_tab.webp)
+
 - **Select Nodes**: Batch select by type (material/file/bump/layeredTexture/CC), excluding default materials
 - **Rename Shading Engine**: Batch rename SG to match material names
 - **Create File From P2D**: create a `file` node from the selected `place2dTexture`, copying the 2D transform attributes and UV/filter connections
 
 ### Log
+
+![Log tab](docs/images/log_tab.webp)
+
 - Global structured log viewer with level, source, and text filters
 - Config Validation controls for checking all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
 - Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
@@ -153,6 +171,7 @@ materialConvert/
 │   ├── CONVERSION_SPEC_zh.md        # 中文版转换规格说明
 │   ├── CONFIG_GUIDE.md              # Renderer JSON config authoring guide
 │   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文版）
+│   ├── images/                      # README preview screenshots (one per tab)
 │   └── README_zh.md                 # 中文版 README
 ├── scripts/                         # Repository maintenance scripts
 │   └── check_no_silent_pass.py      # CI guard: no silent except/print in core/ui

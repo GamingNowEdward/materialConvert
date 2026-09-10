@@ -10,6 +10,7 @@
 - Runtime deferred imports moved to module top (eliminates late imports that could resolve into another tool's package after a take-over): `ui/feedback.py` (`from ui import QtWidgets`), `core/builder_context.py` (`ConfigLoader`; also drops the local `sys.path` hack), `core/material_builder.py` (`apply_prerequisites`)
 
 ### Documentation
+- `README.md` / `docs/README_zh.md`: added a UI preview screenshot (`docs/images/*.webp`) to each of the six feature sections, and listed the new `docs/images/` folder in the project tree
 - `docs/AGENTS.md`: module handling on reload now documents the two-step take-over (foreign top-level + cached submodules) and coexistence with other flat-layout tools (e.g. Batch Attribute Editor)
 - `README.md` / `docs/README_zh.md`: added a "co-existence-safe startup" design principle
 

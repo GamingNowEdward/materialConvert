@@ -38,6 +38,9 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 ## 功能
 
 ### Material Converter
+
+![材质转换页](images/convert_tab.webp)
+
 - 在 Arnold / Redshift / V-Ray 间批量转换 PBR 材质
 - 自动识别材质类型，一键全部转换
 - 支持 bump/normal 节点、颜色校正节点、置换节点的连带转换
@@ -45,6 +48,9 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 支持 6 种材质类型：`aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
 ### Material Builder
+
+![Material Builder 页](images/materialBuilder_tab.webp)
+
 - 从纹理路径一键构建完整 PBR 材质
 - 支持 Color / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission 通道
 - SSS 通道支持（colorCorrect + layeredTexture + ramp）
@@ -53,6 +59,9 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 可选"加入快速选择集"开关
 
 ### Batch Builder
+
+![Batch Builder 页](images/batchBuilder_tab.webp)
+
 - 选择目录并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）
 - 将贴图分组为材质，并预览将要创建的材质列表（Materials to Build）
 - 已解析通道与未解析文件合并展示在同一个表格，Status 列支持排序
@@ -60,8 +69,10 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp）或简单直连
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
 
-
 ### Colorspace
+
+![Colorspace 页](images/colorSpace_tab.webp)
+
 - 独立 **Colorspace** 标签页——file 节点色彩空间操作的**唯一 UI 入口**（Node Tools 不再提供任何 colorspace UI）
 - **File Node List**：扫描场景全部 `file` 节点为可排序表格（File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic）；Diagnostic 列承载匹配状态（如 `CONFLICT: ...`）并按问题严重度排序而非字母序
 - **Refresh**：对每个 file 节点评估自动匹配，**不修改 scene**
@@ -71,11 +82,17 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 选中行会同步 Maya 选择到对应 file 节点；工具按钮可对所有 file 节点设置 `ignoreColorSpaceFileRules`
 
 ### Node Tools
+
+![Node Tools 页](images/nodeTools_tab.webp)
+
 - **Select Nodes**：按类型批量选择（材质/文件/bump/layeredTexture/CC），排除默认材质
 - **Rename Shading Engine**：批量重命名 SG 以匹配材质名称
 - **Create File From P2D**：从选中的 place2dTexture 创建 file 节点，复制 2D 变换属性与 UV/Filter 连接
 
 ### Log
+
+![Log 页](images/log_tab.webp)
+
 - 全局结构化日志查看器，支持按级别、来源和文本过滤
 - 面板顶部提供 Config Validation，可在 Maya 中校验全部 JSON 配置的拼写（材质 / `bumpNormal.json` / `colorCorrection.json`）
 - 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites 与 displacement），结束后自动清理
@@ -153,6 +170,7 @@ materialConvert/
 │   ├── CONVERSION_SPEC_zh.md        # 转换规格说明（中文）
 │   ├── CONFIG_GUIDE.md              # 渲染器 JSON 配置编写指南（英文）
 │   ├── CONFIG_GUIDE_zh.md           # 渲染器 JSON 配置编写指南（中文）
+│   ├── images/                      # README 预览截图（每页一张）
 │   └── README_zh.md                 # 本文件
 ├── scripts/                         # 仓库维护脚本
 │   └── check_no_silent_pass.py      # CI 守卫：core/ui 禁止静默 except/print
