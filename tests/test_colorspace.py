@@ -346,3 +346,54 @@ def test_matcher_reads_errors_into_diagnostic(monkeypatch):
     assert res.state == MatchState.UNMATCHED
     assert "error reading file path" in res.diagnostic
     assert "error reading colorSpace" in res.diagnostic
+
+
+def _match_result(node, state, prematch=""):
+    return cs.MatchResult(
+        file_node=node,
+        file_path=f"C:/{node}.png",
+        actual_colorspace="Raw",
+        name_driver_result=cs.NameDriverResult(),
+        channel_driver_result=cs.ChannelDriverResult(),
+        prematch_colorspace=prematch,
+        state=state,
+        diagnostic="",
+    )
+
+
+def test_apply_matched_applies_only_matched_results(monkeypatch):
+    set_attr_calls = []
+    monkeypatch.setattr(cs.cmds, "setAttr", lambda *a, **k: set_attr_calls.append(a))
+    monkeypatch.setattr(cs.cmds, "undoInfo", lambda **k: None)
+
+    matcher = ColorSpaceMatcher(logger=Logger())
+    outcome = matcher.apply_matched([
+        _match_result("file1", MatchState.MATCHED, "Utility - sRGB - Texture"),
+        _match_result("file2", MatchState.CONFLICT),
+        _match_result("file3", MatchState.UNMATCHED),
+    ])
+
+    assert [c[0] for c in set_attr_calls] == ["file1.colorSpace"]
+    assert set_attr_calls[0][1] == "Utility - sRGB - Texture"
+    assert outcome["applied"] == [("file1", "Utility - sRGB - Texture")]
+    assert outcome["skipped"] == 2
+    assert outcome["failed"] == []
+
+
+def test_apply_matched_reports_failures(monkeypatch):
+    log = Logger()
+
+    def set_attr(plug, *args, **kwargs):
+        raise RuntimeError("read only")
+
+    monkeypatch.setattr(cs.cmds, "setAttr", set_attr)
+    monkeypatch.setattr(cs.cmds, "undoInfo", lambda **k: None)
+
+    matcher = ColorSpaceMatcher(logger=log)
+    outcome = matcher.apply_matched([
+        _match_result("file1", MatchState.MATCHED, "Raw"),
+    ])
+
+    assert outcome["applied"] == []
+    assert len(outcome["failed"]) == 1
+    assert any(r.level == LogLevel.WARN for r in log.poll(0))

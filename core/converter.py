@@ -14,9 +14,9 @@ _SOURCE = "MaterialConverter"
 
 class MaterialConverter:
 
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, config=None):
         self.logger = logger or get_logger()
-        self.config = ConfigLoader()
+        self.config = config or ConfigLoader()
         self.cc_converter = CCConverter(self.config, node_utils, logger=self.logger)
         self.attr_converter = AttributeConverter(self.config, node_utils, self.cc_converter, logger=self.logger)
         self.bump_converter = BumpConverter(self.config, node_utils, logger=self.logger)

@@ -28,14 +28,15 @@ class _StateItem(QtWidgets.QTableWidgetItem):
 
 class ColorspaceTab:
 
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, config=None):
         self.log = logger or get_logger()
-        self.matcher = ColorSpaceMatcher(logger=self.log)
+        self.matcher = ColorSpaceMatcher(config_loader=config, logger=self.log)
         self.refresh_btn = None
         self.status_label = None
         self.table = None
         self.manual_combo = None
         self._loading = False
+        self._results = []
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -145,6 +146,7 @@ class ColorspaceTab:
             self.status_label.setText(f"Error scanning scene: {exc}")
             return
 
+        self._results = results
         self._populate_manual_combo()
         self._populate_table(results)
 
@@ -158,11 +160,7 @@ class ColorspaceTab:
             self.table.insertRow(row)
 
             node_item = QtWidgets.QTableWidgetItem(result.file_node)
-            node_item.setData(QtCore.Qt.UserRole, {
-                "node": result.file_node,
-                "state": result.state.value,
-                "prematch": result.prematch_colorspace,
-            })
+            node_item.setData(QtCore.Qt.UserRole, result)
             self.table.setItem(row, 0, node_item)
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(result.file_path))
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(result.actual_colorspace))
@@ -184,13 +182,9 @@ class ColorspaceTab:
 
     def _update_status(self, total):
         counts = {}
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                data = item.data(QtCore.Qt.UserRole)
-                state = data.get("state") if data else None
-                if state:
-                    counts[state] = counts.get(state, 0) + 1
+        for result in self._results:
+            state = result.state.value
+            counts[state] = counts.get(state, 0) + 1
         ordered = sorted(
             counts.items(),
             key=lambda kv: _STATE_RANK.get(MatchState._value2member_map_.get(kv[0]), 99),
@@ -198,20 +192,20 @@ class ColorspaceTab:
         summary = ", ".join(f"{k} {v}" for k, v in ordered)
         self.status_label.setText(f"{total} file node(s): {summary}")
 
-    def _selected_rows(self):
-        rows = []
+    def _selected_results(self):
+        results = []
         for index in self.table.selectionModel().selectedRows():
             item = self.table.item(index.row(), 0)
             if item:
-                data = item.data(QtCore.Qt.UserRole)
-                if data:
-                    rows.append(data)
-        return rows
+                result = item.data(QtCore.Qt.UserRole)
+                if result:
+                    results.append(result)
+        return results
 
     def _sync_selection(self):
         if self._loading:
             return
-        nodes = [data["node"] for data in self._selected_rows()]
+        nodes = [result.file_node for result in self._selected_results()]
         try:
             if nodes:
                 cmds.select(nodes, replace=True)
@@ -221,27 +215,24 @@ class ColorspaceTab:
             self.log.warn(f"Failed to sync Maya selection: {exc}", source=_SOURCE)
 
     def _apply_selected(self):
-        rows = self._selected_rows()
-        if not rows:
+        results = self._selected_results()
+        if not results:
             self.log.warn("Please select file node rows first.", source=_SOURCE)
             return
-        self._apply_rows(rows, "Apply Selected")
+        self._apply_rows(results, "Apply Selected")
 
     def _apply_all_matched(self):
-        rows = []
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                data = item.data(QtCore.Qt.UserRole)
-                if data and data.get("state") == MatchState.MATCHED.value:
-                    rows.append(data)
-        if not rows:
+        results = [
+            result for result in self._results
+            if result.state == MatchState.MATCHED
+        ]
+        if not results:
             self.log.info("No MATCHED file nodes to apply.", source=_SOURCE)
             return
-        self._apply_rows(rows, "Apply All Matched")
+        self._apply_rows(results, "Apply All Matched")
 
-    def _apply_rows(self, rows, label):
-        outcome = self.matcher.apply_matched(rows)
+    def _apply_rows(self, results, label):
+        outcome = self.matcher.apply_matched(results)
         for node, colorspace in outcome["applied"]:
             self._set_colorspace_column(node, colorspace)
 
@@ -257,20 +248,20 @@ class ColorspaceTab:
         if not cs:
             self.log.warn("Please pick a colorspace first.", source=_SOURCE)
             return
-        rows = self._selected_rows()
-        if not rows:
+        results = self._selected_results()
+        if not results:
             self.log.warn("Please select file node rows first.", source=_SOURCE)
             return
 
         outcome = self.matcher.set_colorspace(
-            [data["node"] for data in rows], cs
+            [result.file_node for result in results], cs
         )
         for node, colorspace in outcome["applied"]:
             self._set_colorspace_column(node, colorspace)
 
         self.log.info(
             f"Manual assignment: set '{cs}' on "
-            f"{len(outcome['applied'])}/{len(rows)} file node(s), "
+            f"{len(outcome['applied'])}/{len(results)} file node(s), "
             f"failed {len(outcome['failed'])}.",
             source=_SOURCE,
         )
@@ -280,8 +271,8 @@ class ColorspaceTab:
             item = self.table.item(row, 0)
             if not item:
                 continue
-            data = item.data(QtCore.Qt.UserRole)
-            if data and data.get("node") == node:
+            result = item.data(QtCore.Qt.UserRole)
+            if result and result.file_node == node:
                 self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(value))
                 break
 

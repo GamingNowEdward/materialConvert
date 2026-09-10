@@ -1,7 +1,6 @@
 import maya.cmds as cmds
 
 from core.builder_context import BuilderContext
-from core.config_loader import ConfigLoader
 from core.logger import get_logger
 import core.node_utils as node_utils
 
@@ -13,9 +12,9 @@ class MaterialBuilder:
     P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
                  'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
 
-    def __init__(self, ctx: BuilderContext, logger=None):
+    def __init__(self, ctx: BuilderContext, logger=None, config=None):
         self.ctx = ctx
-        self.config = ConfigLoader()
+        self.config = config or ctx.config
         self.log = logger or get_logger()
 
     def _resolve_weight_attr(self, common_attr):
@@ -23,8 +22,8 @@ class MaterialBuilder:
             return ""
         return self.config.get_weight_attr_for_common_attr(common_attr)
 
-    def build(self, node_type, base_name, input_paths, use_nrm=True, use_disp=False,
-              use_qss=True, use_full_chain=True, channel_options=None):
+    def build(self, node_type, base_name, input_paths, use_qss=True, use_full_chain=True,
+              channel_options=None):
         mat_config = self.config.get_material_config(node_type)
         if not mat_config:
             raise RuntimeError(f"Missing material config: {node_type}")
@@ -32,7 +31,7 @@ class MaterialBuilder:
 
         self.log.info(f"Building {mat_config.uiPanel_display_name} material: {base_name}", source=_SOURCE)
         self.log.debug(
-            f"Build options: use_nrm={use_nrm}, use_disp={use_disp}, use_qss={use_qss}, "
+            f"Build options: use_qss={use_qss}, "
             f"use_full_chain={use_full_chain}, channels={sorted(input_paths)}",
             source=_SOURCE,
         )
@@ -113,10 +112,10 @@ class MaterialBuilder:
                 built_channels.append(common_attr)
 
         if self._build_bump_normal(m_node, renderer, base_name, make_tex, mat_config,
-                                   use_nrm, channel_options, input_paths):
+                                   channel_options, input_paths):
             built_channels.append('normal_bump')
 
-        if use_disp or "displacementTexture" in input_paths:
+        if "displacementTexture" in input_paths:
             if self._build_displacement(m_node, sg_node, base_name, make_tex, mat_config,
                                         use_full_chain):
                 built_channels.append('displacementTexture')
@@ -212,16 +211,13 @@ class MaterialBuilder:
         return True
 
     def _build_bump_normal(self, m_node, renderer, base_name, make_tex, mat_config,
-                           use_nrm, channel_options, input_paths):
+                           channel_options, input_paths):
         bn_config = self.config.get_bump_normal_config(renderer)
         if not bn_config:
             self.log.skip(f"No bump/normal config for renderer {renderer}", source=_SOURCE)
             return False
 
-        mode = (
-            channel_options.get('normal_bump', {}).get('mode')
-            or ('normal' if use_nrm else 'bump')
-        )
+        mode = channel_options.get('normal_bump', {}).get('mode') or 'normal'
         is_normal = mode == 'normal'
         nb_key = 'nrm' if is_normal else 'bump'
         mapping = bn_config.normal if is_normal else bn_config.bump

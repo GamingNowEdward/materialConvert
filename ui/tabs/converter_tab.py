@@ -6,16 +6,17 @@ from core.converter import MaterialConverter
 from core.logger import get_logger
 from core.results import summarize_results
 import core.node_utils as node_utils
+from ui.widgets import populate_material_targets
 
 _SOURCE = "ConverterTab"
 
 
 class ConverterTab:
 
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, config=None):
         self.log = logger or get_logger()
-        self.config = ConfigLoader()
-        self.converter_obj = MaterialConverter(logger=self.log)
+        self.config = config or ConfigLoader()
+        self.converter_obj = MaterialConverter(logger=self.log, config=self.config)
         self.current_materials = []
         self.selection_display = None
         self.mat_list = None
@@ -93,12 +94,10 @@ class ConverterTab:
         return widget
 
     def _populate_target_list(self):
-        self.target_combo.clear()
-        all_configs = self.config.get_all_material_configs()
-        for node_type in sorted(all_configs.keys()):
-            display_name = self.config.get_display_name(node_type)
-            self.target_combo.addItem(display_name, node_type)
-        self.log.debug(f"Populated {self.target_combo.count()} conversion target(s)", source=_SOURCE)
+        populate_material_targets(
+            self.target_combo, self.config, logger=self.log,
+            source=_SOURCE, label="conversion",
+        )
 
     def refresh_materials(self):
         self.mat_list.clear()

@@ -1,5 +1,6 @@
 from ui import QtWidgets, shiboken
 from core.builder_context import BuilderContext
+from core.config_loader import ConfigLoader
 from core.logger import get_logger
 from ui.styles import FULL_STYLESHEET
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, ColorspaceTab, BatchBuilderTab, LogTab)
@@ -27,12 +28,13 @@ class ConverterWindow(QtWidgets.QMainWindow):
         super().__init__(parent)
 
         self.logger = get_logger()
-        self.ctx = BuilderContext(logger=self.logger)
+        self.config = ConfigLoader()
+        self.ctx = BuilderContext(logger=self.logger, config_loader=self.config)
 
-        self.converter_tab = ConverterTab(logger=self.logger)
+        self.converter_tab = ConverterTab(logger=self.logger, config=self.config)
         self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
         self.node_tools_tab = NodeToolsTab(self.ctx, logger=self.logger)
-        self.colorspace_tab = ColorspaceTab(logger=self.logger)
+        self.colorspace_tab = ColorspaceTab(logger=self.logger, config=self.config)
         self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
         self.log_tab = LogTab(logger=self.logger)
 

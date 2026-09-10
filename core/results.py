@@ -67,3 +67,33 @@ def summarize_results(results):
             if result.partially_wired:
                 summary["partial_wired"] += 1
     return summary
+
+
+@dataclass
+class BuildResult:
+    """Outcome of building one material in a batch.
+
+    ``built`` is True only when the whole material network was created;
+    ``reason`` carries the failure cause otherwise.  Kept separate from
+    ``ConversionResult`` because conversion-specific wiring semantics
+    (``wired`` / ``total_sgs``) do not apply to builds.
+    """
+
+    material: str
+    new_material: str = None
+    built: bool = False
+    reason: str = ""
+
+
+def summarize_build_results(results):
+    """Classify a list of BuildResult into headline counts.
+
+    Returns a dict with keys: built / failed.
+    """
+    summary = {"built": 0, "failed": 0}
+    for result in results:
+        if result.built:
+            summary["built"] += 1
+        else:
+            summary["failed"] += 1
+    return summary

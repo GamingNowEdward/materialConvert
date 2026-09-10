@@ -9,7 +9,7 @@ DEFAULT_MATERIALS = ["lambert1", "standardSurface1", "particleCloud1"]
 
 
 class BuilderContext:
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, config_loader=None):
         self.log = logger or get_logger()
 
         import sys
@@ -18,8 +18,8 @@ class BuilderContext:
         if _ROOT not in sys.path:
             sys.path.insert(0, _ROOT)
         from core.config_loader import ConfigLoader
-        self._config = ConfigLoader()
-        self._naming = self._config.get_builder_naming()
+        self.config = config_loader or ConfigLoader()
+        self._naming = self.config.get_builder_naming()
 
         self._current_build_nodes = []
 

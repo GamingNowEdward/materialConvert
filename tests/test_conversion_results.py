@@ -5,7 +5,12 @@ never be summarized as a plain success, and per-SG wiring is tracked so a
 multi-SG material is not silently reported as fully converted.
 """
 
-from core.results import ConversionResult, summarize_results
+from core.results import (
+    BuildResult,
+    ConversionResult,
+    summarize_build_results,
+    summarize_results,
+)
 
 
 def _ok(material="mat"):
@@ -91,3 +96,25 @@ def test_mixed_batch_totals():
         "converted": 1, "skipped": 1, "failed": 2,
         "unwired": 1, "partial_wired": 0,
     }
+
+
+def test_build_result_success():
+    result = BuildResult(material="hero", new_material="M_hero", built=True)
+    assert result.built
+    assert summarize_build_results([result]) == {"built": 1, "failed": 0}
+
+
+def test_build_result_failure():
+    result = BuildResult(material="hero", reason="boom")
+    assert not result.built
+    assert result.new_material is None
+    assert summarize_build_results([result]) == {"built": 0, "failed": 1}
+
+
+def test_summarize_build_results_mixed_batch():
+    results = [
+        BuildResult(material="a", new_material="M_a", built=True),
+        BuildResult(material="b", reason="boom"),
+    ]
+    assert summarize_build_results(results) == {"built": 1, "failed": 1}
+    assert summarize_build_results([]) == {"built": 0, "failed": 0}

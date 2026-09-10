@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-10
+
+### Refactored
+- **Batch Builder batch orchestration moved into core**: added `BatchBuilder.build_all(materials, ..., on_progress=...)` (`core/batch_builder.py`) — undo chunk, per-material failure isolation (`_build_one_safe`, errors logged without aborting the batch), progress-callback protection and batch summary logging now live in core; `BatchBuilderTab._build_materials` keeps only selection filtering, the progress bar and result presentation, and no longer calls `cmds.undoInfo` directly
+- Added the pure-stdlib result model `BuildResult` + `summarize_build_results()` (`core/results.py`), alongside `ConversionResult`, shared by core and UI
+- **Colorspace matcher API no longer depends on UI row dicts**: `ColorSpaceMatcher.apply_matched()` now accepts `MatchResult` entries (the `scan()` return value); `ColorspaceTab` caches scan results and drives selection / apply / status counts directly from `MatchResult`, storing the result object in the table's UserRole
+- **Shared ConfigLoader instance**: `ConverterWindow` creates the single `ConfigLoader` and injects it into `BuilderContext` / `ConverterTab` / `ColorspaceTab`; `MaterialBuilder` / `MaterialConverter` / `ColorSpaceMatcher` accept injected config (defaults unchanged), avoiding repeated JSON loads per tab
+- Target material combo population deduplicated into `ui/widgets.py:populate_material_targets()` (shared by Converter / Builder / Batch Builder)
+- `MaterialBuilder.build()` dropped the redundant `use_nrm` / `use_disp` parameters: normal/bump mode is derived from `channel_options` (default normal) and displacement from `input_paths` containing `displacementTexture`; the UI no longer recomputes them
+- Removed duplicate scan summary / conflict warning logs from `BatchBuilderTab._scan_directory` (`TextureScanner` already logs them)
+
+### Added
+- Tests: `build_all` cases in `test_batch_builder.py` (result order, undo wrapping, failure isolation, callback exception never aborts, empty batch), `summarize_build_results` cases in `test_conversion_results.py`, core `apply_matched` cases in `test_colorspace.py` (only MATCHED applied / failures reported), injected-loader case in `test_builder_context.py`
+
 ## 2026-09-07
 
 ### Refactored

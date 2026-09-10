@@ -1,9 +1,9 @@
 from ui import QtWidgets
 from ui.feedback import qt_maya_logger
+from ui.widgets import populate_material_targets
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.material_builder import MaterialBuilder
-from core.config_loader import ConfigLoader
 
 _SOURCE = "BuilderTab"
 
@@ -13,7 +13,7 @@ class BuilderTab:
     def __init__(self, ctx: BuilderContext, logger=None):
         self.ctx = ctx
         self.log = logger or get_logger()
-        self.config = ConfigLoader()
+        self.config = ctx.config
         self.builder = MaterialBuilder(ctx, logger=self.log)
 
     def build_ui(self):
@@ -122,12 +122,10 @@ class BuilderTab:
         return (group, opts) if with_options else group
 
     def _populate_material_list(self):
-        self.mat_combo.clear()
-        all_configs = self.config.get_all_material_configs()
-        for node_type in sorted(all_configs.keys()):
-            display_name = self.config.get_display_name(node_type)
-            self.mat_combo.addItem(display_name, node_type)
-        self.log.debug(f"Populated {self.mat_combo.count()} builder material target(s)", source=_SOURCE)
+        populate_material_targets(
+            self.mat_combo, self.config, logger=self.log,
+            source=_SOURCE, label="builder material",
+        )
 
     def _browse_file(self, line_edit):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -153,25 +151,23 @@ class BuilderTab:
                 path = self.ctx.clean_path(entry['le'].text())
                 input_paths[common_attr] = path
 
-        use_nrm = True
         if 'normal_bump' in input_paths and self.cb_normal_mode is not None:
             mode = 'normal' if self.cb_normal_mode.isChecked() else 'bump'
             channel_options['normal_bump'] = {'mode': mode}
-            use_nrm = mode == 'normal'
 
         if self.cb_glossiness is not None and self.cb_glossiness.isChecked():
             channel_options['specularRoughness'] = {'invert': True}
 
-        use_disp = 'displacementTexture' in input_paths
-
         self.log.debug(
             f"Builder submit: material={node_type}, base={mat_base}, "
-            f"channels={sorted(input_paths)}, use_nrm={use_nrm}, use_disp={use_disp}",
+            f"channels={sorted(input_paths)}",
             source=_SOURCE,
         )
-        return self.builder.build(node_type, mat_base, input_paths, use_nrm, use_disp,
-                                  use_qss=self.cb_qss.isChecked(),
-                                  channel_options=channel_options)
+        return self.builder.build(
+            node_type, mat_base, input_paths,
+            use_qss=self.cb_qss.isChecked(),
+            channel_options=channel_options,
+        )
 
     @qt_maya_logger("P2D File")
     def _create_file_from_p2d(self):

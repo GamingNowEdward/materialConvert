@@ -37,7 +37,7 @@ def test_bump_normal_missing_channel_is_silent():
     builder = _make_builder(log)
     config = ConfigLoader().get_material_config("aiStandardSurface")
     ok = builder._build_bump_normal(
-        "mat1", "arnold", "hero", None, config, True, {}, {}
+        "mat1", "arnold", "hero", None, config, {}, {}
     )
     assert ok is False
     assert log.poll(0) == []

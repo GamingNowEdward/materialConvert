@@ -1,5 +1,19 @@
 # 更新日志
 
+## 2026-09-10
+
+### 重构
+- **Batch Builder 批量编排下沉 core**：新增 `BatchBuilder.build_all(materials, ..., on_progress=...)`（`core/batch_builder.py`），undo chunk、逐材质异常隔离（`_build_one_safe`，失败记 ERROR 不中断批次）、进度回调异常防护与批次汇总日志全部由 core 负责；`BatchBuilderTab._build_materials` 只保留选择过滤、进度条与结果展示，不再直接调用 `cmds.undoInfo`
+- 新增纯 stdlib 结果模型 `BuildResult` + `summarize_build_results()`（`core/results.py`），与 `ConversionResult` 并列，core/UI 共用
+- **Colorspace matcher API 不再依赖 UI 行字典**：`ColorSpaceMatcher.apply_matched()` 改为接收 `MatchResult` 列表（`scan()` 的返回值）；`ColorspaceTab` 缓存扫描结果，选择/应用/状态统计均直接基于 `MatchResult`，表格 UserRole 存结果对象
+- **ConfigLoader 单例共享**：`ConverterWindow` 创建唯一 `ConfigLoader` 并注入 `BuilderContext` / `ConverterTab` / `ColorspaceTab`；`MaterialBuilder` / `MaterialConverter` / `ColorSpaceMatcher` 支持注入配置（默认行为不变），避免各 Tab 重复加载 JSON
+- 目标材质下拉列表填充去重为 `ui/widgets.py:populate_material_targets()`（Converter / Builder / Batch Builder 三处共用）
+- `MaterialBuilder.build()` 移除冗余 `use_nrm` / `use_disp` 参数：normal/bump 模式由 `channel_options` 推导（缺省 normal），置换由 `input_paths` 是否含 `displacementTexture` 决定，UI 不再重复计算
+- `BatchBuilderTab._scan_directory` 删除与 `TextureScanner` 重复的扫描汇总与 conflict 警告日志
+
+### 新增
+- 测试：`test_batch_builder.py` 新增 `build_all` 用例（结果顺序、undo 包裹、失败隔离、回调异常不断批、空批次）、`test_conversion_results.py` 新增 `summarize_build_results` 用例、`test_colorspace.py` 新增 `apply_matched` core 用例（仅应用 MATCHED / 失败上报）、`test_builder_context.py` 新增加载器注入用例
+
 ## 2026-09-07
 
 ### 重构

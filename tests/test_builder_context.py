@@ -4,6 +4,7 @@ import pytest
 import maya.cmds as cmds
 
 from core.builder_context import BuilderContext
+from core.config_loader import ConfigLoader
 from core.logger import LogLevel, Logger
 
 
@@ -81,3 +82,10 @@ def test_get_naming():
     naming = ctx.get_naming()
     assert "prefix" in naming
     assert "default_name" in naming
+
+
+def test_injected_config_loader_is_shared():
+    loader = ConfigLoader()
+    ctx = BuilderContext(config_loader=loader)
+    assert ctx.config is loader
+    assert ctx.get_naming()["prefix"] == loader.get_builder_naming()["prefix"]

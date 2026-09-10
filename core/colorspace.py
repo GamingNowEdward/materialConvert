@@ -279,11 +279,15 @@ class ColorSpaceResolver:
 
 class ColorSpaceMatcher:
 
-    def __init__(self, resolver=None, name_driver=None, channel_driver=None, logger=None):
+    def __init__(self, resolver=None, name_driver=None, channel_driver=None, logger=None,
+                 config_loader=None):
         self.log = logger or get_logger()
-        self.resolver = resolver or ColorSpaceResolver(logger=self.log)
-        self.name_driver = name_driver or NameDriver(logger=self.log)
-        self.channel_driver = channel_driver or ChannelDriver(logger=self.log)
+        self.resolver = resolver or ColorSpaceResolver(
+            config_loader=config_loader, logger=self.log)
+        self.name_driver = name_driver or NameDriver(
+            config_loader=config_loader, logger=self.log)
+        self.channel_driver = channel_driver or ChannelDriver(
+            config_loader=config_loader, logger=self.log)
 
     def reset(self):
         """Clear per-refresh caches without touching the scene."""
@@ -298,17 +302,20 @@ class ColorSpaceMatcher:
         self.reset()
         return [self.match(node) for node in file_nodes]
 
-    def apply_matched(self, rows):
-        return self._set_colorspaces(
-            [
-                (data["node"], data.get("prematch") or "")
-                for data in rows
-                if data.get("state") == MatchState.MATCHED.value
-            ],
-            skip_count=sum(
-                1 for data in rows if data.get("state") != MatchState.MATCHED.value
-            ),
-        )
+    def apply_matched(self, results):
+        """Apply prematch colorspaces for MATCHED ``MatchResult`` entries only.
+
+        Accepts the ``MatchResult`` objects returned by :meth:`scan`; every
+        non-MATCHED result is counted as skipped and never applied.
+        """
+        assignments = []
+        skip_count = 0
+        for result in results:
+            if result.state == MatchState.MATCHED:
+                assignments.append((result.file_node, result.prematch_colorspace))
+            else:
+                skip_count += 1
+        return self._set_colorspaces(assignments, skip_count=skip_count)
 
     def set_colorspace(self, nodes, colorspace):
         return self._set_colorspaces([(node, colorspace) for node in nodes])
