@@ -1,5 +1,18 @@
 # 更新日志
 
+## 2026-09-11
+
+### 修复
+- **同一 Maya 会话中其它扁平结构工具占用 `core` / `ui` 时启动不再失败**：`main.py` 接管时现在会释放 foreign 顶层模块**及其缓存的子模块**；此前只删顶层名，残留的 foreign `core.results`（例如 Batch Attribute Editor 留下的）会遮蔽本项目导入，导致启动报 `ImportError: cannot import name 'ConversionResult'`
+
+### 重构
+- `main.py` 启动加固：项目根始终移到 `sys.path` 最前（不再只在缺失时插入），并在本项目导入前释放 `core` / `ui` / `main` 下所有 foreign 模块；路径判断内联实现（`_owned_by_root`），因为为此 import `core.module_reload` 恰恰会被 foreign `core` 截胡
+- 运行时延迟导入提到模块顶部（消除接管后延迟导入命中其它工具包的情形）：`ui/feedback.py`（`from ui import QtWidgets`）、`core/builder_context.py`（`ConfigLoader`，并删除局部 sys.path hack）、`core/material_builder.py`（`apply_prerequisites`）
+
+### 文档
+- `docs/AGENTS.md`：重载时的模块处理更新为两步接管说明（foreign 顶层 + 缓存子模块），并补充与其它扁平结构工具（如 Batch Attribute Editor）共存的说明
+- `README.md` / `docs/README_zh.md`：新增"可共存的启动"设计原则
+
 ## 2026-09-10
 
 ### 修复

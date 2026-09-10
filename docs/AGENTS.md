@@ -26,7 +26,12 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 本项目**零外部依赖**，不需要 pip install。分发给他人时只需拷贝文件夹并告诉对方改 shelf 按钮路径即可。
 
-如果修改代码后没生效，关掉窗口重新点击按钮即可。重新加载时 `main.py` 只清理**本项目自身**的已导入模块（`core/module_reload.py` 按文件物理路径判断），不会误删同一 Maya 会话中其他以 `core`/`ui` 开头的工具包。
+如果修改代码后没生效，关掉窗口重新点击按钮即可。重新加载时 `main.py` 分两步处理模块：
+
+1. **接管顶层名**：把项目根置顶到 `sys.path`，并释放 `core` / `ui` / `main` 下所有**来自其它路径**的模块及其缓存的子模块（例如别的工具残留的 `core.results`，否则后续导入会命中残留对象）；路径判断内联在 `main.py`（`_owned_by_root`），不能为此 import `core.module_reload`——那一步本身就会被 foreign `core` 截胡；
+2. **清理自身**：`core/module_reload.py` 按文件物理路径清理本项目的已导入模块，不会误删其它工具的包。
+
+因此同一 Maya 会话里可以与其它扁平结构工具（如 Batch Attribute Editor）共存："后启动者赢"，先启动的工具依靠已导入的模块对象继续工作。
 
 ## 架构
 

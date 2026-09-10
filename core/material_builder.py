@@ -2,6 +2,7 @@ import maya.cmds as cmds
 
 from core.builder_context import BuilderContext
 from core.logger import get_logger
+from core.prerequisites import apply_prerequisites
 import core.node_utils as node_utils
 
 _SOURCE = "MaterialBuilder"
@@ -141,7 +142,6 @@ class MaterialBuilder:
         return actual
 
     def _apply_material_prereqs(self, m_node, mat_config):
-        from core.prerequisites import apply_prerequisites
         apply_prerequisites(m_node, mat_config, logger=self.log)
 
     def _connect_color_channel(self, m_node, renderer, base_name, name_key, common_attr,

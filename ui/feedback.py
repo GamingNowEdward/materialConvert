@@ -4,6 +4,7 @@ import time
 import maya.cmds as cmds
 
 from core.logger import get_logger
+from ui import QtWidgets
 
 _SOURCE = "BuilderFeedback"
 
@@ -24,7 +25,6 @@ def _report_terminal(message):
 
 
 def show_error_dialog(message):
-    from ui import QtWidgets
     QtWidgets.QMessageBox.critical(None, "Error", message)
 
 

@@ -1,5 +1,6 @@
 import maya.cmds as cmds
 
+from core.config_loader import ConfigLoader
 from core.logger import get_logger
 
 _SOURCE = "BuilderContext"
@@ -11,13 +12,6 @@ DEFAULT_MATERIALS = ["lambert1", "standardSurface1", "particleCloud1"]
 class BuilderContext:
     def __init__(self, logger=None, config_loader=None):
         self.log = logger or get_logger()
-
-        import sys
-        import os
-        _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if _ROOT not in sys.path:
-            sys.path.insert(0, _ROOT)
-        from core.config_loader import ConfigLoader
         self.config = config_loader or ConfigLoader()
         self._naming = self.config.get_builder_naming()
 

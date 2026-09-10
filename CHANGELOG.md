@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-11
+
+### Fixed
+- **Startup no longer fails when another flat-layout tool owns `core` / `ui`**: the take-over in `main.py` now evicts the foreign top-level modules **and their cached submodules**; previously only the top-level names were removed, so a stale foreign `core.results` (e.g. left by Batch Attribute Editor) shadowed this project's import and aborted the launch with `ImportError: cannot import name 'ConversionResult'`
+
+### Refactored
+- `main.py` startup hardening: the project root is always moved to the front of `sys.path` (not only inserted when missing) and every foreign module under `core` / `ui` / `main` is released before the project's own imports run; the path check is inlined (`_owned_by_root`) because importing `core.module_reload` for it is exactly what a foreign `core` would break
+- Runtime deferred imports moved to module top (eliminates late imports that could resolve into another tool's package after a take-over): `ui/feedback.py` (`from ui import QtWidgets`), `core/builder_context.py` (`ConfigLoader`; also drops the local `sys.path` hack), `core/material_builder.py` (`apply_prerequisites`)
+
+### Documentation
+- `docs/AGENTS.md`: module handling on reload now documents the two-step take-over (foreign top-level + cached submodules) and coexistence with other flat-layout tools (e.g. Batch Attribute Editor)
+- `README.md` / `docs/README_zh.md`: added a "co-existence-safe startup" design principle
+
 ## 2026-09-10
 
 ### Fixed
