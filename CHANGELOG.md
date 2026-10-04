@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-04
+
+### Fixed
+- **CI no longer hangs for six hours on a blocking dialog**: `tests/test_feedback.py::test_show_error_dialog_uses_none_parent` now monkeypatches `feedback.QtWidgets` directly; since `7b971d9` moved `from ui import QtWidgets` to the top of `ui/feedback.py`, replacing `sys.modules["ui"]` no longer reached the bound reference, so the test invoked a real modal `QMessageBox.critical` that blocked forever under `QT_QPA_PLATFORM=offscreen` and was cancelled at the 6h job limit
+
+### CI
+- `.github/workflows/test.yml`: added a job-level `timeout-minutes: 15` and `pytest-timeout` (`--timeout=120`), so a hung test fails within two minutes instead of burning the entire 6h cap
+
 ## 2026-09-11
 
 ### Fixed

@@ -1,5 +1,13 @@
 # 更新日志
 
+## 2026-10-04
+
+### 修复
+- **CI 不再因阻塞的对话框挂起六小时**：`tests/test_feedback.py::test_show_error_dialog_uses_none_parent` 现在直接 monkeypatch `feedback.QtWidgets`；自 `7b971d9` 把 `from ui import QtWidgets` 提到 `ui/feedback.py` 模块顶部后，替换 `sys.modules["ui"]` 已无法命中已绑定的引用，测试实际调用了真实的模态 `QMessageBox.critical`，在 `QT_QPA_PLATFORM=offscreen` 下永久阻塞，最终在 6 小时上限处被取消
+
+### CI
+- `.github/workflows/test.yml`：新增 job 级 `timeout-minutes: 15` 与 `pytest-timeout`（`--timeout=120`），任何挂死的测试最多两分钟即失败，而不再耗尽 6 小时上限
+
 ## 2026-09-11
 
 ### 修复

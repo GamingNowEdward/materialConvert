@@ -1,4 +1,3 @@
-import sys
 import types
 
 import pytest
@@ -153,7 +152,6 @@ def test_success_log_failure_falls_back_to_stderr(monkeypatch, capsys):
 
 
 def test_show_error_dialog_uses_none_parent(monkeypatch):
-    fake_ui = types.ModuleType("ui")
     fake_qt = types.ModuleType("fake_qt")
     calls = []
 
@@ -163,8 +161,10 @@ def test_show_error_dialog_uses_none_parent(monkeypatch):
             calls.append((parent, title, text))
 
     fake_qt.QMessageBox = _MsgBox
-    fake_ui.QtWidgets = fake_qt
-    monkeypatch.setitem(sys.modules, "ui", fake_ui)
+    # Patch the binding feedback holds directly: show_error_dialog imports
+    # QtWidgets at module level, so replacing sys.modules["ui"] no longer
+    # affects it (and would drive a real blocking QMessageBox in offscreen CI).
+    monkeypatch.setattr(feedback, "QtWidgets", fake_qt)
 
     feedback.show_error_dialog("test message")
     assert calls == [(None, "Error", "test message")]
