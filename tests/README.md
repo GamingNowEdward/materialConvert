@@ -68,4 +68,10 @@ With Maya 2024 on Windows:
 | Displacement (sentinel / real node) | `test_conversion_displacement_live.py` |
 | Converter flow (SG rewiring / batch / progress) | `test_converter_flow_live.py` |
 | CC chain conversion / reuse / restore | `test_cc_conversion_live.py` |
-| Builder / BuilderContext / Batch Builder / Colorspace / Node Tools / scene round-trip | (added in later phases) |
+| Prerequisites (material / attribute level) | `test_prerequisites_live.py` |
+| BuilderContext (naming / connections / layered) | `test_builder_context_live.py` |
+| MaterialBuilder (all channels, full/simple, QSS) | `test_material_builder_live.py` |
+| BatchBuilder (build / batch / progress) | `test_batch_builder_live.py` |
+| Colorspace matcher (filename / channel / apply / ignore) | `test_colorspace_live.py` |
+| Node Tools logic (node-type groups / SG rename / P2D→file) | `test_node_tools_live.py` |
+| Scene round-trip (build → save → reopen → convert) | `test_scene_roundtrip_live.py` |

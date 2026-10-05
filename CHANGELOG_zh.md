@@ -14,6 +14,7 @@
 - 首批 mayapy 用例（本地 `mayapy -m unittest discover -s tests/mayapy -t tests -v`）：`test_config_validator_live.py`（真实节点 `validate_all` **0 ERROR/0 WARN**，含 `invert`）、`test_node_utils_live.py`（identify/create/CC/collect/selection）、`test_conversion_matrix_live.py`（**全部可用材质交叉转换** × 每个通用属性映射）
 - 渲染器插件缺失时按**通用规则**过滤（非 Redshift 专属），装上后矩阵自动扩展；mayapy 套件不进 CI
 - 第二批 mayapy 用例：`test_cc_conversion_live.py`（CC 链转换/复用/源链还原）、`test_conversion_texture_live.py`（贴图驱动连接 + `reverse` 接线）、`test_conversion_complex_live.py`（Builder 复杂链转换）、`test_conversion_bump_normal_live.py`（bump/normal 双向跨渲染器）、`test_conversion_special_live.py`（glossiness 反转/黑归零/V-Ray emission/同渲染器复用）、`test_conversion_alpha_luminance_live.py`（开启/豁免/跨网络回归）、`test_conversion_displacement_live.py`（哨兵 no-op；真实节点待 Redshift）、`test_converter_flow_live.py`（结果语义/批次/进度/失败隔离）
+- 第三批 mayapy 用例：`test_prerequisites_live.py`、`test_builder_context_live.py`、`test_material_builder_live.py`（全通道 × 渲染器、full/simple、QSS、prereq）、`test_batch_builder_live.py`、`test_colorspace_live.py`（随 OCIO 配置的通用断言）、`test_node_tools_live.py`、`test_scene_roundtrip_live.py`
 
 ## 2026-10-05
 
