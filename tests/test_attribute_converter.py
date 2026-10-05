@@ -140,9 +140,9 @@ def test_transfer_unsupported_type(monkeypatch):
     ok = conv._transfer_one("mat1", "baseColor", "srcColor",
                             {"value": "hello", "connection": None}, {}, "arnold")
     assert ok is False
-    skips = [r for r in log.poll(0) if r.level == LogLevel.SKIP]
-    assert len(skips) == 1
-    assert "unsupported value type" in skips[0].message
+    warns = [r for r in log.poll(0) if r.level == LogLevel.WARN]
+    assert len(warns) == 1
+    assert "unsupported value type" in warns[0].message
 
 
 def test_transfer_missing_target_plug(monkeypatch):
@@ -152,9 +152,9 @@ def test_transfer_missing_target_plug(monkeypatch):
     ok = conv._transfer_one("mat1", "baseColor", "srcColor",
                             {"value": 0.5, "connection": None}, {}, "arnold")
     assert ok is False
-    skips = [r for r in log.poll(0) if r.level == LogLevel.SKIP]
-    assert len(skips) == 1
-    assert "does not exist" in skips[0].message
+    warns = [r for r in log.poll(0) if r.level == LogLevel.WARN]
+    assert len(warns) == 1
+    assert "does not exist" in warns[0].message
 
 
 def test_fix_vray_emission_triggers(monkeypatch):

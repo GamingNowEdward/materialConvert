@@ -67,3 +67,19 @@ class MaterialBuilderLive(support.MayaTestCase):
         mat = support.build_material(self.loader, "VRayMtl", "prq",
                                      {"baseColor": "C:/tex/prq.png"}, use_full_chain=False)
         self.assertEqual(cmds.getAttr(mat + ".useRoughness"), 1)
+
+    def test_build_is_a_single_undo_step(self):
+        if self.loader.get_material_config("aiStandardSurface") is None:
+            self.skipTest("arnold config missing")
+        cmds.file(new=True, force=True)
+        from core.builder_context import BuilderContext
+        from core.material_builder import MaterialBuilder
+
+        ctx = BuilderContext(config_loader=self.loader)
+        mat = MaterialBuilder(ctx, config=self.loader).build(
+            "aiStandardSurface", "undo_b",
+            {"baseColor": "C:/tex/undo.png", "specularRoughness": "C:/tex/undo_r.png"},
+            use_qss=True, use_full_chain=False)
+        self.assertTrue(cmds.objExists(mat))
+        cmds.undo()  # a single build wraps everything in one undo chunk
+        self.assertFalse(cmds.objExists(mat))

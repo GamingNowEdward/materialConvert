@@ -2,6 +2,7 @@ from ui import QtWidgets, shiboken
 from core.builder_context import BuilderContext
 from core.config_loader import ConfigLoader
 from core.logger import get_logger
+from ui.feedback import show_error_dialog, report_terminal
 from ui.styles import FULL_STYLESHEET
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, ColorspaceTab, BatchBuilderTab, LogTab)
 
@@ -103,6 +104,21 @@ def show():
     except Exception as exc:
         logger.debug(f"No previous converter window to close: {exc}", source="MainWindow")
 
-    _main_window = MainWindow()
+    try:
+        _main_window = MainWindow()
+    except Exception as exc:
+        try:
+            logger.error(f"Failed to start Material Converter: {exc}", source="MainWindow")
+        except Exception as log_exc:
+            report_terminal(f"Failed to report startup error: {log_exc!r}")
+        try:
+            show_error_dialog(f"Material Converter failed to start:\n{exc}")
+        except Exception as dialog_exc:
+            try:
+                logger.warn(f"Startup error dialog failed: {dialog_exc}", source="MainWindow")
+            except Exception as log_exc2:
+                report_terminal(f"Failed to report dialog error: {log_exc2!r}")
+        raise
+
     _main_window.show()
     return _main_window

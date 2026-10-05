@@ -26,6 +26,26 @@ class MaterialBuilder:
 
     def build(self, node_type, base_name, input_paths, use_qss=True, use_full_chain=True,
               channel_options=None):
+        """Build a material network inside a single undo chunk.
+
+        Nested chunks (e.g. when called from BatchBuilder's own chunk) merge into
+        the outer step, so a batch still undoes as one action.
+        """
+        try:
+            cmds.undoInfo(openChunk=True)
+        except Exception as exc:
+            self.log.warn(f"Failed to open undo chunk: {exc}", source=_SOURCE)
+        try:
+            return self._build(node_type, base_name, input_paths, use_qss,
+                               use_full_chain, channel_options)
+        finally:
+            try:
+                cmds.undoInfo(closeChunk=True)
+            except Exception as exc:
+                self.log.warn(f"Failed to close undo chunk: {exc}", source=_SOURCE)
+
+    def _build(self, node_type, base_name, input_paths, use_qss=True, use_full_chain=True,
+               channel_options=None):
         mat_config = self.config.get_material_config(node_type)
         if not mat_config:
             raise RuntimeError(f"Missing material config: {node_type}")

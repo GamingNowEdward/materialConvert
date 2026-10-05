@@ -10,7 +10,6 @@ __pycache__/
 .DS_Store
 .mimocode/
 .pytest_cache/
-pytest.ini
 pytest-cache-files-*/
 opencode/
 .workbuddy/

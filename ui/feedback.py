@@ -24,6 +24,10 @@ def _report_terminal(message):
         del exc  # guard-rule requirement (no silent pass), not business logic
 
 
+# Public alias: other UI modules reuse the logger-independent channel.
+report_terminal = _report_terminal
+
+
 def show_error_dialog(message):
     QtWidgets.QMessageBox.critical(None, "Error", message)
 

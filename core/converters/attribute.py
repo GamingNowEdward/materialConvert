@@ -256,6 +256,16 @@ class AttributeConverter:
             source=_SOURCE,
             nodes=(target_mat,),
         )
+        if report.critical:
+            self.log.warn(
+                f"Critical transfer failure(s): {'; '.join(report.critical)}",
+                source=_SOURCE, nodes=(target_mat,),
+            )
+        if report.issues:
+            self.log.warn(
+                f"Non-critical transfer issue(s): {'; '.join(report.issues)}",
+                source=_SOURCE, nodes=(target_mat,),
+            )
         return report
 
     def _apply_inversions(self, target_mat, source_config, target_config, invert_attrs):
@@ -356,7 +366,7 @@ class AttributeConverter:
             return False
 
         if not plug_exists:
-            self.log.skip(f"{src_attr_name}: target plug {target_plug} does not exist", source=_SOURCE, nodes=(target_mat,))
+            self.log.warn(f"{src_attr_name}: target plug {target_plug} does not exist", source=_SOURCE, nodes=(target_mat,))
             return False
 
         connection = src_data.get("connection")
@@ -445,5 +455,5 @@ class AttributeConverter:
                     )
                     return False
 
-        self.log.skip(f"{src_attr_name}: unsupported value type {type(value).__name__}", source=_SOURCE, nodes=(target_mat,))
+        self.log.warn(f"{src_attr_name}: unsupported value type {type(value).__name__}", source=_SOURCE, nodes=(target_mat,))
         return False

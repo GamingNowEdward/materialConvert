@@ -10,6 +10,10 @@
 - **Redshift / V-Ray 的 Object-Space Normal 被误判为 bump**：`config/bumpNormal.json` 的 `redshift.normal.is_normal_value` 与 `vray.normal.is_normal_value` 由 `1` 改为 `[1, 2]`（对齐 Maya `bumpInterp`，`inputType`/`bumpMapType` = 2 才是物体法线）；Builder 回写仍取首值 1（切线法线）。文档 `CONFIG_GUIDE*.md` / `docs/AGENTS.md` / `CONVERSION_SPEC*.md` 同步修正（此前自相矛盾）
 - **`get_materials_from_selection` 材质识别过宽**：原用 `outColor` 存在性判定，把 `file` / `layeredTexture` / `ramp` 也当材质（选中后转换必得 "unknown source material type"）。改用 `cmds.ls(selection, materials=True)`，保留 shape→SG 回退
 - **非 V-Ray 源转 VRayMtl 时 `translucencyMode` 没开，SSS 参数无效**：`config/material/VRayMtl.json` 的 `subsurface` 段新增属性级 prerequisite —— 处理 `subsurfaceWeight` 时先设 `translucencyMode = 6`（SSS），否则 `translucencyAmount` / `translucencyColor` 传了也不生效（与已有 `useRoughness` 同类遗漏）。源权重为 0 时 `translucencyAmount` 传 0，视觉无变化
+- **Material Builder 手动构建没有 undo chunk**：`core/material_builder.py` 的 `build()` 现在内部包裹 `undoInfo` open/close（实际实现在 `_build()`），单次构建可**一步撤销**；`BatchBuilder` 已有的外层 chunk 与内层嵌套合并，批量仍为一步
+- **启动时配置 JSON 损坏直接抛异常、窗口不出现**：`ui/main_window.py:show()` 捕获 `MainWindow()` 构造异常 → `log.error` + best-effort 错误对话框，随后**重新抛出**（不吞异常）
+- **属性传递失败路径的日志级别与结果不一致**：目标插槽缺失 / 不支持值类型由 `SKIP` 升为 `WARN`（因为它们会记入 `issues`），并在 `transfer_all` 末尾汇总一条带 `nodes` 的 WARN 列出 issues / critical
+- **mayapy 转换矩阵对缺失目标属性静默 `continue`**：`test_conversion_matrix_live.py` 改为断言目标插槽存在（缺失即测试失败），不再跳过
 
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
@@ -20,6 +24,7 @@
 - 渲染器插件缺失时按**通用规则**过滤（非 Redshift 专属），装上后矩阵自动扩展；mayapy 套件不进 CI
 - 第二批 mayapy 用例：`test_cc_conversion_live.py`（CC 链转换/复用/源链还原）、`test_conversion_texture_live.py`（贴图驱动连接 + `reverse` 接线）、`test_conversion_complex_live.py`（Builder 复杂链转换）、`test_conversion_bump_normal_live.py`（bump/normal 双向跨渲染器）、`test_conversion_special_live.py`（glossiness 反转/黑归零/V-Ray emission/同渲染器复用）、`test_conversion_alpha_luminance_live.py`（开启/豁免/跨网络回归）、`test_conversion_displacement_live.py`（哨兵 no-op；真实节点待 Redshift）、`test_converter_flow_live.py`（结果语义/批次/进度/失败隔离）
 - 第三批 mayapy 用例：`test_prerequisites_live.py`、`test_builder_context_live.py`、`test_material_builder_live.py`（全通道 × 渲染器、full/simple、QSS、prereq）、`test_batch_builder_live.py`、`test_colorspace_live.py`（随 OCIO 配置的通用断言）、`test_node_tools_live.py`、`test_scene_roundtrip_live.py`
+- `pytest.ini` 不再被 `.gitignore` 忽略并纳入版本控制，CI 只收集纯套件（此前会额外收集 `tests/mayapy` 的跳过用例）；`MaterialBuilder.build` 新增单步 undo 用例
 
 ### 文档
 - `README.md` / `docs/README_zh.md`：结构树与 Development 小节补充 `tests/mayapy/`、`pytest.ini` 与 mayapy 运行命令

@@ -64,8 +64,9 @@ class CrossConversionMatrix(support.MayaTestCase):
             if not tgt_attr:
                 continue
             tgt_plug = "%s.%s" % (target, tgt_attr)
-            if not cmds.objExists(tgt_plug):
-                continue
+            self.assertTrue(
+                cmds.objExists(tgt_plug),
+                "target plug missing for %s: %s" % (common_attr, tgt_plug))
             tgt_type = cmds.getAttr(tgt_plug, type=True)
             expected = support.expected_target_value(src_value, tgt_type)
             actual = support.read_plug_value(tgt_plug)
