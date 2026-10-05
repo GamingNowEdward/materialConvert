@@ -122,6 +122,7 @@ Automatically set on the **target material** before attribute transfer:
 | RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
 | VRayMtl (roughness) | `useRoughness` | `1` |
 | VRayMtl (default reflection) | `reflectionColor` | `[1, 1, 1]` |
+| VRayMtl (subsurface) | `translucencyMode` | `6` (SSS) |
 
 On the **source material** side, glossiness→roughness inversion is declared via `material.invert` (see 1.3): VRayMtl's `useRoughness` decides whether its glossiness attributes are interpreted as glossiness or roughness — the target is forced to `useRoughness=1`, while the source is inverted according to its actual value.
 

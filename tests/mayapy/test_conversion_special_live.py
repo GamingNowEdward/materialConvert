@@ -119,3 +119,48 @@ class ConversionSpecialLive(support.MayaTestCase):
 
         # same renderer: the existing bump/normal node is reused, not duplicated
         self.assertEqual(support.upstream_plug(target + ".normalCamera"), src_bump)
+
+    def test_vray_target_enables_translucency_mode(self):
+        if self.loader.get_material_config("VRayMtl") is None:
+            self.skipTest("VRayMtl missing")
+
+        from core.converter import MaterialConverter
+        checked = 0
+        for cfg in support.available_material_configs(self.loader):
+            if cfg.node_type == "VRayMtl":
+                continue
+            weight_attr = cfg.get_maya_attr("subsurfaceWeight")
+            if not weight_attr:
+                continue
+            with self.subTest(src=cfg.node_type):
+                cmds.file(new=True, force=True)
+                mat = support.create_material(cfg.node_type, "sss_%s" % cfg.node_type)
+                cmds.setAttr("%s.%s" % (mat, weight_attr), 1.0)
+                color_attr = cfg.get_maya_attr("subsurfaceColor")
+                if color_attr and cmds.objExists("%s.%s" % (mat, color_attr)):
+                    cmds.setAttr("%s.%s" % (mat, color_attr), 0.9, 0.4, 0.3)
+
+                result = MaterialConverter(config=self.loader).convert(mat, "VRayMtl")
+                self.assertTrue(result.converted, result.reason)
+                target = result.new_material
+                self.assertEqual(cmds.getAttr(target + ".translucencyMode"), 6,
+                                 "translucencyMode (SSS) not enabled")
+                self.assertAlmostEqual(cmds.getAttr(target + ".translucencyAmount"), 1.0, places=4)
+                checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_vray_target_zero_subsurface_weight_stays_off(self):
+        if self.loader.get_material_config("VRayMtl") is None:
+            self.skipTest("VRayMtl missing")
+        cfg = self.loader.get_material_config("aiStandardSurface")
+        if cfg is None or not cfg.get_maya_attr("subsurfaceWeight"):
+            self.skipTest("arnold subsurface missing")
+
+        cmds.file(new=True, force=True)
+        mat = support.create_material("aiStandardSurface", "sss_zero")
+        cmds.setAttr(mat + "." + cfg.get_maya_attr("subsurfaceWeight"), 0.0)
+
+        from core.converter import MaterialConverter
+        result = MaterialConverter(config=self.loader).convert(mat, "VRayMtl")
+        self.assertTrue(result.converted, result.reason)
+        self.assertAlmostEqual(cmds.getAttr(result.new_material + ".translucencyAmount"), 0.0, places=4)

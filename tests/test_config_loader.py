@@ -55,6 +55,9 @@ def test_prerequisites_parsed():
     vray = loader.get_material_config("VRayMtl")
     assert vray.get_prerequisites()["roughness_mode"]["attribute"] == "useRoughness"
     assert vray.get_prerequisites()["reflection_color"]["value"] == [1, 1, 1]
+    assert vray.get_attr_prerequisites("subsurfaceWeight") == {
+        "attribute": "translucencyMode", "value": 6
+    }
 
 
 def test_invert_parsed():

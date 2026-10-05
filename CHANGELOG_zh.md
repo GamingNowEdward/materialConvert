@@ -9,6 +9,7 @@
 - **通道级内部失败被静默当作成功**：`cc.transfer` 无返回值、`_transfer_one` 的 CC 分支无条件 `return True`、`bump`/`displacement` 连接失败仅记 WARN 仍写 "converted"、`apply_prerequisites` 失败被忽略。现按严重程度分流：**关键失败**（前置条件、CC 链、bump/normal、displacement）→ 设 `reason`、`converted=False`（计为失败并中止）；**非关键通道失败**（单个属性 / emission / alphaIsLuminance / reverse）→ 记入新增的 `ConversionResult.issues`（`converted` 仍 True，汇总计入 `with_issues` 并输出 WARN）；Builder 单通道失败记入 `BuildResult.issues`
 - **Redshift / V-Ray 的 Object-Space Normal 被误判为 bump**：`config/bumpNormal.json` 的 `redshift.normal.is_normal_value` 与 `vray.normal.is_normal_value` 由 `1` 改为 `[1, 2]`（对齐 Maya `bumpInterp`，`inputType`/`bumpMapType` = 2 才是物体法线）；Builder 回写仍取首值 1（切线法线）。文档 `CONFIG_GUIDE*.md` / `docs/AGENTS.md` / `CONVERSION_SPEC*.md` 同步修正（此前自相矛盾）
 - **`get_materials_from_selection` 材质识别过宽**：原用 `outColor` 存在性判定，把 `file` / `layeredTexture` / `ramp` 也当材质（选中后转换必得 "unknown source material type"）。改用 `cmds.ls(selection, materials=True)`，保留 shape→SG 回退
+- **非 V-Ray 源转 VRayMtl 时 `translucencyMode` 没开，SSS 参数无效**：`config/material/VRayMtl.json` 的 `subsurface` 段新增属性级 prerequisite —— 处理 `subsurfaceWeight` 时先设 `translucencyMode = 6`（SSS），否则 `translucencyAmount` / `translucencyColor` 传了也不生效（与已有 `useRoughness` 同类遗漏）。源权重为 0 时 `translucencyAmount` 传 0，视觉无变化
 
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
@@ -24,7 +25,7 @@
 - `README.md` / `docs/README_zh.md`：结构树与 Development 小节补充 `tests/mayapy/`、`pytest.ini` 与 mayapy 运行命令
 - `docs/AGENTS.md`：架构新增「测试」说明（纯套件进 CI / mayapy 本地两半布局）
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：功能回归与新增材质 Checklist 补充 mayapy 套件
-- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`：标注负值各向异性在无符号目标（Arnold / RedshiftOpenPBR）上不可映射（记入 `issues`），旋转不参与转换；bump/normal 模式判定补充 Object-Space Normal
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`：标注负值各向异性在无符号目标（Arnold / RedshiftOpenPBR）上不可映射（记入 `issues`），旋转不参与转换；bump/normal 模式判定补充 Object-Space Normal；1.5 prerequisite 表新增 VRayMtl（subsurface）→ `translucencyMode` = `6`
 
 ### 验证
 - 本机装齐 `mtoa` / `vrayformaya` / `lookdevKit` / `redshift4maya` 后跑完整 mayapy 套件：`mayapy -m unittest discover -s tests/mayapy -t tests -v` → **56 passed, 0 skipped**（6 种材质 × 30 个跨材质对全覆盖，含 bump/normal、CC、displacement、alphaIsLuminance、同渲染器复用等）；纯套件 192 passed

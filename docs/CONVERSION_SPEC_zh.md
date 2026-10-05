@@ -122,6 +122,7 @@
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
 | VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
+| VRayMtl（subsurface） | `translucencyMode` | `6`（SSS） |
 
 **源材质**侧通过 `material.invert` 声明 glossiness→roughness 反转（见 1.3）：VRayMtl 的 `useRoughness` 决定该材质把 glossiness 属性按 glossiness 还是 roughness 解释——目标侧强制 `useRoughness=1`，源侧则按实际取值决定是否反转。
 

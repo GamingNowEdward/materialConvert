@@ -56,7 +56,13 @@
     "subsurfaceWeight": "translucencyAmount",
     "subsurfaceColor": "translucencyColor",
     "subsurfaceRadius": "",
-    "subsurfaceScale": ""
+    "subsurfaceScale": "",
+    "prerequisites": {
+      "subsurfaceWeight": {
+        "attribute": "translucencyMode",
+        "value": 6
+      }
+    }
   },
   "coat": {
     "coatWeight": "coatColorAmount",
