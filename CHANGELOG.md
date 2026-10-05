@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-06
+
+### Fixed
+- **`alphaIsLuminance` auto-tracing could jump across material networks onto the wrong texture**: `core/converters/attribute.py:_trace_alpha_plug` called `cmds.listConnections(start, plugs=True, source=True)` without `destination=False`, so node-level recursion also picked up `*.message` / `defaultRenderUtilityList` registry wiring and downstream plugs as if they were upstream; the trace could then leave the current network and enable `alphaIsLuminance` on an unrelated file (more likely now that conversion inserts `reverse` nodes). Adding `destination=False` restricts the walk to genuine upstream plugs
+
+### Tests
+- `tests/test_attribute_converter.py` gains `test_trace_alpha_plug_follows_only_upstream`: a fake graph where a source=True-only query would wander to `otherFile` while the upstream-only walk must resolve `realFile`
+
 ## 2026-10-05
 
 ### Fixed

@@ -272,3 +272,32 @@ def test_apply_inversions_skips_value_channel(monkeypatch):
                         lambda node_type, **k: created.append(node_type) or "rev")
     conv._apply_inversions("mat1", source, target, {"specularRoughness"})
     assert created == []
+
+
+def test_trace_alpha_plug_follows_only_upstream(monkeypatch):
+    """Regression: node-level listConnections must pass destination=False.
+
+    Without it, Maya returned *.message / defaultRenderUtilityList plumbing and
+    downstream plugs, so the alpha trace could jump into an unrelated material
+    network and enable alphaIsLuminance on the wrong file.
+    """
+    conv = _conv()
+    upstream_only = {
+        "mat1.specularRoughness": ["rev.outputX"],
+        "rev": ["realFile.outAlpha"],
+    }
+    # What a source=True-only query would return on node names (cross-talk).
+    any_direction = {
+        "mat1.specularRoughness": ["rev.outputX"],
+        "rev": ["otherFile.outAlpha"],
+    }
+
+    def list_connections(node, plugs=False, source=False, destination=None):
+        table = upstream_only if destination is False else any_direction
+        return table.get(node, [])
+
+    monkeypatch.setattr(attribute_module.cmds, "listConnections", list_connections)
+    monkeypatch.setattr(attribute_module.cmds, "attributeQuery",
+                        lambda attr, node=None, exists=True:
+                        node in ("realFile", "otherFile"))
+    assert conv._trace_alpha_plug("mat1.specularRoughness") == "realFile.outAlpha"

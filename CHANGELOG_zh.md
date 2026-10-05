@@ -1,5 +1,13 @@
 # 更新日志
 
+## 2026-10-06
+
+### 修复
+- **`alphaIsLuminance` 自动追踪可能跨材质网络串到错误贴图**：`core/converters/attribute.py:_trace_alpha_plug` 的 `cmds.listConnections(start, plugs=True, source=True)` 漏了 `destination=False`，按节点名递归时会把 `*.message` / `defaultRenderUtilityList` 等注册表连线以及下游连线也当成上游，追踪会跳到无关材质并把 `alphaIsLuminance` 开在错误的 file 上（新增 `reverse` 反相节点后更易触发）。补上 `destination=False` 后只沿真正上游遍历
+
+### 测试
+- `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
+
 ## 2026-10-05
 
 ### 修复

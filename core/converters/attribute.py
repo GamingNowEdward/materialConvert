@@ -113,7 +113,7 @@ class AttributeConverter:
             visited = set()
 
         try:
-            conns = cmds.listConnections(start, plugs=True, source=True) or []
+            conns = cmds.listConnections(start, plugs=True, source=True, destination=False) or []
         except Exception as exc:
             self.log.warn(f"Failed to trace alpha upstream from {start}: {exc}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(start),))
             return None
