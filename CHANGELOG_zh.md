@@ -16,6 +16,9 @@
 - 第二批 mayapy 用例：`test_cc_conversion_live.py`（CC 链转换/复用/源链还原）、`test_conversion_texture_live.py`（贴图驱动连接 + `reverse` 接线）、`test_conversion_complex_live.py`（Builder 复杂链转换）、`test_conversion_bump_normal_live.py`（bump/normal 双向跨渲染器）、`test_conversion_special_live.py`（glossiness 反转/黑归零/V-Ray emission/同渲染器复用）、`test_conversion_alpha_luminance_live.py`（开启/豁免/跨网络回归）、`test_conversion_displacement_live.py`（哨兵 no-op；真实节点待 Redshift）、`test_converter_flow_live.py`（结果语义/批次/进度/失败隔离）
 - 第三批 mayapy 用例：`test_prerequisites_live.py`、`test_builder_context_live.py`、`test_material_builder_live.py`（全通道 × 渲染器、full/simple、QSS、prereq）、`test_batch_builder_live.py`、`test_colorspace_live.py`（随 OCIO 配置的通用断言）、`test_node_tools_live.py`、`test_scene_roundtrip_live.py`
 
+### 验证
+- 本机装齐 `mtoa` / `vrayformaya` / `lookdevKit` / `redshift4maya` 后跑完整 mayapy 套件：`mayapy -m unittest discover -s tests/mayapy -t tests -v` → **56 passed, 0 skipped**（6 种材质 × 30 个跨材质对全覆盖，含 bump/normal、CC、displacement、alphaIsLuminance、同渲染器复用等）；纯套件 192 passed
+
 ## 2026-10-05
 
 ### 修复
