@@ -40,12 +40,12 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 所有渲染器映射定义在 `config/*.json` 中，Python 代码中**零硬编码渲染器类型名**
 - 新增渲染器支持：**只需添加 JSON 文件，不需要改业务代码**
 - 四个转换模块位于 `core/converters/` 目录下：
-  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（按目标配置实际属性名扫描、递归上游追踪、opacity 豁免、Redshift 跳过）
+  - `attribute.py` — 材质属性收集与传递 + 黑色颜色自动归零 + Alpha Is Luminance 自动开启（按目标配置实际属性名扫描、递归上游追踪、opacity 豁免、Redshift 跳过）+ 源属性反转（`material.invert` 声明的通道按 `1 - x` 反转；贴图/CC 连接在目标插槽前串入 Maya `reverse` 节点，源链不动）
   - `bump.py` — 凹凸/法线节点检测与转换（独立节点 / 共享类型 / 材质内嵌）
   - `cc.py` — 颜色校正链检测（通过 `listHistory`）、转换、跨通道复用
   - `displacement.py` — 置换节点转换（Redshift ↔ 原生 `displacementShader`）；**逐 shadingEngine 转换**（置换挂在 SG 上），转换器一次性枚举源材质全部 SG 传入，源置换相同的 SG 复用同一目标节点
 - 颜色校正节点类型以 `config/colorCorrection.json` 为单一来源；`node_utils.is_cc_node()` 通过 `ConfigLoader.get_all_cc_types()` 判断，禁止在 Python 中维护 CC 节点类型列表
-- 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数；`convert()` 返回结构化 `ConversionResult`，`convert_all(..., on_progress=...)` 提供可选逐材质进度回调（core 不依赖 Qt，回调异常只记 WARN 不中断批次）
+- 调度器：`core/converter.py` — `MaterialConverter` 接受可选 `logger` 参数；`convert()` 返回结构化 `ConversionResult`，`convert_all(..., on_progress=...)` 提供可选逐材质进度回调（core 不依赖 Qt，回调异常只记 WARN 不中断批次）；`_resolve_inverted_attrs()` 按源配置 `material.invert` 读取开关、算出需反转的通用属性并传给属性转换器（读取失败按 glossiness 默认保守反转并记 WARN）
 - 转换结果模型：`core/results.py` — `ConversionResult`（`created`/`converted`/`wired`/`total_sgs`/`skipped`/`reason`）+ `summarize_results()`，以及 Builder 用的 `BuildResult`（`material`/`new_material`/`built`/`reason`）+ `summarize_build_results()`，纯 Python 可单测，core 与 UI 共用。**语义**：创建成功但全部 SG 接线失败 = `unwired`（计入失败，场景仍渲染旧材质，绝不静默报成功）；仅部分 SG 接线 = `partially_wired`（计入成功但批次 WARN）；`total_sgs==0` 的浮动材质不计入失败
 - 工具函数：`core/node_utils.py` — **模块级函数**，使用 `import core.node_utils as node_utils`，直接调用 `node_utils.xxx()`；节点识别/创建类函数（`identify_node_type` / `create_cc_node` / `create_target_material`）接受可选 `logger` 参数，调用方应传入实例 logger，未传时回落到 `get_logger()`
 - **API 约定：全部使用 `maya.cmds`（字符串式 API，plug 一律 `"node.attr"` 字符串），不依赖 pymel（Maya 2027 起不再支持）**
@@ -72,7 +72,7 @@ from ui import QtWidgets, shiboken    # main_window.py
 PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一行 import。
 
 ### 新增渲染器材质
-只需在 `config/material/` 目录下添加对应的 JSON 文件，包含 `node_type`、`uiPanel_display_name`、`renderer` 和属性映射。无需修改任何 Python 代码，UI 下拉框和转换逻辑自动支持。
+只需在 `config/material/` 目录下添加对应的 JSON 文件，包含 `node_type`、`uiPanel_display_name`、`renderer` 和属性映射。无需修改任何 Python 代码，UI 下拉框和转换逻辑自动支持。若该材质的源属性以 **glossiness**（roughness 的反值）形式存储，需额外配置 `material.invert` 声明条件反转（见 `docs/CONFIG_GUIDE_zh.md`），仍无需改 Python。
 
 ### `bumpNormal.json` 统一 Schema
 每个渲染器的 bump/normal 段使用**统一字段**（按数据流方向排列）：

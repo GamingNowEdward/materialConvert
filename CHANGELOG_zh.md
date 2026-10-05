@@ -1,5 +1,27 @@
 # 更新日志
 
+## 2026-10-05
+
+### 修复
+- **V-Ray 源材质处于 glossiness 模式（`useRoughness=0`）时，转换输出的 roughness 被反转**：`config/material/VRayMtl.json` 新增 `material.invert` 声明 —— `reflectionGlossiness` / `coatGlossiness` / `sheenGlossiness`（分别映射到 `specularRoughness` / `coatRoughness` / `fuzzRoughness`）在源开关为 glossiness 模式时按 `1 - x` 反转。数值直接反转；贴图/CC 链则在连向目标插槽的边上串入 Maya `reverse` 节点（不改动源链，`alphaIsLuminance` 追踪可穿透该节点）。`roughness`（`roughnessAmount`，漫反射粗糙度）是真实 roughness，不反转
+
+### 重构
+- `MaterialConverter._resolve_inverted_attrs()` 按源配置 `material.invert` 解析需反转的通用属性（读取开关失败时按 glossiness 默认保守反转并记 WARN）；`AttributeConverter.transfer_all()` / `_transfer_one()` 增加 `invert` 通道，代码中不含任何渲染器专用属性名，渲染器语义全部保留在 JSON
+- `ConfigValidator` 新增对 `material.invert` 引用属性的拼写校验（与 prerequisites 同层）
+
+### 文档
+- `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：新增 `invert` 字段说明
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`：映射表与值传递规则补充 glossiness→roughness 反转
+- `docs/AGENTS.md`：更新 `attribute.py` / `converter.py` 职责与配置字段
+- `README.md` / `docs/README_zh.md`：Converter 功能列表补充语义反转
+
+### 测试
+- 新增 `tests/test_converter.py`（反转集合解析）；`tests/test_config_loader.py` / `tests/test_attribute_converter.py` 增加 `invert` 解析与数值/连接反转用例
+
+### 验证
+- Maya 2024（mayapy standalone，加载 `mtoa` / `vrayformaya` / `lookdevKit`）跑 `ConfigValidator`：177 项检查 **0 ERROR / 0 WARN**（7 项 SKIP 为未安装 Redshift 的组）
+- V-Ray ↔ Arnold 转换实测：glossiness 模式数值按 `1 - x` 反转、roughness 模式不反转；贴图连接与 Builder 全链（file→ramp）均在目标插槽前正确插入 `reverse` 节点且源链复用；Arnold → V-Ray 目标强制 `useRoughness=1`
+
 ## 2026-10-04
 
 ### 修复

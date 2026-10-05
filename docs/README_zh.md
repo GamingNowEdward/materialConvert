@@ -44,6 +44,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 在 Arnold / Redshift / V-Ray 间批量转换 PBR 材质
 - 自动识别材质类型，一键全部转换
 - 支持 bump/normal 节点、颜色校正节点、置换节点的连带转换
+- 保留粗糙度语义：源材质以 glossiness 存储的通道（如 V-Ray `reflectionGlossiness`）自动反转
 - 批量转换带进度条，支持单步撤销（Ctrl+Z）
 - 支持 6 种材质类型：`aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
@@ -95,7 +96,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 - 全局结构化日志查看器，支持按级别、来源和文本过滤
 - 面板顶部提供 Config Validation，可在 Maya 中校验全部 JSON 配置的拼写（材质 / `bumpNormal.json` / `colorCorrection.json`）
-- 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites 与 displacement），结束后自动清理
+- 创建临时节点校验 `node_type` 与每个映射属性（含 prerequisites、invert 与 displacement），结束后自动清理
 - 未安装插件的渲染器尽可能自动加载，加载失败则整组跳过（绝不误报为拼写错误）
 
 ## 架构

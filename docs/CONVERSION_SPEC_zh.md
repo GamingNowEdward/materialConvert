@@ -41,7 +41,7 @@
 | **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | diffuse_roughness | roughnessAmount |
 | **specularWeight** | specularWeight | specular | refl_weight | specular_weight | refl_weight | reflectionColorAmount |
 | **specularColor** | specularColor | specularColor | refl_color | specular_color | refl_color | reflectionColor |
-| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | refl_roughness | reflectionGlossiness |
+| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | refl_roughness | reflectionGlossiness * |
 | **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | refl_aniso | anisotropy |
 | **ior** | specularIOR | specularIOR | refl_ior | specular_ior | refl_ior | refractionIOR |
 | **transmissionWeight** | transmissionWeight | transmission | refr_weight | transmission_weight | refr_weight | refractionColorAmount |
@@ -54,13 +54,15 @@
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
 | **coatColor** | coatColor | coatColor | coat_color | coat_color | coat_color | coatColor |
-| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coat_roughness | coatGlossiness |
+| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coat_roughness | coatGlossiness * |
 | **coatIor** | coatIOR | coatIOR | coat_ior | coat_ior | coat_ior | coatIor |
 | **fuzzWeight** | fuzzWeight | sheen | sheen_weight | fuzz_weight | sheen_weight | sheenColorAmount |
 | **fuzzColor** | fuzzColor | sheenColor | sheen_color | fuzz_color | sheen_color | sheenColor |
-| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheen_roughness | sheenGlossiness |
+| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheen_roughness | sheenGlossiness * |
 | **emissionWeight** | emissionLuminance | emission | emission_weight | emission_luminance | emission_weight | - |
 | **emissionColor** | emissionColor | emissionColor | emission_color | emission_color | emission_color | illumColor |
+
+> `*` VRayMtl 的 `reflectionGlossiness` / `coatGlossiness` / `sheenGlossiness` 存的是 **glossiness**（与 roughness 互为 `1 - x`）。当源材质 `useRoughness=0`（glossiness 模式）时，转换前按 `1 - x` 反转；`useRoughness=1` 时该属性即 roughness，不反转。声明见 `config/material/VRayMtl.json` 的 `material.invert`（1.5）。`roughness`（`roughnessAmount`）是真实 roughness，不反转。
 
 ### 1.2 属性传递循环中跳过的属性
 
@@ -78,6 +80,7 @@
 - **Alpha Is Luminance**：属性传递完成后，按目标配置的**实际属性名**扫描目标材质所有连接，并**递归追踪上游**（穿越 CC/ramp/layeredTexture/bump 等中间节点），若发现链条中使用 `outAlpha` 输出，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过；opacity 透明度通道豁免，避免误开真实 alpha 贴图）
 - **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
 - **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
+- **源属性反转**：若源配置在 `material.invert` 声明某通用属性，则按 `1 - x` 反转——数值直接反转，贴图/CC 连接在连向目标插槽的边上串入 Maya `reverse` 节点（不改动源链）
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
@@ -108,7 +111,7 @@
 
 ### 1.5 渲染器特定前提条件
 
-属性传递前自动设置：
+**目标材质**属性传递前自动设置：
 
 | 渲染器 | 前提属性 | 值 |
 |---|---|---|
@@ -117,6 +120,8 @@
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
 | VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
+
+**源材质**侧通过 `material.invert` 声明 glossiness→roughness 反转（见 1.3）：VRayMtl 的 `useRoughness` 决定该材质把 glossiness 属性按 glossiness 还是 roughness 解释——目标侧强制 `useRoughness=1`，源侧则按实际取值决定是否反转。
 
 ---
 

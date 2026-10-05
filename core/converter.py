@@ -104,7 +104,8 @@ class MaterialConverter:
 
                 self.attr_converter.transfer_all(
                     new_mat, source_config, target_config, target_renderer,
-                    attr_info, cc_cache
+                    attr_info, cc_cache,
+                    invert_attrs=self._resolve_inverted_attrs(source_mat, source_config),
                 )
 
                 if source_renderer != target_renderer:
@@ -153,6 +154,68 @@ class MaterialConverter:
         except Exception as exc:
             self.logger.warn(f"Failed to query shading engines for {source_mat}: {exc}", nodes=(source_mat,))
             return []
+
+    def _resolve_inverted_attrs(self, source_mat, source_config):
+        """Common attributes whose source value must be inverted (1 - x) on transfer.
+
+        Declared in the source config under ``material.invert`` as
+        ``{common_attr: {attribute, value}}``: the channel inverts when the source
+        material's ``attribute`` equals ``value`` (a bare ``true`` inverts always).
+        Only generic attribute names are used here; renderer specifics stay in JSON.
+        """
+        inverted = set()
+        for common_attr, spec in source_config.get_inverts().items():
+            if not source_config.get_maya_attr(common_attr):
+                self.logger.debug(
+                    f"invert declared for unmapped common attr {common_attr}; ignored",
+                    source=_SOURCE, nodes=(source_mat,),
+                )
+                continue
+
+            if spec is True:
+                inverted.add(common_attr)
+                continue
+
+            if not isinstance(spec, dict):
+                self.logger.warn(
+                    f"Invalid invert spec for {common_attr}: {spec!r}",
+                    source=_SOURCE, nodes=(source_mat,),
+                )
+                continue
+
+            toggle_attr = spec.get("attribute")
+            toggle_value = spec.get("value")
+            if not toggle_attr or toggle_value is None:
+                self.logger.warn(
+                    f"Incomplete invert spec for {common_attr}: {spec!r}",
+                    source=_SOURCE, nodes=(source_mat,),
+                )
+                continue
+
+            try:
+                actual = cmds.getAttr(f"{source_mat}.{toggle_attr}")
+            except Exception as exc:
+                self.logger.warn(
+                    f"Failed to read {source_mat}.{toggle_attr} for invert decision "
+                    f"on {common_attr}: {exc}; assuming inverted (glossiness default)",
+                    source=_SOURCE, nodes=(source_mat,),
+                )
+                inverted.add(common_attr)
+                continue
+
+            if actual == toggle_value:
+                inverted.add(common_attr)
+                self.logger.debug(
+                    f"{common_attr}: invert enabled ({source_mat}.{toggle_attr}={actual!r})",
+                    source=_SOURCE, nodes=(source_mat,),
+                )
+
+        if inverted:
+            self.logger.debug(
+                f"Inverted common attr(s): {sorted(inverted)}",
+                source=_SOURCE, nodes=(source_mat,),
+            )
+        return inverted
 
     def _convert_one_safe(self, mat, target_node_type):
         """Batch item wrapper: never raises, always returns a ConversionResult."""

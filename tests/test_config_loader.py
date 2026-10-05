@@ -57,6 +57,19 @@ def test_prerequisites_parsed():
     assert vray.get_prerequisites()["reflection_color"]["value"] == [1, 1, 1]
 
 
+def test_invert_parsed():
+    loader = ConfigLoader()
+    vray = loader.get_material_config("VRayMtl")
+    inverts = vray.get_inverts()
+    assert inverts["specularRoughness"] == {"attribute": "useRoughness", "value": 0}
+    assert inverts["coatRoughness"] == {"attribute": "useRoughness", "value": 0}
+    assert inverts["fuzzRoughness"] == {"attribute": "useRoughness", "value": 0}
+    # roughnessAmount is a genuine roughness and must NOT be inverted
+    assert "roughness" not in inverts
+    # renderers without an invert block default to empty
+    assert loader.get_material_config("aiStandardSurface").get_inverts() == {}
+
+
 def test_color_weight_pairs_roundtrip():
     loader = ConfigLoader()
     pairs = loader.get_color_weight_pairs()

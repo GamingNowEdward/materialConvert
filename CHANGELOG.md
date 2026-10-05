@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-05
+
+### Fixed
+- **Roughness was inverted when the source V-Ray material was in glossiness mode (`useRoughness=0`)**: `config/material/VRayMtl.json` gains a `material.invert` declaration — `reflectionGlossiness` / `coatGlossiness` / `sheenGlossiness` (mapped to `specularRoughness` / `coatRoughness` / `fuzzRoughness`) are inverted as `1 - x` when the source toggle is in glossiness mode. Scalar values are inverted in place; texture / CC chains get a Maya `reverse` node inserted on the edge into the target plug (the source network is untouched and `alphaIsLuminance` tracing passes through the node). `roughness` (`roughnessAmount`, the diffuse roughness) is a genuine roughness and is not inverted
+
+### Refactor
+- `MaterialConverter._resolve_inverted_attrs()` resolves the common attributes to invert from the source config's `material.invert` (a failed toggle read falls back conservatively to inversion and logs WARN); `AttributeConverter.transfer_all()` / `_transfer_one()` gain an `invert` path with no renderer-specific attribute names in code — renderer semantics stay in JSON
+- `ConfigValidator` now validates the spelling of attributes referenced by `material.invert` (same layer as prerequisites)
+
+### Docs
+- `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`: documented the `invert` field
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`: mapping table and value-transfer rules note the glossiness→roughness inversion
+- `docs/AGENTS.md`: updated `attribute.py` / `converter.py` responsibilities and the config field
+- `README.md` / `docs/README_zh.md`: Converter feature list notes the semantic inversion
+
+### Tests
+- New `tests/test_converter.py` (inversion-set resolution); `tests/test_config_loader.py` / `tests/test_attribute_converter.py` cover `invert` parsing plus scalar/connection inversion
+
+### Verification
+- Ran `ConfigValidator` in Maya 2024 (mayapy standalone with `mtoa` / `vrayformaya` / `lookdevKit` loaded): 177 checks, **0 ERROR / 0 WARN** (7 SKIPs are the not-installed Redshift group)
+- Live V-Ray ↔ Arnold conversions: values inverted as `1 - x` in glossiness mode and left alone in roughness mode; texture connections and full Builder chains (file→ramp) get the `reverse` node inserted on the target edge with the source chain reused; Arnold → V-Ray forces `useRoughness=1`
+
 ## 2026-10-04
 
 ### Fixed

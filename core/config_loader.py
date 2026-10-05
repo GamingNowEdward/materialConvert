@@ -85,11 +85,16 @@ class MaterialConfig:
         self.attr_map = {}
         self.prerequisites = {}
         self.attr_prerequisites = {}
+        self.invert = {}
 
         prereq_section = mat_data.get("prerequisites", {})
         if prereq_section:
             if isinstance(prereq_section, dict):
                 self.prerequisites = dict(prereq_section)
+
+        invert_section = mat_data.get("invert", {})
+        if isinstance(invert_section, dict):
+            self.invert = dict(invert_section)
 
         for section_name, section_data in data.items():
             if section_name in ("material",):
@@ -128,6 +133,9 @@ class MaterialConfig:
 
     def get_attr_prerequisites(self, common_attr):
         return self.attr_prerequisites.get(common_attr)
+
+    def get_inverts(self):
+        return dict(self.invert)
 
 
 class ConfigLoader:

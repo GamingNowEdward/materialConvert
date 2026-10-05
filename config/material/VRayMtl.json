@@ -12,6 +12,20 @@
         "value": [1, 1, 1]
       }
     },
+    "invert": {
+      "specularRoughness": {
+        "attribute": "useRoughness",
+        "value": 0
+      },
+      "coatRoughness": {
+        "attribute": "useRoughness",
+        "value": 0
+      },
+      "fuzzRoughness": {
+        "attribute": "useRoughness",
+        "value": 0
+      }
+    },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",
     "renderer": "vray"

@@ -44,6 +44,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Batch convert PBR materials between Arnold / Redshift / V-Ray
 - Auto-detect material types, one-click convert all
 - Supports bump/normal nodes, color correction nodes, and displacement nodes
+- Preserves roughness semantics: source channels stored as glossiness (e.g. V-Ray `reflectionGlossiness`) are inverted automatically
 - Progress bar for batch conversion, single-step undo (Ctrl+Z)
 - Supports 6 material types: `aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
@@ -96,7 +97,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 - Global structured log viewer with level, source, and text filters
 - Config Validation controls for checking all JSON config spelling against actual Maya node types (materials / `bumpNormal.json` / `colorCorrection.json`)
-- Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites and displacement), then cleans up
+- Creates temporary nodes to check `node_type` and every mapped attribute (incl. prerequisites, invert and displacement), then cleans up
 - Renderers without an installed plugin are auto-loaded when possible, otherwise skipped entirely (never misreported as spelling errors)
 
 ## Architecture

@@ -187,6 +187,14 @@ class ConfigValidator:
                     self._check_attr(node, config.node_type, attr, scope,
                                      f"attr prerequisite '{common_attr}' -> '{attr}'")
 
+            for common_attr in sorted(config.get_inverts()):
+                spec = config.get_inverts()[common_attr]
+                if isinstance(spec, dict):
+                    attr = spec.get("attribute", "")
+                    if attr:
+                        self._check_attr(node, config.node_type, attr, scope,
+                                         f"invert '{common_attr}' toggle -> '{attr}'")
+
             self._validate_displacement(config, scope)
 
     def _validate_displacement(self, config, scope):

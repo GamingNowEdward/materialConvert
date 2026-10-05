@@ -174,7 +174,8 @@ class AttributeConverter:
             self.log.warn(f"Failed to set emission weight on {target_mat}.{weight_attr}: {exc}", source=_SOURCE, nodes=(target_mat,))
 
     def transfer_all(self, target_mat, source_config, target_config, target_renderer,
-                     attr_info, cc_cache):
+                     attr_info, cc_cache, invert_attrs=None):
+        invert_attrs = invert_attrs or set()
         self._zero_black_colors(attr_info, source_config)
         self._fix_vray_emission(attr_info, source_config, target_mat, target_config)
 
@@ -206,10 +207,14 @@ class AttributeConverter:
 
             apply_attr_prerequisites(target_mat, target_config, common_attr, logger=self.log)
             if self._transfer_one(target_mat, tgt_maya_attr, src_maya_attr,
-                                  src_data, cc_cache, target_renderer):
+                                  src_data, cc_cache, target_renderer,
+                                  invert=common_attr in invert_attrs):
                 transferred += 1
             else:
                 skipped += 1
+
+        if invert_attrs:
+            self._apply_inversions(target_mat, source_config, target_config, invert_attrs)
 
         self._fix_alpha_luminance(target_mat, target_renderer, target_config)
         self.log.info(
@@ -218,8 +223,90 @@ class AttributeConverter:
             nodes=(target_mat,),
         )
 
+    def _apply_inversions(self, target_mat, source_config, target_config, invert_attrs):
+        """Flip connected roughness-style channels through a Maya ``reverse`` node.
+
+        Values were already inverted in ``_transfer_one``; only connected channels
+        (plain texture, CC chain, or shared CC output) are handled here. The node is
+        inserted on the edge into the target plug, so the source network is untouched.
+        """
+        for common_attr in invert_attrs:
+            target_attr = target_config.get_maya_attr(common_attr)
+            if not target_attr:
+                continue
+            src_attr = source_config.get_maya_attr(common_attr)
+
+            target_plug = f"{target_mat}.{target_attr}"
+            try:
+                if not cmds.objExists(target_plug):
+                    continue
+                upstream = cmds.listConnections(
+                    target_plug, source=True, destination=False, plugs=True) or []
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to trace upstream of {target_plug} for inversion: {exc}",
+                    source=_SOURCE, nodes=(target_mat,),
+                )
+                continue
+
+            if not upstream:
+                self.log.debug(
+                    f"{common_attr}: no connection on {target_plug} to invert "
+                    f"(value already inverted)",
+                    source=_SOURCE, nodes=(target_mat,),
+                )
+                continue
+
+            self._insert_invert_node(target_mat, common_attr, src_attr, upstream[0], target_plug)
+
+    def _insert_invert_node(self, target_mat, common_attr, src_attr, src_plug, target_plug):
+        try:
+            cmds.disconnectAttr(src_plug, target_plug)
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to disconnect {src_plug} -> {target_plug} for inversion: {exc}",
+                source=_SOURCE, nodes=(target_mat,),
+            )
+            return
+
+        # Name after the SOURCE attribute (e.g. reflectionGlossiness): the node turns
+        # a glossiness value into roughness, so naming it after the target roughness
+        # plug would read as "invert roughness" and mislead later.
+        node_name = f"{target_mat}_{src_attr or common_attr}_invert"
+        try:
+            rev_node = cmds.shadingNode("reverse", asUtility=True, name=node_name)
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to create reverse node {node_name}: {exc}",
+                source=_SOURCE, nodes=(target_mat,),
+            )
+            self.utils.smart_connect(src_plug, target_plug, logger=self.log)
+            return
+
+        if not self.utils.smart_connect(src_plug, f"{rev_node}.inputX", logger=self.log):
+            self.log.warn(
+                f"Failed to connect {src_plug} -> {rev_node}.inputX for inversion",
+                source=_SOURCE, nodes=(rev_node, target_mat),
+            )
+            self.utils.smart_connect(src_plug, target_plug, logger=self.log)
+            return
+
+        try:
+            cmds.connectAttr(f"{rev_node}.outputX", target_plug, force=True)
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to connect {rev_node}.outputX -> {target_plug} for inversion: {exc}",
+                source=_SOURCE, nodes=(rev_node, target_mat),
+            )
+            return
+
+        self.log.info(
+            f"Inverted {common_attr}: {src_plug} -> {rev_node}.outputX -> {target_plug}",
+            source=_SOURCE, nodes=(rev_node, target_mat),
+        )
+
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
-                      src_data, cc_cache, target_renderer):
+                      src_data, cc_cache, target_renderer, invert=False):
         target_plug = f"{target_mat}.{target_attr}"
         try:
             plug_exists = cmds.objExists(target_plug)
@@ -233,6 +320,13 @@ class AttributeConverter:
 
         connection = src_data.get("connection")
         value = src_data.get("value")
+
+        if invert and isinstance(value, (int, float)):
+            value = 1.0 - value
+            self.log.debug(
+                f"{src_attr_name}: inverted scalar value -> {value}",
+                source=_SOURCE, nodes=(target_mat,),
+            )
 
         if connection:
             cc_entry = cc_cache.get(src_attr_name)

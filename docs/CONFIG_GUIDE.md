@@ -66,6 +66,7 @@ Create a new JSON file under `config/material/`. **The file name is not used for
     "node_type": "VRayMtl",
     "plugin": "vrayformaya",
     "prerequisites": { },
+    "invert": { },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",
     "renderer": "vray"
@@ -81,6 +82,7 @@ Create a new JSON file under `config/material/`. **The file name is not used for
 | `short_name` | Recommended | Naming suffix for converted materials: `{source_material}_{short_name}` (defaults to `"converted"`). Existing conventions: `aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | Recommended | Renderer plugin module name (e.g. `mtoa` / `redshift4maya` / `vrayformaya`). Used only by Debug validation: checks plugin load state; if not installed, the whole renderer group is SKIPped instead of misreported as spelling errors |
 | `prerequisites` | Optional | Material-level prerequisites, see below |
+| `invert` | Optional | Material-level source-attribute inversion declaration, see below |
 
 ### Attribute Mapping Sections
 
@@ -145,6 +147,31 @@ Format rules:
 | `value` as array | Set via multi-argument setAttr (broadcast to three channels, float3) |
 | Empty `attribute` or null `value` | Silently skipped |
 | Failure | Logged as WARN only; conversion continues |
+
+### The `invert` Block
+
+Some source renderers store roughness as glossiness (the two are `1 - x` of each other), and whether they do may depend on a material toggle. `invert` flips the source value of the listed common attributes **before transfer**, so the target material receives the correct roughness:
+
+```json
+"material": {
+  "invert": {
+    "specularRoughness": { "attribute": "useRoughness", "value": 0 },
+    "coatRoughness":     { "attribute": "useRoughness", "value": 0 },
+    "fuzzRoughness":     { "attribute": "useRoughness", "value": 0 }
+  }
+}
+```
+
+| Rule | Description |
+|---|---|
+| Key | Common attribute name (ignored if the material has no non-empty mapping for it) |
+| Value | `true` inverts unconditionally; `{ "attribute": "...", "value": ... }` inverts only when the source material's attribute equals `value` |
+| Scalar | Written as `1 - x` |
+| Texture / CC connection | A Maya `reverse` node is inserted on the edge into the target plug; **the source network is left untouched** |
+| Node name | `{target_material}_{source_attribute}_invert` (e.g. `wood_aiStd_reflectionGlossiness_invert`), taken from the source glossiness attribute so it is not misread as "invert roughness" |
+| Toggle read failure | Logged as WARN and treated conservatively as glossiness (inverted) |
+
+> Example: VRayMtl's `reflectionGlossiness` stores glossiness when `useRoughness=0`, so `specularRoughness` is declared to invert under that condition; `roughnessAmount` (`roughness`) is a genuine roughness and is not declared.
 
 ### The `displacement` Block
 
@@ -389,7 +416,7 @@ cmds.delete(n)                             # Delete immediately after verificati
 
 ### 2. Debug Config Validation (Recommended)
 
-Run **Config Validation** from the Log tab: the validator creates temporary nodes in Maya and checks every JSON's `node_type` and all mapped attributes (including prerequisites and displacement) against real spelling, then cleans up the temporary nodes.
+Run **Config Validation** from the Log tab: the validator creates temporary nodes in Maya and checks every JSON's `node_type` and all mapped attributes (including prerequisites, invert and displacement) against real spelling, then cleans up the temporary nodes.
 
 - Plugin not installed / fails to load → the entire renderer group is SKIPped, **never misreported as spelling errors**
 - Results go into the unified log stream, filterable by level/source
@@ -443,6 +470,7 @@ Complete list for adding a new renderer material type:
 - [ ] `config/material/<NodeType>.json`: `material` block contains `node_type` / `renderer` (built-in: arnold/redshift/vray) / `uiPanel_display_name`
 - [ ] Attribute section keys match the universal attribute table exactly; unsupported entries use `""` or omit the section
 - [ ] Attributes needing toggles/defaults have prerequisites configured (material-level or attribute-level)
+- [ ] Source attributes stored as glossiness (inverse of roughness) are declared in `material.invert` (with the toggle condition)
 - [ ] `displacement` block filled correctly per sentinel semantics (or confirmed unsupported)
 - [ ] `bumpNormal.json` has a same-named `renderer` section (bump + normal), with the correct mode among the three
 - [ ] `colorCorrection.json` has a same-named `renderer` section with `hue_range` / `hue_center` matching the renderer's scale

@@ -41,7 +41,7 @@ Columns: aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMater
 | **roughness** | baseDiffuseRoughness | diffuseRoughness | diffuse_roughness | base_diffuse_roughness | diffuse_roughness | roughnessAmount |
 | **specularWeight** | specularWeight | specular | refl_weight | specular_weight | refl_weight | reflectionColorAmount |
 | **specularColor** | specularColor | specularColor | refl_color | specular_color | refl_color | reflectionColor |
-| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | refl_roughness | reflectionGlossiness |
+| **specularRoughness** | specularRoughness | specularRoughness | refl_roughness | specular_roughness | refl_roughness | reflectionGlossiness * |
 | **specularAnisotropy** | specularRoughnessAnisotropy | specularAnisotropy | refl_aniso | specular_roughness_anisotropy | refl_aniso | anisotropy |
 | **ior** | specularIOR | specularIOR | refl_ior | specular_ior | refl_ior | refractionIOR |
 | **transmissionWeight** | transmissionWeight | transmission | refr_weight | transmission_weight | refr_weight | refractionColorAmount |
@@ -54,13 +54,15 @@ Columns: aiOpenPBR / aiStandardSurface / RedshiftMaterial / RedshiftOpenPBRMater
 | **subsurfaceScale** | subsurfaceRadiusScale | subsurfaceScale | ms_radius_scale | subsurface_radius_scale | ms_radius_scale | - |
 | **coatWeight** | coatWeight | coat | coat_weight | coat_weight | coat_weight | coatColorAmount |
 | **coatColor** | coatColor | coatColor | coat_color | coat_color | coat_color | coatColor |
-| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coat_roughness | coatGlossiness |
+| **coatRoughness** | coatRoughness | coatRoughness | coat_roughness | coat_roughness | coat_roughness | coatGlossiness * |
 | **coatIor** | coatIOR | coatIOR | coat_ior | coat_ior | coat_ior | coatIor |
 | **fuzzWeight** | fuzzWeight | sheen | sheen_weight | fuzz_weight | sheen_weight | sheenColorAmount |
 | **fuzzColor** | fuzzColor | sheenColor | sheen_color | fuzz_color | sheen_color | sheenColor |
-| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheen_roughness | sheenGlossiness |
+| **fuzzRoughness** | fuzzRoughness | sheenRoughness | sheen_roughness | fuzz_roughness | sheen_roughness | sheenGlossiness * |
 | **emissionWeight** | emissionLuminance | emission | emission_weight | emission_luminance | emission_weight | - |
 | **emissionColor** | emissionColor | emissionColor | emission_color | emission_color | emission_color | illumColor |
+
+> `*` VRayMtl's `reflectionGlossiness` / `coatGlossiness` / `sheenGlossiness` store **glossiness** (the `1 - x` of roughness). When the source material has `useRoughness=0` (glossiness mode) they are inverted as `1 - x` before transfer; with `useRoughness=1` the attribute already holds roughness and is not inverted. Declared in `config/material/VRayMtl.json` under `material.invert` (see 1.5). `roughness` (`roughnessAmount`) is a genuine roughness and is not inverted.
 
 ### 1.2 Attributes Skipped in Transfer Loop
 
@@ -78,6 +80,7 @@ These universal attributes are **not** processed in the main transfer loop — t
 - **Alpha Is Luminance**: After attribute transfer, scans target material connections using the **actual attribute names** from the target config and **recursively traces upstream** (through intermediate nodes like CC/ramp/layeredTexture/bump); if an `outAlpha` output is found in the chain, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift; `opacity` channel is exempt to avoid enabling luminance on genuine alpha maps)
 - **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
 - **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
+- **Source inversion**: If the source config declares a common attribute under `material.invert`, it is inverted as `1 - x` — scalars in place; texture/CC connections get a Maya `reverse` node inserted on the edge into the target plug (source network untouched)
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
 ### 1.4 Black Color Auto-Zeroing
@@ -108,7 +111,7 @@ This processing runs before attribute transfer, regardless of target renderer.
 
 ### 1.5 Renderer-Specific Prerequisites
 
-Automatically set before attribute transfer:
+Automatically set on the **target material** before attribute transfer:
 
 | Renderer | Prerequisite Attribute | Value |
 |---|---|---|
@@ -117,6 +120,8 @@ Automatically set before attribute transfer:
 | RedshiftMaterial (metallic) | `refl_fresnel_mode` | `2` |
 | VRayMtl (roughness) | `useRoughness` | `1` |
 | VRayMtl (default reflection) | `reflectionColor` | `[1, 1, 1]` |
+
+On the **source material** side, glossiness→roughness inversion is declared via `material.invert` (see 1.3): VRayMtl's `useRoughness` decides whether its glossiness attributes are interpreted as glossiness or roughness — the target is forced to `useRoughness=1`, while the source is inverted according to its actual value.
 
 ---
 

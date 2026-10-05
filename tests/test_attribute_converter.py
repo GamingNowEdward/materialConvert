@@ -195,3 +195,80 @@ def test_fix_vray_emission_black_without_connection_skips(monkeypatch):
                         lambda plug, v: calls.append((plug, v)))
     conv._fix_vray_emission(attr_info, src, "mat1", target)
     assert calls == []
+
+
+def test_transfer_scalar_invert(monkeypatch):
+    conv = _conv()
+    calls = []
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "getAttr",
+                        lambda plug, type=None: "float")
+    monkeypatch.setattr(attribute_module.cmds, "setAttr",
+                        lambda plug, *v: calls.append((plug, v)))
+    ok = conv._transfer_one("mat1", "specularRoughness", "reflectionGlossiness",
+                            {"value": 0.25, "connection": None}, {}, "arnold",
+                            invert=True)
+    assert ok is True
+    assert calls == [("mat1.specularRoughness", (0.75,))]
+
+
+def test_transfer_scalar_invert_false_keeps_value(monkeypatch):
+    conv = _conv()
+    calls = []
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "getAttr",
+                        lambda plug, type=None: "float")
+    monkeypatch.setattr(attribute_module.cmds, "setAttr",
+                        lambda plug, *v: calls.append((plug, v)))
+    conv._transfer_one("mat1", "specularRoughness", "reflectionGlossiness",
+                       {"value": 0.25, "connection": None}, {}, "arnold",
+                       invert=False)
+    assert calls == [("mat1.specularRoughness", (0.25,))]
+
+
+def test_apply_inversions_inserts_reverse_node(monkeypatch):
+    loader = ConfigLoader()
+    utils = FakeUtils()
+    conv = AttributeConverter(loader, utils, FakeCC(), Logger())
+    source = loader.get_material_config("VRayMtl")
+    target = loader.get_material_config("aiStandardSurface")
+
+    created = []
+    cmds_calls = []
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "listConnections",
+                        lambda *a, **k: ["file1.outAlpha"])
+    monkeypatch.setattr(attribute_module.cmds, "disconnectAttr",
+                        lambda src, dst: cmds_calls.append(("disconnect", src, dst)))
+    monkeypatch.setattr(
+        attribute_module.cmds, "shadingNode",
+        lambda node_type, **k: created.append(node_type)
+        or "mat1_reflectionGlossiness_invert")
+    monkeypatch.setattr(attribute_module.cmds, "connectAttr",
+                        lambda src, dst, force=False: cmds_calls.append(("connect", src, dst)))
+
+    conv._apply_inversions("mat1", source, target, {"specularRoughness"})
+
+    # Node is named after the SOURCE glossiness attribute, not the target roughness plug.
+    assert created == ["reverse"]
+    assert ("disconnect", "file1.outAlpha", "mat1.specularRoughness") in cmds_calls
+    assert ("connect", "mat1_reflectionGlossiness_invert.outputX",
+            "mat1.specularRoughness") in cmds_calls
+    assert ("smart_connect", "file1.outAlpha",
+            "mat1_reflectionGlossiness_invert.inputX") in utils.calls
+
+
+def test_apply_inversions_skips_value_channel(monkeypatch):
+    loader = ConfigLoader()
+    utils = FakeUtils()
+    conv = AttributeConverter(loader, utils, FakeCC(), Logger())
+    source = loader.get_material_config("VRayMtl")
+    target = loader.get_material_config("aiStandardSurface")
+    created = []
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "listConnections",
+                        lambda *a, **k: [])
+    monkeypatch.setattr(attribute_module.cmds, "shadingNode",
+                        lambda node_type, **k: created.append(node_type) or "rev")
+    conv._apply_inversions("mat1", source, target, {"specularRoughness"})
+    assert created == []

@@ -66,6 +66,7 @@
     "node_type": "VRayMtl",
     "plugin": "vrayformaya",
     "prerequisites": { },
+    "invert": { },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",
     "renderer": "vray"
@@ -81,6 +82,7 @@
 | `short_name` | 建议 | 转换后新材质的命名后缀：`{源材质名}_{short_name}`（缺省用 `"converted"`）。现有约定：`aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | 建议 | 渲染器插件模块名（如 `mtoa` / `redshift4maya` / `vrayformaya`）。仅 Debug 校验使用：检测插件加载状态，未安装则该渲染器整组 SKIP，不会误报拼写错误 |
 | `prerequisites` | 可选 | 材质级前置条件，见下文 |
+| `invert` | 可选 | 材质级源属性反转声明，见下文 |
 
 ### 属性映射段
 
@@ -145,6 +147,31 @@
 | `value` 为数组 | 按 float3 多参数设置（广播到三个通道） |
 | `attribute` 为空或 `value` 为 null | 静默跳过 |
 | 设置失败 | 仅记录 WARN 日志，不中断转换 |
+
+### `invert`（源属性反转）
+
+某些源渲染器把 roughness 存成 glossiness（两者数值互为 `1 - x`），且是否如此由材质上的一个开关决定。`invert` 在**转换前**把指定通用属性的源值反转，使目标材质拿到正确的 roughness：
+
+```json
+"material": {
+  "invert": {
+    "specularRoughness": { "attribute": "useRoughness", "value": 0 },
+    "coatRoughness":     { "attribute": "useRoughness", "value": 0 },
+    "fuzzRoughness":     { "attribute": "useRoughness", "value": 0 }
+  }
+}
+```
+
+| 规则 | 说明 |
+|---|---|
+| 键 | 通用属性名（须在该材质的属性映射中有非空映射，否则忽略） |
+| 值 | `true` 表示恒定反转；`{ "attribute": "...", "value": ... }` 表示仅当源材质该属性等于 `value` 时反转 |
+| 数值 | 直接写 `1 - x` |
+| 贴图/CC 连接 | 在连向目标插槽的边上串入 Maya `reverse` 节点，**不改动源链** |
+| 节点命名 | `{目标材质}_{源属性名}_invert`（如 `wood_aiStd_reflectionGlossiness_invert`），取自源 glossiness 属性名以免被误读为"反转 roughness" |
+| 开关读取失败 | 记 WARN，并按 glossiness（反转）保守处理 |
+
+> 例：VRayMtl 的 `reflectionGlossiness` 在 `useRoughness=0` 时存的是 glossiness，因此声明 `specularRoughness` 在该条件下反转；`roughnessAmount`（`roughness`）是真实 roughness，不声明。
 
 ### `displacement` 块
 
@@ -389,7 +416,7 @@ cmds.delete(n)                             # 验证后立即删除
 
 ### 2. Debug 配置校验（推荐）
 
-打开 Log 标签页运行 **Config Validation**：校验器会在 Maya 中创建临时节点，逐一核对每个 JSON 的 `node_type` 和所有映射属性（含 prerequisites 与 displacement）的真实拼写，结束后清理临时节点。
+打开 Log 标签页运行 **Config Validation**：校验器会在 Maya 中创建临时节点，逐一核对每个 JSON 的 `node_type` 和所有映射属性（含 prerequisites、invert 与 displacement）的真实拼写，结束后清理临时节点。
 
 - 插件未安装/无法加载 → 该渲染器整组标记 SKIP 并跳过，**不会误报为拼写错误**
 - 结果进入统一日志流，可按级别/来源过滤
@@ -443,6 +470,7 @@ arnold → ai    redshift → rs    vray → vray
 - [ ] `config/material/<NodeType>.json`：`material` 块含 `node_type` / `renderer`（内置：arnold/redshift/vray）/ `uiPanel_display_name`
 - [ ] 属性段的键与通用属性总表完全一致；不支持项写 `""` 或整段省略
 - [ ] 需要开关/默认值的属性已配置 prerequisites（材质级或属性级）
+- [ ] 源属性若为 glossiness（数值与 roughness 相反），已在 `material.invert` 声明（含开关条件）
 - [ ] `displacement` 块已按哨兵值语义正确填写（或确认不支持）
 - [ ] `bumpNormal.json` 已添加同名 `renderer` 段（bump + normal），三种模式判别正确
 - [ ] `colorCorrection.json` 已添加同名 `renderer` 段，`hue_range` / `hue_center` 符合该渲染器量纲
