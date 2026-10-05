@@ -8,6 +8,11 @@
 ### Tests
 - `tests/test_attribute_converter.py` gains `test_trace_alpha_plug_follows_only_upstream`: a fake graph where a source=True-only query would wander to `otherFile` while the upstream-only walk must resolve `realFile`
 
+### Tests (new mayapy integration suite)
+- New Maya integration harness: `pytest.ini` (`--ignore=tests/mayapy`; the pure suite still runs in CI), `tests/support.py` (`maya.standalone` bootstrap, fresh scene per test, loads the renderer plugins available on the machine, material/value helpers, data-driven material pairs), `tests/mayapy/__init__.py`, `tests/README.md`
+- First mayapy cases (local `mayapy -m unittest discover -s tests/mayapy -t tests -v`): `test_config_validator_live.py` (real-node `validate_all` **0 ERROR / 0 WARN**, incl. `invert`), `test_node_utils_live.py` (identify/create/CC/collect/selection), `test_conversion_matrix_live.py` (**all available cross-material conversions** × every mapped common attribute)
+- Missing renderer plugins are filtered generically (not Redshift-specific); the matrix widens automatically once installed. The mayapy suite is not part of CI
+
 ## 2026-10-05
 
 ### Fixed

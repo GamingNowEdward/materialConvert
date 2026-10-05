@@ -8,6 +8,11 @@
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
 
+### 测试（新增 mayapy 集成套件）
+- 新增 Maya 集成测试骨架：`pytest.ini`（`--ignore=tests/mayapy`，纯套件仍进 CI）、`tests/support.py`（`maya.standalone` 初始化、每例新场景、按可用插件加载渲染器、建材质/取值辅助、材质对数据驱动）、`tests/mayapy/__init__.py`、`tests/README.md`
+- 首批 mayapy 用例（本地 `mayapy -m unittest discover -s tests/mayapy -t tests -v`）：`test_config_validator_live.py`（真实节点 `validate_all` **0 ERROR/0 WARN**，含 `invert`）、`test_node_utils_live.py`（identify/create/CC/collect/selection）、`test_conversion_matrix_live.py`（**全部可用材质交叉转换** × 每个通用属性映射）
+- 渲染器插件缺失时按**通用规则**过滤（非 Redshift 专属），装上后矩阵自动扩展；mayapy 套件不进 CI
+
 ## 2026-10-05
 
 ### 修复

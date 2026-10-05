@@ -171,7 +171,8 @@ renderer_short = renderer_map.get(target_renderer, target_renderer)  # 回退为
 2. 在 Maya Script Editor 中重新 `exec()` 加载
 3. 如果模块缓存问题持续存在，关闭窗口后重新运行
 4. 运行纯 Python 测试（无需 Maya）：`python -m pytest tests/ -v`
-5. 提交后由 GitHub Actions（`.github/workflows/test.yml`，Python 3.11 + PySide6）自动跑 `pytest` 与守卫脚本，本地验证命令与 CI 一致
+5. 运行 Maya 集成测试（本地，需 Maya，不进 CI）：`mayapy -m unittest discover -s tests/mayapy -t tests -v`（覆盖真实节点/连接/插件；见 `tests/README.md`）
+6. 提交后由 GitHub Actions（`.github/workflows/test.yml`，Python 3.11 + PySide6）自动跑 `pytest` 与守卫脚本，本地验证命令与 CI 一致
 
 ## 常见陷阱
 
