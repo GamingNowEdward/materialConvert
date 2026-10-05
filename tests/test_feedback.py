@@ -168,3 +168,58 @@ def test_show_error_dialog_uses_none_parent(monkeypatch):
 
     feedback.show_error_dialog("test message")
     assert calls == [(None, "Error", "test message")]
+
+
+class _WarnAction:
+    def __init__(self, log, warnings):
+        self.log = log
+        self._warnings = warnings
+
+    @feedback.qt_maya_logger("Test")
+    def run(self):
+        self._last_operation_warnings = self._warnings
+        return "ok"
+
+
+def test_warning_branch_shows_banner_and_warn_not_success(monkeypatch):
+    log = _Log()
+    banners = []
+    monkeypatch.setattr(feedback, "show_warning_banner",
+                        lambda m: banners.append(m) or True)
+    views = []
+    monkeypatch.setattr(cmds, "inViewMessage", lambda **k: views.append(k.get("amg", "")))
+
+    action = _WarnAction(log, 2)
+    assert action.run() == "ok"
+    assert banners and "issue" in banners[0]
+    assert any(c[0] == "warn" and "[WARN]" in c[1] for c in log.calls)
+    assert not any(c[0] == "info" and "[SUCCESS]" in c[1] for c in log.calls)
+    assert not any("Success" in v for v in views)
+
+
+def test_warning_counter_is_reset_between_runs(monkeypatch):
+    log = _Log()
+    monkeypatch.setattr(feedback, "show_warning_banner", lambda m: True)
+    action = _Action(log, lambda: "ok")
+    action._last_operation_warnings = 5  # stale value from a previous run
+    assert action.run() == "ok"
+    assert any(c[0] == "info" and "[SUCCESS]" in c[1] for c in log.calls)
+
+
+def test_warning_banner_failure_is_logged(monkeypatch):
+    log = _Log()
+    monkeypatch.setattr(feedback, "show_warning_banner", lambda m: False)
+    action = _WarnAction(log, 1)
+    assert action.run() == "ok"
+    assert any(c[0] == "warn" and "Warning banner failed" in c[1] for c in log.calls)
+
+
+def test_show_warning_banner_is_best_effort(monkeypatch):
+    def broken(**kwargs):
+        raise RuntimeError("view broken")
+
+    monkeypatch.setattr(cmds, "inViewMessage", broken)
+    assert feedback.show_warning_banner("hi") is False
+
+    monkeypatch.setattr(cmds, "inViewMessage", lambda **kwargs: None)
+    assert feedback.show_warning_banner("hi") is True

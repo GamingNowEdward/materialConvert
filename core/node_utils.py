@@ -28,14 +28,20 @@ def get_materials_from_selection(logger=None):
 
     log.debug(f"Scanning {len(selection)} selected node(s) for materials", source=_SOURCE, nodes=tuple(selection))
 
-    for node in selection:
-        try:
-            if cmds.attributeQuery("outColor", node=node, exists=True) and node not in seen:
-                seen.add(node)
-                materials.append(node)
-                log.debug(f"Selected node is a material: {node}", source=_SOURCE, nodes=(node,))
-        except Exception as exc:
-            log.warn(f"Failed to query outColor on {node}: {exc}", source=_SOURCE, nodes=(node,))
+    # Rely on Maya's own material filter: an `outColor` existence check also
+    # matches textures/utilities (file, layeredTexture, ramp), which are not
+    # materials and would only produce "unknown source material type" failures.
+    try:
+        selected_materials = cmds.ls(selection, materials=True) or []
+    except Exception as exc:
+        log.warn(f"Failed to filter selected material nodes: {exc}", source=_SOURCE, nodes=tuple(selection))
+        selected_materials = []
+
+    for node in selected_materials:
+        if node not in seen:
+            seen.add(node)
+            materials.append(node)
+            log.debug(f"Selected node is a material: {node}", source=_SOURCE, nodes=(node,))
 
     if not materials:
         shapes = cmds.ls(sl=True, dag=True, shapes=True, noIntermediate=True) or []

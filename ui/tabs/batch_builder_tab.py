@@ -2,6 +2,7 @@ import os
 
 from ui import QtWidgets, QtCore, QtGui
 from ui.widgets import populate_material_targets
+from ui.feedback import show_warning_banner
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.texture_scanner import TextureScanner
@@ -244,7 +245,7 @@ class BatchBuilderTab:
                 self.progress_bar.setValue(done)
                 QtWidgets.QApplication.processEvents()
 
-        self.batch_builder.build_all(
+        results = self.batch_builder.build_all(
             materials,
             target_node_type,
             use_full_chain=use_full_chain,
@@ -254,3 +255,16 @@ class BatchBuilderTab:
 
         self.progress_bar.setValue(total)
         self.progress_bar.setVisible(False)
+
+        issue_results = [r for r in results if r.has_issues]
+        if issue_results:
+            nodes = tuple(r.new_material or r.material for r in issue_results)
+            self.log.warn(
+                f"{len(issue_results)} material(s) built with channel issue(s); "
+                f"see the log for details",
+                source=_SOURCE,
+                nodes=nodes,
+            )
+            show_warning_banner(
+                f"{len(issue_results)} material(s) built with channel issue(s); see the log"
+            )

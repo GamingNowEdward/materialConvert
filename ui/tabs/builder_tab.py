@@ -152,8 +152,10 @@ class BuilderTab:
             f"channels={sorted(input_paths)}",
             source=_SOURCE,
         )
-        return self.builder.build(
+        new_mat = self.builder.build(
             node_type, mat_base, input_paths,
             use_qss=self.cb_qss.isChecked(),
             channel_options=channel_options,
         )
+        self._last_operation_warnings = len(getattr(self.builder, "last_build_issues", []))
+        return new_mat

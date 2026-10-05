@@ -82,6 +82,7 @@ These universal attributes are **not** processed in the main transfer loop — t
 - **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Source inversion**: If the source config declares a common attribute under `material.invert`, it is inverted as `1 - x` — scalars in place; texture/CC connections get a Maya `reverse` node inserted on the edge into the target plug (source network untouched)
 - **Failure classification**: **Critical** channel failures (prerequisites / CC chains / bump-normal / displacement) fail the whole material and abort the conversion (`reason` + `converted=False`); **non-critical** failures (single attribute / emission / alphaIsLuminance / reverse) go into `ConversionResult.issues` (`converted` stays True, summarized as `with_issues`)
+- **Anisotropy sign is not mappable**: `specularAnisotropy` is unsigned `[0, 1]` on Arnold / RedshiftOpenPBR, while V-Ray / RedshiftMaterial allow `[-1, 1]` (negative stretches along the x/u axis). When the source is negative and the target unsigned the value cannot be mapped: it is handled as a non-critical failure (recorded in `issues`, `converted` stays True) and the direction is lost; `rotation` is not converted either
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
 ### 1.4 Black Color Auto-Zeroing
@@ -146,8 +147,8 @@ Source bump node → [Source config] → Universal format {scale, input_plug, is
 ### 2.3 Mode Detection
 
 - **Standalone different types** (Arnold): Node type directly determines mode (`aiBump2d` → bump, `aiNormalMap` → normal)
-- **Shared type** (Redshift `RedshiftBumpMap`, Maya `bump2d`): Determined by `inputType` / `bumpInterp` attribute value (0=bump, 1=normal)
-- **Embedded** (V-Ray): Determined by `bumpMapType` attribute value (0=bump, 1=normal)
+- **Shared type** (Redshift `RedshiftBumpMap`, Maya `bump2d`): Determined by `inputType` / `bumpInterp` attribute value (0=bump, 1=tangent-space normal, 2=object-space normal; both normal modes count as normal)
+- **Embedded** (V-Ray): Determined by `bumpMapType` attribute value (0=bump, 1=tangent-space normal, 2=object-space normal; both normal modes count as normal)
 
 ### 2.4 Embedded ↔ Standalone Node Conversion
 

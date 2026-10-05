@@ -82,6 +82,7 @@
 - **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **源属性反转**：若源配置在 `material.invert` 声明某通用属性，则按 `1 - x` 反转——数值直接反转，贴图/CC 连接在连向目标插槽的边上串入 Maya `reverse` 节点（不改动源链）
 - **失败分流**：**关键通道**失败（前置条件 / CC 链 / bump-normal / displacement）→ 整个材质计为失败并中止转换（`reason` + `converted=False`）；**非关键通道**失败（单个属性 / emission / alphaIsLuminance / reverse）记入 `ConversionResult.issues`（`converted` 仍 True，`summarize_results` 计入 `with_issues`）
+- **各向异性符号不可映射**：`specularAnisotropy` 在 Arnold / RedshiftOpenPBR 上为无符号 `[0, 1]`，而 V-Ray / RedshiftMaterial 为 `[-1, 1]`（负值表示沿 x/u 轴拉伸）。源为负值、目标无符号时**无法一一映射**：按非关键失败处理（记入 `issues`，`converted` 仍 True），方向信息丢失；`rotation` 目前也不参与转换
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
@@ -146,8 +147,8 @@
 ### 2.3 模式判定
 
 - **独立不同类型**（Arnold）：节点类型直接判定（`aiBump2d` → bump，`aiNormalMap` → normal）
-- **共享类型**（Redshift `RedshiftBumpMap`、Maya `bump2d`）：通过 `inputType` / `bumpInterp` 属性值判定（0=bump，1=normal）
-- **材质内嵌**（V-Ray）：通过 `bumpMapType` 属性值判定（0=bump，1=normal）
+- **共享类型**（Redshift `RedshiftBumpMap`、Maya `bump2d`）：通过 `inputType` / `bumpInterp` 属性值判定（0=bump，1=切线法线，2=物体法线；两种法线都算 normal）
+- **材质内嵌**（V-Ray）：通过 `bumpMapType` 属性值判定（0=bump，1=切线法线，2=物体法线；两种法线都算 normal）
 
 ### 2.4 材质内嵌 ↔ 独立节点互转
 

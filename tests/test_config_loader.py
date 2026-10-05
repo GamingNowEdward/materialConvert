@@ -93,6 +93,21 @@ def test_bump_normal_configs_merged_from_common():
     assert vray.bump.is_normal_value == 0
 
 
+def test_normal_mode_values_cover_tangent_and_object_space():
+    # Maya bumpInterp, Redshift inputType and V-Ray bumpMapType all encode
+    # 1=tangent-space and 2=object-space normal; only 0 is bump.
+    loader = ConfigLoader()
+    for renderer in ("maya", "redshift", "vray"):
+        normal = loader.get_bump_normal_config(renderer).normal
+        assert normal.matches_mode_value(1) is True, renderer
+        assert normal.matches_mode_value(2) is True, renderer
+        assert normal.matches_mode_value(0) is False, renderer
+        # writing a normal target picks the first (tangent) mode
+        assert normal.effective_mode_value() == 1, renderer
+    for renderer in ("redshift", "vray"):
+        assert loader.get_bump_normal_config(renderer).bump.is_normal_value == 0
+
+
 def test_cc_configs_and_identify():
     loader = ConfigLoader()
     cc_configs = loader.get_all_cc_configs()

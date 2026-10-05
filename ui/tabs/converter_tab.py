@@ -6,6 +6,7 @@ from core.converter import MaterialConverter
 from core.logger import get_logger
 import core.node_utils as node_utils
 from ui.widgets import populate_material_targets
+from ui.feedback import show_warning_banner
 
 _SOURCE = "ConverterTab"
 
@@ -180,5 +181,19 @@ class ConverterTab:
                 cmds.select(new_mats)
             except Exception as exc:
                 self.log.warn(f"Failed to select converted materials: {exc}", source=_SOURCE)
+
+        issue_results = [r for r in results if r.has_issues]
+        if issue_results:
+            nodes = tuple(r.new_material or r.material for r in issue_results)
+            self.log.warn(
+                f"{len(issue_results)} material(s) converted with channel issue(s); "
+                f"see the log for details",
+                source=_SOURCE,
+                nodes=nodes,
+            )
+            show_warning_banner(
+                f"{len(issue_results)} material(s) converted with channel issue(s); "
+                f"see the log"
+            )
 
         self.refresh_materials()

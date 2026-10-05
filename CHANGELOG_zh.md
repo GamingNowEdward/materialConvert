@@ -7,6 +7,8 @@
 - **Builder 构建的 V-Ray 法线材质实际是 bump**：`core/material_builder.py:_build_bump_normal` 的材质内嵌分支漏设模式属性（`bumpMapType`），导致 `channel_options={"normal_bump": {"mode": "normal"}}` 构建 V-Ray 时仍为 bump（值 0）。补齐后与节点分支一致
 - **ShadingEngine 枚举失败被静默当作「浮动材质」成功**：`core/converter.py:_find_shading_engines` 在 `cmds.listConnections` 抛异常时返回 `[]`，与「真的没有 SG」不可区分 → `total_sgs=0`、`unwired` 恒为 False、`summarize_results` 计入 converted，而场景实际仍使用旧材质（位移也被静默跳过）。现改为枚举在**创建目标材质之前**进行，失败即记 ERROR、设 `reason` 并**中止转换**（`created`/`converted` 均为 False → 计入 failed）
 - **通道级内部失败被静默当作成功**：`cc.transfer` 无返回值、`_transfer_one` 的 CC 分支无条件 `return True`、`bump`/`displacement` 连接失败仅记 WARN 仍写 "converted"、`apply_prerequisites` 失败被忽略。现按严重程度分流：**关键失败**（前置条件、CC 链、bump/normal、displacement）→ 设 `reason`、`converted=False`（计为失败并中止）；**非关键通道失败**（单个属性 / emission / alphaIsLuminance / reverse）→ 记入新增的 `ConversionResult.issues`（`converted` 仍 True，汇总计入 `with_issues` 并输出 WARN）；Builder 单通道失败记入 `BuildResult.issues`
+- **Redshift / V-Ray 的 Object-Space Normal 被误判为 bump**：`config/bumpNormal.json` 的 `redshift.normal.is_normal_value` 与 `vray.normal.is_normal_value` 由 `1` 改为 `[1, 2]`（对齐 Maya `bumpInterp`，`inputType`/`bumpMapType` = 2 才是物体法线）；Builder 回写仍取首值 1（切线法线）。文档 `CONFIG_GUIDE*.md` / `docs/AGENTS.md` / `CONVERSION_SPEC*.md` 同步修正（此前自相矛盾）
+- **`get_materials_from_selection` 材质识别过宽**：原用 `outColor` 存在性判定，把 `file` / `layeredTexture` / `ramp` 也当材质（选中后转换必得 "unknown source material type"）。改用 `cmds.ls(selection, materials=True)`，保留 shape→SG 回退
 
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
@@ -22,6 +24,7 @@
 - `README.md` / `docs/README_zh.md`：结构树与 Development 小节补充 `tests/mayapy/`、`pytest.ini` 与 mayapy 运行命令
 - `docs/AGENTS.md`：架构新增「测试」说明（纯套件进 CI / mayapy 本地两半布局）
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：功能回归与新增材质 Checklist 补充 mayapy 套件
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`：标注负值各向异性在无符号目标（Arnold / RedshiftOpenPBR）上不可映射（记入 `issues`），旋转不参与转换；bump/normal 模式判定补充 Object-Space Normal
 
 ### 验证
 - 本机装齐 `mtoa` / `vrayformaya` / `lookdevKit` / `redshift4maya` 后跑完整 mayapy 套件：`mayapy -m unittest discover -s tests/mayapy -t tests -v` → **56 passed, 0 skipped**（6 种材质 × 30 个跨材质对全覆盖，含 bump/normal、CC、displacement、alphaIsLuminance、同渲染器复用等）；纯套件 192 passed
@@ -35,6 +38,7 @@
 - `MaterialConverter._resolve_inverted_attrs()` 按源配置 `material.invert` 解析需反转的通用属性（读取开关失败时按 glossiness 默认保守反转并记 WARN）；`AttributeConverter.transfer_all()` / `_transfer_one()` 增加 `invert` 通道，代码中不含任何渲染器专用属性名，渲染器语义全部保留在 JSON
 - `ConfigValidator` 新增对 `material.invert` 引用属性的拼写校验（与 prerequisites 同层）
 - 转换结果模型扩展 `issues`/`with_issues`：`ConversionResult`/`BuildResult` 新增 `issues`（非关键通道失败）；`prerequisites.apply_prerequisites`/`apply_attr_prerequisites`、`cc.transfer`、`bump.convert`/`reuse_existing`、`displacement.convert` 返回成败；`attribute.transfer_all` 返回 `TransferReport(issues, critical)`；`material_builder` 记录 `last_build_issues`；`summarize_results`/`summarize_build_results` 增列 `with_issues`；`convert_all`/`build_all` 汇总输出 `with_issues` WARN
+- **UI 暴露非关键通道失败**：`ui/feedback.py` 新增 `show_warning_banner`，`qt_maya_logger` 支持 `self._last_operation_warnings`（>0 时输出警告横幅 + WARN，替代 Success）；`converter_tab`/`builder_tab`/`batch_builder_tab` 汇总 `has_issues` 并警告（带 `nodes`，可右键选中）
 
 ### 文档
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：新增 `invert` 字段说明

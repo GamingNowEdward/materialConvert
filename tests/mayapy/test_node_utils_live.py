@@ -114,3 +114,19 @@ class NodeUtilsLive(support.MayaTestCase):
         cmds.sets(cube, edit=True, forceElement=sg)
         cmds.select(cube, replace=True)
         self.assertIn(mat, node_utils.get_materials_from_selection())
+
+    def test_get_materials_from_selection_excludes_textures(self):
+        from core import node_utils
+
+        textures = [
+            cmds.shadingNode("file", asTexture=True, name="selFile"),
+            cmds.shadingNode("layeredTexture", asTexture=True, name="selLayered"),
+            cmds.shadingNode("ramp", asTexture=True, name="selRamp"),
+        ]
+        for node in textures:
+            cmds.select(node, replace=True)
+            self.assertEqual(node_utils.get_materials_from_selection(), [],
+                             "%s falsely identified as a material" % node)
+        mat = support.create_material("VRayMtl", "selRealMat")
+        cmds.select(mat, replace=True)
+        self.assertIn(mat, node_utils.get_materials_from_selection())

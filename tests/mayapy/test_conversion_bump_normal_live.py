@@ -71,3 +71,38 @@ class BumpNormalConversionLive(support.MayaTestCase):
         # source chain preserved
         self.assertIsNotNone(support.upstream_plug(src_plug))
         return True
+
+    def test_object_space_normal_is_detected_for_redshift_and_vray(self):
+        if self.loader.get_material_config("aiStandardSurface") is None:
+            self.skipTest("arnold config missing")
+
+        from core.converter import MaterialConverter
+
+        cases = (
+            ("RedshiftMaterial", "inputType", "node"),
+            ("VRayMtl", "bumpMapType", "material"),
+        )
+        for src_type, mode_attr, kind in cases:
+            src_cfg = self.loader.get_material_config(src_type)
+            if src_cfg is None:
+                continue
+            with self.subTest(src=src_type):
+                cmds.file(new=True, force=True)
+                mat = support.build_material(
+                    self.loader, src_type, "osn_%s" % src_type,
+                    {"normal_bump": "C:/tex/osn.png"},
+                    channel_options={"normal_bump": {"mode": "normal"}},
+                )
+                nb_attr = src_cfg.get_maya_attr("normal_bump")
+                if kind == "material":
+                    cmds.setAttr("%s.%s" % (mat, mode_attr), 2)  # object-space normal
+                else:
+                    bn = support.upstream_plug("%s.%s" % (mat, nb_attr)).split(".")[0]
+                    cmds.setAttr("%s.%s" % (bn, mode_attr), 2)  # object-space normal
+
+                result = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+                self.assertTrue(result.converted, result.reason)
+                upstream = support.upstream_plug(result.new_material + ".normalCamera")
+                self.assertIsNotNone(upstream)
+                # object-space normal must map to a NORMAL node, not a bump node
+                self.assertEqual(cmds.nodeType(upstream.split(".")[0]), "aiNormalMap")
