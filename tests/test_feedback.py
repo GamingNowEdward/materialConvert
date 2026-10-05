@@ -223,3 +223,25 @@ def test_show_warning_banner_is_best_effort(monkeypatch):
 
     monkeypatch.setattr(cmds, "inViewMessage", lambda **kwargs: None)
     assert feedback.show_warning_banner("hi") is True
+
+
+def test_show_result_banner_severity(monkeypatch):
+    views = []
+    monkeypatch.setattr(cmds, "inViewMessage", lambda **k: views.append(k.get("amg", "")))
+
+    assert feedback.show_result_banner(2, 1) is True
+    assert "color:red" in views[-1] and "failed" in views[-1]
+
+    assert feedback.show_result_banner(0, 3) is True
+    assert "color:orange" in views[-1] and "issues" in views[-1]
+
+    assert feedback.show_result_banner(0, 0, ok_message="3 material(s) converted") is True
+    assert "color:green" in views[-1] and "3 material(s) converted" in views[-1]
+
+
+def test_show_result_banner_is_best_effort(monkeypatch):
+    def broken(**kwargs):
+        raise RuntimeError("view broken")
+
+    monkeypatch.setattr(cmds, "inViewMessage", broken)
+    assert feedback.show_result_banner(1, 0) is False

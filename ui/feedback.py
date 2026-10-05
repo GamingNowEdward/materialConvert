@@ -48,6 +48,27 @@ def show_warning_banner(message):
         return False
 
 
+def show_result_banner(failed, with_issues, ok_message="Completed"):
+    """Best-effort result banner driven by batch summary counts.
+
+    Red when anything failed, orange when some converted/built with issues,
+    green otherwise. Returns True on success.
+    """
+    if failed:
+        body = f"<span style='color:red'>Warning:</span> {failed} material(s) failed; see the log"
+    elif with_issues:
+        body = (f"<span style='color:orange'>Warning:</span> {with_issues} material(s) "
+                f"completed with issues; see the log")
+    else:
+        body = f"<span style='color:green'>Success:</span> {ok_message}"
+    try:
+        cmds.inViewMessage(amg=body, pos="topCenter", fade=True)
+        return True
+    except Exception as exc:
+        del exc
+        return False
+
+
 def qt_maya_logger(label):
     """Wrap a builder action with start/success banners and an error dialog.
 

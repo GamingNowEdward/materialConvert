@@ -45,6 +45,7 @@
 - `ConfigValidator` now validates the spelling of attributes referenced by `material.invert` (same layer as prerequisites)
 - Extended result model with `issues`/`with_issues`: `ConversionResult`/`BuildResult` gain `issues` (non-critical channel failures); `prerequisites.apply_prerequisites`/`apply_attr_prerequisites`, `cc.transfer`, `bump.convert`/`reuse_existing`, `displacement.convert` return success; `attribute.transfer_all` returns `TransferReport(issues, critical)`; `material_builder` records `last_build_issues`; `summarize_results`/`summarize_build_results` add a `with_issues` counter; `convert_all`/`build_all` log a `with_issues` WARN
 - **UI surfaces non-critical channel failures**: `ui/feedback.py` gains `show_warning_banner` and `qt_maya_logger` honours `self._last_operation_warnings` (>0 shows a warning banner + WARN instead of Success); `converter_tab`/`builder_tab`/`batch_builder_tab` summarize `has_issues` and warn (with `nodes` for right-click selection)
+- **Hard conversion / build failures now surface too**: `ConverterTab` / `BatchBuilderTab` summarize with `summarize_results` / `summarize_build_results` — `failed` shows a **red warning banner** + ERROR log with `nodes` (previously only core logging, no UI cue), `with_issues` an orange banner, all-clear a green banner; unified through `ui/feedback.py:show_result_banner` (best-effort)
 
 ### Docs
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`: documented the `invert` field

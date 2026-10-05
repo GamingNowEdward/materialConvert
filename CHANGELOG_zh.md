@@ -45,6 +45,7 @@
 - `ConfigValidator` 新增对 `material.invert` 引用属性的拼写校验（与 prerequisites 同层）
 - 转换结果模型扩展 `issues`/`with_issues`：`ConversionResult`/`BuildResult` 新增 `issues`（非关键通道失败）；`prerequisites.apply_prerequisites`/`apply_attr_prerequisites`、`cc.transfer`、`bump.convert`/`reuse_existing`、`displacement.convert` 返回成败；`attribute.transfer_all` 返回 `TransferReport(issues, critical)`；`material_builder` 记录 `last_build_issues`；`summarize_results`/`summarize_build_results` 增列 `with_issues`；`convert_all`/`build_all` 汇总输出 `with_issues` WARN
 - **UI 暴露非关键通道失败**：`ui/feedback.py` 新增 `show_warning_banner`，`qt_maya_logger` 支持 `self._last_operation_warnings`（>0 时输出警告横幅 + WARN，替代 Success）；`converter_tab`/`builder_tab`/`batch_builder_tab` 汇总 `has_issues` 并警告（带 `nodes`，可右键选中）
+- **转换 / 批量构建的彻底失败也会上屏**：`ConverterTab` / `BatchBuilderTab` 用 `summarize_results` / `summarize_build_results` 汇总 —— `failed` 时输出**红色警告横幅** + 带 `nodes` 的 ERROR 日志（此前只有 core 日志、UI 无提示），`with_issues` 时橙色横幅，全成功绿色横幅；统一经 `ui/feedback.py:show_result_banner`（best-effort）
 
 ### 文档
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：新增 `invert` 字段说明

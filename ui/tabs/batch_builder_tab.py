@@ -2,11 +2,12 @@ import os
 
 from ui import QtWidgets, QtCore, QtGui
 from ui.widgets import populate_material_targets
-from ui.feedback import show_warning_banner
+from ui.feedback import show_result_banner
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.texture_scanner import TextureScanner
 from core.batch_builder import BatchBuilder
+from core.results import summarize_build_results
 
 _SOURCE = "BatchBuilderTab"
 
@@ -256,15 +257,23 @@ class BatchBuilderTab:
         self.progress_bar.setValue(total)
         self.progress_bar.setVisible(False)
 
+        summary = summarize_build_results(results)
         issue_results = [r for r in results if r.has_issues]
         if issue_results:
-            nodes = tuple(r.new_material or r.material for r in issue_results)
             self.log.warn(
-                f"{len(issue_results)} material(s) built with channel issue(s); "
+                f"{summary['with_issues']} material(s) built with channel issue(s); "
                 f"see the log for details",
                 source=_SOURCE,
-                nodes=nodes,
+                nodes=tuple(r.new_material or r.material for r in issue_results),
             )
-            show_warning_banner(
-                f"{len(issue_results)} material(s) built with channel issue(s); see the log"
+        failed_results = [r for r in results if not r.built]
+        if failed_results:
+            self.log.error(
+                f"{summary['failed']} material(s) failed to build; see the log for details",
+                source=_SOURCE,
+                nodes=tuple(r.new_material or r.material for r in failed_results),
             )
+        show_result_banner(
+            summary["failed"], summary["with_issues"],
+            ok_message=f"{summary['built']} material(s) built",
+        )
