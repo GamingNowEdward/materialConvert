@@ -241,6 +241,14 @@ class MaterialBuilder:
             if mapping.scale and mapping.default_scale is not None:
                 if cmds.attributeQuery(mapping.scale, node=m_node, exists=True):
                     cmds.setAttr(f"{m_node}.{mapping.scale}", mapping.default_scale)
+            mode_val = mapping.effective_mode_value()
+            if mapping.is_normal and mode_val is not None \
+                    and cmds.attributeQuery(mapping.is_normal, node=m_node, exists=True):
+                cmds.setAttr(f"{m_node}.{mapping.is_normal}", mode_val)
+                self.log.debug(
+                    f"Set {m_node}.{mapping.is_normal} = {mode_val!r}",
+                    source=_SOURCE, nodes=(m_node,),
+                )
             self.log.info(f"Built bump/normal as material attribute: {m_node}.{mapping.input}", source=_SOURCE, nodes=(m_node,))
             return True
 

@@ -135,6 +135,19 @@ def create_material(node_type, name):
     return cmds.shadingNode(node_type, asShader=True, name=name)
 
 
+def build_material(loader, node_type, name, input_paths, channel_options=None,
+                   use_full_chain=True):
+    """Build a material via MaterialBuilder (used to set up complex source nets)."""
+    from core.builder_context import BuilderContext
+    from core.material_builder import MaterialBuilder
+
+    ctx = BuilderContext(config_loader=loader)
+    builder = MaterialBuilder(ctx, config=loader)
+    return builder.build(node_type, name, input_paths, use_qss=False,
+                         use_full_chain=use_full_chain,
+                         channel_options=channel_options or {})
+
+
 def read_plug_value(plug):
     value = cmds.getAttr(plug)
     if isinstance(value, list) and value and isinstance(value[0], (tuple, list)):

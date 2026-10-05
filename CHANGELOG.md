@@ -4,6 +4,7 @@
 
 ### Fixed
 - **`alphaIsLuminance` auto-tracing could jump across material networks onto the wrong texture**: `core/converters/attribute.py:_trace_alpha_plug` called `cmds.listConnections(start, plugs=True, source=True)` without `destination=False`, so node-level recursion also picked up `*.message` / `defaultRenderUtilityList` registry wiring and downstream plugs as if they were upstream; the trace could then leave the current network and enable `alphaIsLuminance` on an unrelated file (more likely now that conversion inserts `reverse` nodes). Adding `destination=False` restricts the walk to genuine upstream plugs
+- **Builder-built V-Ray normal materials were actually bump**: `core/material_builder.py:_build_bump_normal`'s material-attribute branch never set the mode attribute (`bumpMapType`), so `channel_options={"normal_bump": {"mode": "normal"}}` still produced bump (value 0) for V-Ray. It now mirrors the node branch
 
 ### Tests
 - `tests/test_attribute_converter.py` gains `test_trace_alpha_plug_follows_only_upstream`: a fake graph where a source=True-only query would wander to `otherFile` while the upstream-only walk must resolve `realFile`
@@ -12,6 +13,7 @@
 - New Maya integration harness: `pytest.ini` (`--ignore=tests/mayapy`; the pure suite still runs in CI), `tests/support.py` (`maya.standalone` bootstrap, fresh scene per test, loads the renderer plugins available on the machine, material/value helpers, data-driven material pairs), `tests/mayapy/__init__.py`, `tests/README.md`
 - First mayapy cases (local `mayapy -m unittest discover -s tests/mayapy -t tests -v`): `test_config_validator_live.py` (real-node `validate_all` **0 ERROR / 0 WARN**, incl. `invert`), `test_node_utils_live.py` (identify/create/CC/collect/selection), `test_conversion_matrix_live.py` (**all available cross-material conversions** × every mapped common attribute)
 - Missing renderer plugins are filtered generically (not Redshift-specific); the matrix widens automatically once installed. The mayapy suite is not part of CI
+- Second batch of mayapy cases: `test_cc_conversion_live.py` (CC convert / reuse / source-chain restore), `test_conversion_texture_live.py` (texture-driven connections + `reverse` wiring), `test_conversion_complex_live.py` (Builder-built chains), `test_conversion_bump_normal_live.py` (bump/normal both ways across renderers), `test_conversion_special_live.py` (glossiness inversion / black-zero / V-Ray emission / same-renderer reuse), `test_conversion_alpha_luminance_live.py` (enable / exempt / cross-network regression), `test_conversion_displacement_live.py` (sentinel no-op; real node pending Redshift), `test_converter_flow_live.py` (result semantics / batch / progress / failure isolation)
 
 ## 2026-10-05
 

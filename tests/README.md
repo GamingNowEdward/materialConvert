@@ -60,5 +60,12 @@ With Maya 2024 on Windows:
 | Config validation (real nodes, incl. `invert`) | `test_config_validator_live.py` |
 | node_utils (identify / create / CC / collect / selection) | `test_node_utils_live.py` |
 | Cross-material conversion matrix (all pairs) | `test_conversion_matrix_live.py` |
-| Texture-driven, complex architectures, special handlers, converter flow | (added in later phases) |
+| Texture-driven connections | `test_conversion_texture_live.py` |
+| Complex Builder-built architectures | `test_conversion_complex_live.py` |
+| Bump / normal conversion | `test_conversion_bump_normal_live.py` |
+| Special handlers (glossiness invert, black-zero, emission, same-renderer reuse) | `test_conversion_special_live.py` |
+| alphaIsLuminance (enable / exempt / cross-network) | `test_conversion_alpha_luminance_live.py` |
+| Displacement (sentinel / real node) | `test_conversion_displacement_live.py` |
+| Converter flow (SG rewiring / batch / progress) | `test_converter_flow_live.py` |
+| CC chain conversion / reuse / restore | `test_cc_conversion_live.py` |
 | Builder / BuilderContext / Batch Builder / Colorspace / Node Tools / scene round-trip | (added in later phases) |
