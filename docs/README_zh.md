@@ -175,7 +175,10 @@ materialConvert/
 │   └── README_zh.md                 # 本文件
 ├── scripts/                         # 仓库维护脚本
 │   └── check_no_silent_pass.py      # CI 守卫：core/ui 禁止静默 except/print
-├── tests/                           # 纯 Python 单元测试（无需 Maya）
+├── tests/                           # 测试
+│   ├── mayapy/                      # Maya 集成测试（本地跑，不进 CI）
+│   └── README.md                    # 测试说明与覆盖表
+├── pytest.ini                       # pytest 配置（忽略 tests/mayapy）
 ├── .github/
 │   └── workflows/test.yml           # CI：pytest + 守卫脚本（Python 3.11 + PySide6）
 ├── main.py                          # 入口脚本
@@ -195,7 +198,8 @@ materialConvert/
 ## 开发
 
 - 纯 Python 测试（无需 Maya）：`python -m pytest tests/ -v`
-- CI（`.github/workflows/test.yml`）在 Python 3.11 + PySide6 下运行同一套 pytest 与 `scripts/check_no_silent_pass.py` 守卫脚本
+- Maya 集成测试（本地，需 Maya）：`mayapy -m unittest discover -s tests/mayapy -t tests -v`（见 `tests/README.md`）
+- CI（`.github/workflows/test.yml`）只跑纯 pytest 与 `scripts/check_no_silent_pass.py`（Python 3.11 + PySide6）；mayapy 套件不进 CI
 
 ## License
 

@@ -176,7 +176,10 @@ materialConvert/
 │   └── README_zh.md                 # 中文版 README
 ├── scripts/                         # Repository maintenance scripts
 │   └── check_no_silent_pass.py      # CI guard: no silent except/print in core/ui
-├── tests/                           # Pure-Python unit tests (no Maya required)
+├── tests/                           # Test suites
+│   ├── mayapy/                      # Maya integration tests (local, not in CI)
+│   └── README.md                    # Test layout and coverage table
+├── pytest.ini                       # pytest config (ignores tests/mayapy)
 ├── .github/
 │   └── workflows/test.yml           # CI: pytest + guard script (Python 3.11 + PySide6)
 ├── main.py                          # Entry script
@@ -196,7 +199,8 @@ materialConvert/
 ## Development
 
 - Pure-Python tests (no Maya required): `python -m pytest tests/ -v`
-- CI (`.github/workflows/test.yml`) runs the same pytest suite plus `scripts/check_no_silent_pass.py` on Python 3.11 + PySide6
+- Maya integration tests (local, requires Maya): `mayapy -m unittest discover -s tests/mayapy -t tests -v` (see `tests/README.md`)
+- CI (`.github/workflows/test.yml`) runs only the pure pytest suite plus `scripts/check_no_silent_pass.py` on Python 3.11 + PySide6; the mayapy suite is not part of CI
 
 ## License
 

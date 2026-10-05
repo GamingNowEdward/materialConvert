@@ -429,7 +429,13 @@ Pure Python tests run without Maya:
 python -m pytest tests/ -v
 ```
 
-Finally reload the tool in Maya and do a round-trip conversion test (materials with bump, CC, and displacement chains are the most representative).
+Maya integration tests (local, real nodes/plugins, covering the cross-conversion matrix):
+
+```
+mayapy -m unittest discover -s tests/mayapy -t tests -v
+```
+
+Finally you may reload the tool in Maya and do a round-trip conversion test (materials with bump, CC, and displacement chains are the most representative).
 
 ---
 
@@ -476,6 +482,7 @@ Complete list for adding a new renderer material type:
 - [ ] `colorCorrection.json` has a same-named `renderer` section with `hue_range` / `hue_center` matching the renderer's scale
 - [ ] Ran Log-tab Config Validation: no ERROR/WARN (whole-group SKIP due to missing plugins is normal)
 - [ ] `python -m pytest tests/ -v` passes
+- [ ] `mayapy -m unittest discover -s tests/mayapy -t tests -v` passes locally (a new renderer is picked up by the cross-conversion matrix automatically)
 - [ ] Round-trip conversion tested inside Maya (covering bump/CC/displacement chains)
 
 ---

@@ -16,6 +16,11 @@
 - Second batch of mayapy cases: `test_cc_conversion_live.py` (CC convert / reuse / source-chain restore), `test_conversion_texture_live.py` (texture-driven connections + `reverse` wiring), `test_conversion_complex_live.py` (Builder-built chains), `test_conversion_bump_normal_live.py` (bump/normal both ways across renderers), `test_conversion_special_live.py` (glossiness inversion / black-zero / V-Ray emission / same-renderer reuse), `test_conversion_alpha_luminance_live.py` (enable / exempt / cross-network regression), `test_conversion_displacement_live.py` (sentinel no-op; real node pending Redshift), `test_converter_flow_live.py` (result semantics / batch / progress / failure isolation)
 - Third batch of mayapy cases: `test_prerequisites_live.py`, `test_builder_context_live.py`, `test_material_builder_live.py` (all channels × renderers, full/simple, QSS, prereqs), `test_batch_builder_live.py`, `test_colorspace_live.py` (generic assertions that follow the OCIO config), `test_node_tools_live.py`, `test_scene_roundtrip_live.py`
 
+### Docs
+- `README.md` / `docs/README_zh.md`: structure tree and Development section now list `tests/mayapy/`, `pytest.ini` and the mayapy run command
+- `docs/AGENTS.md`: new "tests" note (pure suite in CI / mayapy local, two-halves layout)
+- `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`: functional-regression section and the new-material checklist mention the mayapy suite
+
 ### Verification
 - With `mtoa` / `vrayformaya` / `lookdevKit` / `redshift4maya` all installed, the full mayapy suite runs `mayapy -m unittest discover -s tests/mayapy -t tests -v` → **56 passed, 0 skipped** (all 6 material types × 30 cross-material pairs, including bump/normal, CC, displacement, alphaIsLuminance and same-renderer reuse); pure suite 192 passed
 

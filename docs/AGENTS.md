@@ -62,6 +62,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 通道规则：`config/texture_channels.json` — `common_attr` 使用 `common.json` 的通道名（如 `baseColor`、`specularRoughness`、`subsurfaceColor`）。文件名匹配采用「长别名优先 + token 匹配 + 忽略下划线子串（带边界检查）」，避免 `met`/`metal` 等短词误触
 - 色彩空间：`config/colorSpace.json`（colorSpaces.{role}.aliases OCIO 名称 + `commonAttributeRoles` 单源属性角色映射，经 `config/material/*.json` 动态扩展）+ `config/texture_channels.json`（文件名关键词按通道 type 分组为 srgb/raw，单一来源）；唯一 matcher 核心在 `core/colorspace.py`（`ColorSpaceMatcher` = `NameDriver` + `ChannelDriver` + `ColorSpaceResolver`，`MatchResult` 携带 state/prematch/diagnostic；`apply_matched()` 接收 `MatchResult`，不消费 UI 表格数据结构），UI 入口为 Colorspace 标签页（`ui/tabs/colorspace_tab.py`，缓存扫描结果驱动展示/应用），Node Tools 不再提供任何 colorspace 操作；通道匹配 BFS 追踪 file 全部下游连接并规范化属性名，保留 depth/budget 遍历保护；表格行选择同步 Maya 节点选择（填充期间同步被屏蔽）
 - Log/Debug：`core/config_validator.py`（`ConfigValidator` 读取全部 JSON 配置，在 Maya 中创建临时节点校验 node_type 与属性拼写，结束后清理临时节点；插件检测用 `pluginInfo(loaded)` + `loadPlugin`，加载失败（未安装/不兼容）时**整组忽略（SKIP）**，不误报为拼写错误）+ `ui/tabs/log_tab.py`（Log 标签页：顶部 Config Validation 控件 + 全局 `LogViewer`，两者共用同一日志表）
+- 测试：**两半布局**——纯 Python 套件（`tests/*.py`，`tests/conftest.py` 把 `maya.cmds` 打成 dummy stub）由 CI 运行；Maya 集成套件在 `tests/mayapy/`（真实节点/连接/插件），本地经 `tests/support.py`（`maya.standalone` 初始化、每例新场景、按可用插件加载渲染器）用 `mayapy -m unittest discover -s tests/mayapy -t tests -v` 运行，**不进 CI**。`pytest.ini` 的 `addopts = --ignore=tests/mayapy` 保证纯 pytest 只收集前者；覆盖与运行方式见 `tests/README.md`
 
 ### 统一导入
 所有 UI 模块从 `ui` 包统一导入 PySide 和 Maya 模块，避免重复的 `try/except`：

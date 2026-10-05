@@ -429,7 +429,13 @@ cmds.delete(n)                             # 验证后立即删除
 python -m pytest tests/ -v
 ```
 
-最后在 Maya 中重新加载工具，做一次双向转换实测（含凹凸、CC、置换链路的材质最有代表性）。
+Maya 集成测试（本地，真实节点/插件，覆盖交叉转换矩阵）：
+
+```
+mayapy -m unittest discover -s tests/mayapy -t tests -v
+```
+
+最后可在 Maya 中重新加载工具，做一次双向转换实测（含凹凸、CC、置换链路的材质最有代表性）。
 
 ---
 
@@ -476,6 +482,7 @@ arnold → ai    redshift → rs    vray → vray
 - [ ] `colorCorrection.json` 已添加同名 `renderer` 段，`hue_range` / `hue_center` 符合该渲染器量纲
 - [ ] 运行 Log 标签页 Config Validation：无 ERROR/WARN（插件未装时整组 SKIP 属正常）
 - [ ] `python -m pytest tests/ -v` 通过
+- [ ] 本地 `mayapy -m unittest discover -s tests/mayapy -t tests -v` 通过（新渲染器自动纳入交叉转换矩阵）
 - [ ] Maya 内实测一次双向转换（覆盖凹凸/CC/置换链路）
 
 ---
