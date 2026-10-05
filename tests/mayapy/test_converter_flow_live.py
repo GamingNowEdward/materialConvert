@@ -79,3 +79,36 @@ class ConverterFlowLive(support.MayaTestCase):
         self.assertTrue(results[0].converted)
         self.assertFalse(results[1].converted)
         self.assertTrue(results[1].reason)
+
+    def test_shading_engine_query_failure_aborts(self):
+        self._require("aiStandardSurface")
+        self._require("VRayMtl")
+
+        cmds.file(new=True, force=True)
+        mat = support.create_material("aiStandardSurface", "sgfail_src")
+        sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name="sgfailSG")
+        cmds.connectAttr(mat + ".outColor", sg + ".surfaceShader", force=True)
+
+        original = cmds.listConnections
+
+        def boom(*args, **kwargs):
+            if kwargs.get("type") == "shadingEngine":
+                raise RuntimeError("simulated listConnections failure")
+            return original(*args, **kwargs)
+
+        cmds.listConnections = boom
+        try:
+            from core.converter import MaterialConverter
+            from core.results import summarize_results
+            result = MaterialConverter(config=self.loader).convert(mat, "VRayMtl")
+        finally:
+            cmds.listConnections = original
+
+        # a failed SG enumeration must abort, not silently report success
+        self.assertFalse(result.converted)
+        self.assertFalse(result.created)
+        self.assertIsNone(result.new_material)
+        self.assertTrue(result.reason)
+        self.assertEqual(summarize_results([result])["failed"], 1)
+        # nothing was created and the SG still points at the old material
+        self.assertEqual(support.upstream_plug(sg + ".surfaceShader"), mat + ".outColor")

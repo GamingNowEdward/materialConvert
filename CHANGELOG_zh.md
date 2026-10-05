@@ -5,6 +5,7 @@
 ### 修复
 - **`alphaIsLuminance` 自动追踪可能跨材质网络串到错误贴图**：`core/converters/attribute.py:_trace_alpha_plug` 的 `cmds.listConnections(start, plugs=True, source=True)` 漏了 `destination=False`，按节点名递归时会把 `*.message` / `defaultRenderUtilityList` 等注册表连线以及下游连线也当成上游，追踪会跳到无关材质并把 `alphaIsLuminance` 开在错误的 file 上（新增 `reverse` 反相节点后更易触发）。补上 `destination=False` 后只沿真正上游遍历
 - **Builder 构建的 V-Ray 法线材质实际是 bump**：`core/material_builder.py:_build_bump_normal` 的材质内嵌分支漏设模式属性（`bumpMapType`），导致 `channel_options={"normal_bump": {"mode": "normal"}}` 构建 V-Ray 时仍为 bump（值 0）。补齐后与节点分支一致
+- **ShadingEngine 枚举失败被静默当作「浮动材质」成功**：`core/converter.py:_find_shading_engines` 在 `cmds.listConnections` 抛异常时返回 `[]`，与「真的没有 SG」不可区分 → `total_sgs=0`、`unwired` 恒为 False、`summarize_results` 计入 converted，而场景实际仍使用旧材质（位移也被静默跳过）。现改为枚举在**创建目标材质之前**进行，失败即记 ERROR、设 `reason` 并**中止转换**（`created`/`converted` 均为 False → 计入 failed）
 
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`

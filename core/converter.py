@@ -71,6 +71,19 @@ class MaterialConverter:
                 result.reason = f"failed to collect attributes: {exc}"
                 return result
 
+            # Enumerate every shading engine once, BEFORE creating anything: a
+            # failure here means the result cannot be wired, so abort instead of
+            # silently reporting success (displacement also needs the SG list).
+            sgs, sgs_ok = self._find_shading_engines(source_mat)
+            if not sgs_ok:
+                self.logger.error(
+                    f"Failed to enumerate shading engines for {source_mat}; conversion aborted",
+                    nodes=(source_mat,),
+                )
+                result.reason = "failed to enumerate shading engines"
+                return result
+            result.total_sgs = len(sgs)
+
             suffix = target_config.short_name or "converted"
             base_name = source_mat + "_" + suffix
             try:
@@ -87,11 +100,6 @@ class MaterialConverter:
                 apply_prerequisites(new_mat, target_config, logger=self.logger)
             except Exception as exc:
                 self.logger.warn(f"Failed to apply prerequisites to {new_mat}: {exc}", nodes=(new_mat,))
-
-            # Enumerate every shading engine once; displacement lives on the SG,
-            # so downstream modules must see the full list, not just the first SG.
-            sgs = self._find_shading_engines(source_mat)
-            result.total_sgs = len(sgs)
 
             try:
                 if source_renderer == target_renderer:
@@ -148,12 +156,17 @@ class MaterialConverter:
             return result
 
     def _find_shading_engines(self, source_mat):
-        """Shading engines currently fed by *source_mat* (all of them, not just the first)."""
+        """Shading engines fed by *source_mat* as ``(list, ok)``.
+
+        ``ok`` is False when the query itself fails, so the caller can abort
+        rather than treat a failed enumeration as "no shading engine" (which
+        would silently report a floating material as a success).
+        """
         try:
-            return cmds.listConnections(f"{source_mat}.outColor", type="shadingEngine") or []
+            return (cmds.listConnections(f"{source_mat}.outColor", type="shadingEngine") or [], True)
         except Exception as exc:
             self.logger.warn(f"Failed to query shading engines for {source_mat}: {exc}", nodes=(source_mat,))
-            return []
+            return ([], False)
 
     def _resolve_inverted_attrs(self, source_mat, source_config):
         """Common attributes whose source value must be inverted (1 - x) on transfer.
