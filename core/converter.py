@@ -96,31 +96,50 @@ class MaterialConverter:
             result.created = True
             self.logger.info(f"Created: {new_mat}", nodes=(new_mat,))
 
-            try:
-                apply_prerequisites(new_mat, target_config, logger=self.logger)
-            except Exception as exc:
-                self.logger.warn(f"Failed to apply prerequisites to {new_mat}: {exc}", nodes=(new_mat,))
+            if not apply_prerequisites(new_mat, target_config, logger=self.logger):
+                self.logger.error(
+                    f"Failed to apply prerequisites to {new_mat}; conversion aborted",
+                    nodes=(new_mat,),
+                )
+                result.reason = "failed to apply prerequisites"
+                return result
 
             try:
                 if source_renderer == target_renderer:
                     self.logger.debug("Same renderer: reusing existing bump/normal node", source=_SOURCE)
                     cc_cache = {}
-                    self.bump_converter.reuse_existing(source_mat, new_mat, source_renderer)
+                    bump_ok = self.bump_converter.reuse_existing(source_mat, new_mat, source_renderer)
                 else:
                     cc_cache = self.cc_converter.collect_chains(attr_info)
-                    self.bump_converter.convert(source_mat, new_mat, source_renderer, target_renderer)
+                    bump_ok = self.bump_converter.convert(source_mat, new_mat, source_renderer, target_renderer)
 
-                self.attr_converter.transfer_all(
+                if not bump_ok:
+                    self.logger.error(f"Bump/Normal conversion failed for {source_mat}", nodes=(source_mat, new_mat))
+                    result.reason = "bump/normal conversion failed"
+                    return result
+
+                report = self.attr_converter.transfer_all(
                     new_mat, source_config, target_config, target_renderer,
                     attr_info, cc_cache,
                     invert_attrs=self._resolve_inverted_attrs(source_mat, source_config),
                 )
+                if report.critical:
+                    self.logger.error(
+                        f"Critical attribute transfer failure for {source_mat}: "
+                        f"{'; '.join(report.critical)}",
+                        nodes=(new_mat,),
+                    )
+                    result.reason = "critical attribute transfer failure"
+                    return result
+                result.issues.extend(report.issues)
 
                 if source_renderer != target_renderer:
-                    self.disp_converter.convert(
-                        source_mat, new_mat, source_config, target_config,
-                        target_renderer, sgs,
-                    )
+                    if not self.disp_converter.convert(
+                            source_mat, new_mat, source_config, target_config,
+                            target_renderer, sgs):
+                        self.logger.error(f"Displacement conversion failed for {source_mat}", nodes=(source_mat, new_mat))
+                        result.reason = "displacement conversion failed"
+                        return result
             except Exception as exc:
                 self.logger.error(f"Conversion failed for {source_mat}: {exc}", nodes=(source_mat,))
                 result.reason = f"conversion failed: {exc}"
@@ -306,6 +325,12 @@ class MaterialConverter:
         if summary["partial_wired"]:
             self.logger.warn(
                 f"{summary['partial_wired']} material(s) were wired to only some shading engines",
+                source=_SOURCE,
+            )
+        if summary["with_issues"]:
+            self.logger.warn(
+                f"{summary['with_issues']} material(s) converted with channel issue(s); "
+                f"see the WARN entries above",
                 source=_SOURCE,
             )
         if summary["failed"]:

@@ -75,3 +75,4 @@ With Maya 2024 on Windows:
 | Colorspace matcher (filename / channel / apply / ignore) | `test_colorspace_live.py` |
 | Node Tools logic (node-type groups / SG rename / P2D→file) | `test_node_tools_live.py` |
 | Scene round-trip (build → save → reopen → convert) | `test_scene_roundtrip_live.py` |
+| Failure reporting (critical abort / non-critical issues) | `test_failure_reporting_live.py` |

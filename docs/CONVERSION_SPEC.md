@@ -81,6 +81,7 @@ These universal attributes are **not** processed in the main transfer loop — t
 - **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
 - **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Source inversion**: If the source config declares a common attribute under `material.invert`, it is inverted as `1 - x` — scalars in place; texture/CC connections get a Maya `reverse` node inserted on the edge into the target plug (source network untouched)
+- **Failure classification**: **Critical** channel failures (prerequisites / CC chains / bump-normal / displacement) fail the whole material and abort the conversion (`reason` + `converted=False`); **non-critical** failures (single attribute / emission / alphaIsLuminance / reverse) go into `ConversionResult.issues` (`converted` stays True, summarized as `with_issues`)
 - **Connection chains**: If source attribute connects from a CC node, the CC node is converted and reconnected; intermediate nodes (ramp, layeredTexture, multiplyDivide, etc.) are preserved
 
 ### 1.4 Black Color Auto-Zeroing

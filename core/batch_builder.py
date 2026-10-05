@@ -68,8 +68,11 @@ class BatchBuilder:
             self.log.error(f"Failed to build {name}: {exc}", source=_SOURCE)
             return BuildResult(material=name, reason=str(exc))
 
+        issues = list(getattr(self.builder, "last_build_issues", []))
+        if issues:
+            self.log.warn(f"Built {name} with issue(s): {'; '.join(issues)}", source=_SOURCE, nodes=(new_mat,))
         self.log.info(f"Built {name} -> {new_mat}", source=_SOURCE, nodes=(new_mat,))
-        return BuildResult(material=name, new_material=new_mat, built=True)
+        return BuildResult(material=name, new_material=new_mat, built=True, issues=issues)
 
     def build_all(self, materials, node_type, use_full_chain=True, use_qss=True,
                   on_progress=None):
@@ -131,6 +134,12 @@ class BatchBuilder:
         if summary["failed"]:
             self.log.warn(
                 f"{summary['failed']} material(s) failed during batch build",
+                source=_SOURCE,
+            )
+        if summary["with_issues"]:
+            self.log.warn(
+                f"{summary['with_issues']} material(s) built with channel issue(s); "
+                f"see the WARN entries above",
                 source=_SOURCE,
             )
 

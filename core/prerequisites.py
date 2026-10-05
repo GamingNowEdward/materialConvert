@@ -14,30 +14,31 @@ def apply_prerequisites(material, config, logger=None):
     prereqs = config.get_prerequisites()
     if not prereqs:
         log.debug(f"No material prerequisites for {material}", source=_SOURCE, nodes=(material,))
-        return
+        return True
     log.debug(f"Applying {len(prereqs)} material prerequisite(s) to {material}", source=_SOURCE, nodes=(material,))
-    _apply_prereq_dict(material, prereqs, log)
+    return _apply_prereq_dict(material, prereqs, log)
 
 
 def apply_attr_prerequisites(material, config, common_attr, logger=None):
     log = _log_or_default(logger)
     prereq = config.get_attr_prerequisites(common_attr)
     if not prereq:
-        return
+        return True
     log.debug(f"Applying attribute prerequisite for {common_attr} on {material}", source=_SOURCE, nodes=(material,))
-    _apply_single_prereq(material, prereq, log)
+    return _apply_single_prereq(material, prereq, log)
 
 
 def _apply_single_prereq(material, prereq_info, log):
+    """Set one prerequisite attribute; return False when the set fails."""
     if not isinstance(prereq_info, dict):
         log.warn(f"Invalid prerequisite definition for {material}: {prereq_info!r}", source=_SOURCE, nodes=(material,))
-        return
+        return False
 
     prereq_attr = prereq_info.get("attribute", "")
     prereq_value = prereq_info.get("value", None)
     if not prereq_attr or prereq_value is None:
         log.debug(f"Empty prerequisite on {material}: attribute={prereq_attr!r} value={prereq_value!r}", source=_SOURCE, nodes=(material,))
-        return
+        return True
 
     try:
         if isinstance(prereq_value, (list, tuple)) and len(prereq_value):
@@ -45,12 +46,17 @@ def _apply_single_prereq(material, prereq_info, log):
         else:
             cmds.setAttr(f"{material}.{prereq_attr}", prereq_value)
         log.debug(f"Set prerequisite {material}.{prereq_attr} = {prereq_value!r}", source=_SOURCE, nodes=(material,))
+        return True
     except Exception as exc:
         log.warn(f"Failed to set prerequisite {material}.{prereq_attr} = {prereq_value!r}: {exc}", source=_SOURCE, nodes=(material,))
+        return False
 
 
 def _apply_prereq_dict(material, prereq_dict, log):
     if not prereq_dict:
-        return
+        return True
+    ok = True
     for attr_name, prereq_info in prereq_dict.items():
-        _apply_single_prereq(material, prereq_info, log)
+        if not _apply_single_prereq(material, prereq_info, log):
+            ok = False
+    return ok

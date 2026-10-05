@@ -96,6 +96,7 @@ class CCConverter:
         }
 
     def transfer(self, cc_entry, target_plug, target_renderer):
+        """Convert one CC chain; return True when the intended wiring succeeded."""
         cc_config = self.config.get_color_correction_config(target_renderer)
         if not cc_config or not cc_config.node_type:
             input_plug = cc_entry.get("input_plug")
@@ -105,8 +106,10 @@ class CCConverter:
                 source=_SOURCE,
             )
             if input_plug:
-                self.utils.smart_connect(input_plug, target_plug, logger=self.log)
-            return
+                return self.utils.smart_connect(input_plug, target_plug, logger=self.log)
+            return False
+
+        ok = True
 
         src_cc_name = cc_entry.get("cc_node_name", "")
         if src_cc_name and src_cc_name in self._converted:
@@ -121,6 +124,7 @@ class CCConverter:
             input_plug = cc_entry.get("input_plug")
             if input_plug and cc_config.input:
                 if not self.utils.smart_connect(input_plug, f"{cc_node}.{cc_config.input}", logger=self.log):
+                    ok = False
                     self.log.warn(
                         f"Failed to connect CC input {input_plug} -> {cc_node}.{cc_config.input}",
                         source=_SOURCE,
@@ -152,17 +156,23 @@ class CCConverter:
             for dest in cc_out_dests:
                 try:
                     cmds.connectAttr(f"{cc_node}.{cc_config.output}", dest, force=True)
-                    self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest_node))
+                    self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest))
                 except Exception as exc:
-                    self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest_node))
+                    ok = False
+                    self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest))
         else:
             try:
                 cmds.connectAttr(f"{cc_node}.{cc_config.output}", target_plug, force=True)
                 self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
             except Exception as exc:
+                ok = False
                 self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
 
-        self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE, nodes=(cc_node,))
+        if ok:
+            self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE, nodes=(cc_node,))
+        else:
+            self.log.warn(f"Color correction conversion incomplete: {cc_node}", source=_SOURCE, nodes=(cc_node,))
+        return ok
 
     def _restore_shared_source_chain(self, cc_entry):
         """After the original CC is displaced by a new CC, if the intermediate node is

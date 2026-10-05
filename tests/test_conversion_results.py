@@ -1,8 +1,9 @@
 """Unit tests for the structured conversion outcome model (no Maya).
 
 These tests encode the review findings: a created-but-unwired conversion must
-never be summarized as a plain success, and per-SG wiring is tracked so a
-multi-SG material is not silently reported as fully converted.
+never be summarized as a plain success, per-SG wiring is tracked so a multi-SG
+material is not silently reported as fully converted, and non-critical channel
+failures surface as ``with_issues`` instead of a plain success.
 """
 
 from core.results import (
@@ -23,9 +24,10 @@ def test_full_success_counts_as_converted():
     result.wired = 2
     assert not result.unwired
     assert not result.partially_wired
+    assert not result.has_issues
     assert summarize_results([result]) == {
         "converted": 1, "skipped": 0, "failed": 0,
-        "unwired": 0, "partial_wired": 0,
+        "unwired": 0, "partial_wired": 0, "with_issues": 0,
     }
 
 
@@ -38,7 +40,7 @@ def test_created_but_unwired_is_not_a_plain_success():
     assert result.unwired
     assert summarize_results([result]) == {
         "converted": 0, "skipped": 0, "failed": 1,
-        "unwired": 1, "partial_wired": 0,
+        "unwired": 1, "partial_wired": 0, "with_issues": 0,
     }
 
 
@@ -50,7 +52,7 @@ def test_material_with_no_shading_engine_counts_as_converted():
     assert not result.unwired
     assert summarize_results([result]) == {
         "converted": 1, "skipped": 0, "failed": 0,
-        "unwired": 0, "partial_wired": 0,
+        "unwired": 0, "partial_wired": 0, "with_issues": 0,
     }
 
 
@@ -63,7 +65,20 @@ def test_partially_wired_counts_converted_but_is_flagged():
     assert result.partially_wired
     assert summarize_results([result]) == {
         "converted": 1, "skipped": 0, "failed": 0,
-        "unwired": 0, "partial_wired": 1,
+        "unwired": 0, "partial_wired": 1, "with_issues": 0,
+    }
+
+
+def test_converted_with_channel_issues_is_flagged():
+    # Report finding: a channel-level failure must not be a plain success.
+    result = _ok()
+    result.total_sgs = 1
+    result.wired = 1
+    result.issues = ["metallic: transfer failed"]
+    assert result.has_issues
+    assert summarize_results([result]) == {
+        "converted": 1, "skipped": 0, "failed": 0,
+        "unwired": 0, "partial_wired": 0, "with_issues": 1,
     }
 
 
@@ -81,7 +96,7 @@ def test_skips_are_not_failures():
     result = ConversionResult(material="mat", skipped=True, reason="already target type")
     assert summarize_results([result]) == {
         "converted": 0, "skipped": 1, "failed": 0,
-        "unwired": 0, "partial_wired": 0,
+        "unwired": 0, "partial_wired": 0, "with_issues": 0,
     }
 
 
@@ -91,24 +106,35 @@ def test_mixed_batch_totals():
         ConversionResult(material="b", created=True, converted=True, total_sgs=1, wired=1),
         ConversionResult(material="c", created=True, converted=True, total_sgs=1, wired=0),
         ConversionResult(material="d", created=True, reason="conversion failed"),
+        ConversionResult(material="e", created=True, converted=True, total_sgs=1, wired=1,
+                         issues=["roughness: transfer failed"]),
     ]
     assert summarize_results(results) == {
-        "converted": 1, "skipped": 1, "failed": 2,
-        "unwired": 1, "partial_wired": 0,
+        "converted": 2, "skipped": 1, "failed": 2,
+        "unwired": 1, "partial_wired": 0, "with_issues": 1,
     }
 
 
 def test_build_result_success():
     result = BuildResult(material="hero", new_material="M_hero", built=True)
     assert result.built
-    assert summarize_build_results([result]) == {"built": 1, "failed": 0}
+    assert not result.has_issues
+    assert summarize_build_results([result]) == {"built": 1, "failed": 0, "with_issues": 0}
+
+
+def test_build_result_with_issues():
+    result = BuildResult(material="hero", new_material="M_hero", built=True,
+                         issues=["metallic: texture not connected"])
+    assert result.built
+    assert result.has_issues
+    assert summarize_build_results([result]) == {"built": 1, "failed": 0, "with_issues": 1}
 
 
 def test_build_result_failure():
     result = BuildResult(material="hero", reason="boom")
     assert not result.built
     assert result.new_material is None
-    assert summarize_build_results([result]) == {"built": 0, "failed": 1}
+    assert summarize_build_results([result]) == {"built": 0, "failed": 1, "with_issues": 0}
 
 
 def test_summarize_build_results_mixed_batch():
@@ -116,5 +142,5 @@ def test_summarize_build_results_mixed_batch():
         BuildResult(material="a", new_material="M_a", built=True),
         BuildResult(material="b", reason="boom"),
     ]
-    assert summarize_build_results(results) == {"built": 1, "failed": 1}
-    assert summarize_build_results([]) == {"built": 0, "failed": 0}
+    assert summarize_build_results(results) == {"built": 1, "failed": 1, "with_issues": 0}
+    assert summarize_build_results([]) == {"built": 0, "failed": 0, "with_issues": 0}

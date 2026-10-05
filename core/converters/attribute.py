@@ -1,9 +1,23 @@
 import maya.cmds as cmds
 
+from dataclasses import dataclass, field
+
 from core.logger import get_logger
 from core.prerequisites import apply_attr_prerequisites
 
 _SOURCE = "AttributeConverter"
+
+
+@dataclass
+class TransferReport:
+    """Outcome of one ``transfer_all`` pass.
+
+    ``critical`` holds failures that make the whole conversion unusable
+    (prerequisites, CC chains) and must fail the material; ``issues`` holds
+    non-critical channel failures that leave a partially-built material.
+    """
+    issues: list = field(default_factory=list)
+    critical: list = field(default_factory=list)
 
 
 class AttributeConverter:
@@ -67,8 +81,9 @@ class AttributeConverter:
     def _fix_alpha_luminance(self, target_mat, target_renderer, target_config):
         if target_renderer == "redshift":
             self.log.debug("Alpha Is Luminance fix skipped for Redshift target", source=_SOURCE)
-            return
+            return []
 
+        failed = []
         fixed = []
         for common_attr, maya_attr in target_config.attr_map.items():
             if common_attr in self._FIX_ALPHA_SKIP or not maya_attr:
@@ -79,6 +94,7 @@ class AttributeConverter:
                 plug_exists = cmds.objExists(plug)
             except Exception as exc:
                 self.log.warn(f"Failed to query {plug}: {exc}", source=_SOURCE, nodes=(target_mat,))
+                failed.append(common_attr)
                 continue
 
             if not plug_exists:
@@ -98,9 +114,11 @@ class AttributeConverter:
                     self.log.debug(f"Enabled Alpha Is Luminance on {tex_node}", source=_SOURCE, nodes=(tex_node,))
             except Exception as exc:
                 self.log.warn(f"Failed to enable alphaIsLuminance on {tex_node}: {exc}", source=_SOURCE, nodes=(tex_node,))
+                failed.append(common_attr)
 
         if fixed:
             self.log.info(f"Enabled Alpha Is Luminance on {len(fixed)} texture node(s)", source=_SOURCE, nodes=tuple(fixed))
+        return failed
 
     def _trace_alpha_plug(self, start, visited=None, depth=0):
         """Recursively trace upstream from an attribute/node to find the bitmap texture
@@ -149,35 +167,39 @@ class AttributeConverter:
     def _fix_vray_emission(self, attr_info, source_config, target_mat, target_config):
         if source_config.get_maya_attr("emissionWeight"):
             self.log.debug("Source already has emissionWeight mapping; V-Ray emission fix skipped", source=_SOURCE)
-            return
+            return True
 
         color_attr = source_config.get_maya_attr("emissionColor")
         color_data = attr_info.get(color_attr) if color_attr else None
         if not color_data:
             self.log.debug("No emissionColor source data; V-Ray emission fix skipped", source=_SOURCE)
-            return
+            return True
 
         has_connection = color_data.get("connection") is not None
         val = color_data.get("value")
         is_non_black = isinstance(val, (tuple, list)) and tuple(val) != (0, 0, 0)
         if not (has_connection or is_non_black):
-            return
+            return True
 
         weight_attr = target_config.get_maya_attr("emissionWeight")
         if not weight_attr:
-            return
+            return True
 
         try:
             cmds.setAttr(f"{target_mat}.{weight_attr}", 1)
             self.log.debug(f"Enabled emission weight on {target_mat}.{weight_attr}", source=_SOURCE, nodes=(target_mat,))
+            return True
         except Exception as exc:
             self.log.warn(f"Failed to set emission weight on {target_mat}.{weight_attr}: {exc}", source=_SOURCE, nodes=(target_mat,))
+            return False
 
     def transfer_all(self, target_mat, source_config, target_config, target_renderer,
                      attr_info, cc_cache, invert_attrs=None):
         invert_attrs = invert_attrs or set()
+        report = TransferReport()
         self._zero_black_colors(attr_info, source_config)
-        self._fix_vray_emission(attr_info, source_config, target_mat, target_config)
+        if not self._fix_vray_emission(attr_info, source_config, target_mat, target_config):
+            report.issues.append("emissionWeight not set")
 
         transferred = 0
         skipped = 0
@@ -205,23 +227,36 @@ class AttributeConverter:
                 skipped += 1
                 continue
 
-            apply_attr_prerequisites(target_mat, target_config, common_attr, logger=self.log)
+            if not apply_attr_prerequisites(target_mat, target_config, common_attr, logger=self.log):
+                # the mapping is meaningless without its switch (e.g. V-Ray useRoughness)
+                report.critical.append(f"{common_attr}: prerequisite failed")
+                skipped += 1
+                continue
+
+            crit_before = len(report.critical)
             if self._transfer_one(target_mat, tgt_maya_attr, src_maya_attr,
                                   src_data, cc_cache, target_renderer,
-                                  invert=common_attr in invert_attrs):
+                                  invert=common_attr in invert_attrs, report=report):
                 transferred += 1
             else:
                 skipped += 1
+                if len(report.critical) == crit_before:
+                    report.issues.append(f"{common_attr}: transfer failed")
 
         if invert_attrs:
-            self._apply_inversions(target_mat, source_config, target_config, invert_attrs)
+            for failed in self._apply_inversions(target_mat, source_config, target_config, invert_attrs):
+                report.issues.append(f"{failed}: inversion failed")
 
-        self._fix_alpha_luminance(target_mat, target_renderer, target_config)
+        for failed in self._fix_alpha_luminance(target_mat, target_renderer, target_config):
+            report.issues.append(f"{failed}: alphaIsLuminance not enabled")
+
         self.log.info(
-            f"Attribute transfer finished: {transferred} transferred, {skipped} skipped",
+            f"Attribute transfer finished: {transferred} transferred, {skipped} skipped, "
+            f"{len(report.issues)} issue(s), {len(report.critical)} critical",
             source=_SOURCE,
             nodes=(target_mat,),
         )
+        return report
 
     def _apply_inversions(self, target_mat, source_config, target_config, invert_attrs):
         """Flip connected roughness-style channels through a Maya ``reverse`` node.
@@ -229,7 +264,9 @@ class AttributeConverter:
         Values were already inverted in ``_transfer_one``; only connected channels
         (plain texture, CC chain, or shared CC output) are handled here. The node is
         inserted on the edge into the target plug, so the source network is untouched.
+        Returns the common attrs that could not be inverted.
         """
+        failed = []
         for common_attr in invert_attrs:
             target_attr = target_config.get_maya_attr(common_attr)
             if not target_attr:
@@ -247,6 +284,7 @@ class AttributeConverter:
                     f"Failed to trace upstream of {target_plug} for inversion: {exc}",
                     source=_SOURCE, nodes=(target_mat,),
                 )
+                failed.append(common_attr)
                 continue
 
             if not upstream:
@@ -257,7 +295,9 @@ class AttributeConverter:
                 )
                 continue
 
-            self._insert_invert_node(target_mat, common_attr, src_attr, upstream[0], target_plug)
+            if not self._insert_invert_node(target_mat, common_attr, src_attr, upstream[0], target_plug):
+                failed.append(common_attr)
+        return failed
 
     def _insert_invert_node(self, target_mat, common_attr, src_attr, src_plug, target_plug):
         try:
@@ -267,7 +307,7 @@ class AttributeConverter:
                 f"Failed to disconnect {src_plug} -> {target_plug} for inversion: {exc}",
                 source=_SOURCE, nodes=(target_mat,),
             )
-            return
+            return False
 
         # Name after the SOURCE attribute (e.g. reflectionGlossiness): the node turns
         # a glossiness value into roughness, so naming it after the target roughness
@@ -281,7 +321,7 @@ class AttributeConverter:
                 source=_SOURCE, nodes=(target_mat,),
             )
             self.utils.smart_connect(src_plug, target_plug, logger=self.log)
-            return
+            return False
 
         if not self.utils.smart_connect(src_plug, f"{rev_node}.inputX", logger=self.log):
             self.log.warn(
@@ -289,7 +329,7 @@ class AttributeConverter:
                 source=_SOURCE, nodes=(rev_node, target_mat),
             )
             self.utils.smart_connect(src_plug, target_plug, logger=self.log)
-            return
+            return False
 
         try:
             cmds.connectAttr(f"{rev_node}.outputX", target_plug, force=True)
@@ -298,15 +338,16 @@ class AttributeConverter:
                 f"Failed to connect {rev_node}.outputX -> {target_plug} for inversion: {exc}",
                 source=_SOURCE, nodes=(rev_node, target_mat),
             )
-            return
+            return False
 
         self.log.info(
             f"Inverted {common_attr}: {src_plug} -> {rev_node}.outputX -> {target_plug}",
             source=_SOURCE, nodes=(rev_node, target_mat),
         )
+        return True
 
     def _transfer_one(self, target_mat, target_attr, src_attr_name,
-                      src_data, cc_cache, target_renderer, invert=False):
+                      src_data, cc_cache, target_renderer, invert=False, report=None):
         target_plug = f"{target_mat}.{target_attr}"
         try:
             plug_exists = cmds.objExists(target_plug)
@@ -332,11 +373,18 @@ class AttributeConverter:
             cc_entry = cc_cache.get(src_attr_name)
 
             if cc_entry:
-                self.cc_converter.transfer(cc_entry, target_plug, target_renderer)
+                if report is None:
+                    report = TransferReport()
+                cc_ok = bool(self.cc_converter.transfer(cc_entry, target_plug, target_renderer))
                 chain_plug = cc_entry.get("output_plug")
                 if chain_plug and not self.utils.is_cc_node(
                         chain_plug.split(".")[0], self.config, logger=self.log):
-                    self.utils.smart_connect(chain_plug, target_plug, logger=self.log)
+                    if not self.utils.smart_connect(chain_plug, target_plug, logger=self.log):
+                        cc_ok = False
+                if not cc_ok:
+                    report.critical.append(f"{src_attr_name}: CC conversion failed")
+                    self.log.warn(f"{src_attr_name}: CC chain conversion failed for {target_plug}", source=_SOURCE, nodes=(target_mat,))
+                    return False
                 self.log.debug(f"{src_attr_name}: transferred CC chain to {target_plug}", source=_SOURCE, nodes=(target_mat, self.utils.node_name_from_plug(chain_plug)))
                 return True
 

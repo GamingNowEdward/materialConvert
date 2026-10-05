@@ -6,6 +6,7 @@
 - **`alphaIsLuminance` 自动追踪可能跨材质网络串到错误贴图**：`core/converters/attribute.py:_trace_alpha_plug` 的 `cmds.listConnections(start, plugs=True, source=True)` 漏了 `destination=False`，按节点名递归时会把 `*.message` / `defaultRenderUtilityList` 等注册表连线以及下游连线也当成上游，追踪会跳到无关材质并把 `alphaIsLuminance` 开在错误的 file 上（新增 `reverse` 反相节点后更易触发）。补上 `destination=False` 后只沿真正上游遍历
 - **Builder 构建的 V-Ray 法线材质实际是 bump**：`core/material_builder.py:_build_bump_normal` 的材质内嵌分支漏设模式属性（`bumpMapType`），导致 `channel_options={"normal_bump": {"mode": "normal"}}` 构建 V-Ray 时仍为 bump（值 0）。补齐后与节点分支一致
 - **ShadingEngine 枚举失败被静默当作「浮动材质」成功**：`core/converter.py:_find_shading_engines` 在 `cmds.listConnections` 抛异常时返回 `[]`，与「真的没有 SG」不可区分 → `total_sgs=0`、`unwired` 恒为 False、`summarize_results` 计入 converted，而场景实际仍使用旧材质（位移也被静默跳过）。现改为枚举在**创建目标材质之前**进行，失败即记 ERROR、设 `reason` 并**中止转换**（`created`/`converted` 均为 False → 计入 failed）
+- **通道级内部失败被静默当作成功**：`cc.transfer` 无返回值、`_transfer_one` 的 CC 分支无条件 `return True`、`bump`/`displacement` 连接失败仅记 WARN 仍写 "converted"、`apply_prerequisites` 失败被忽略。现按严重程度分流：**关键失败**（前置条件、CC 链、bump/normal、displacement）→ 设 `reason`、`converted=False`（计为失败并中止）；**非关键通道失败**（单个属性 / emission / alphaIsLuminance / reverse）→ 记入新增的 `ConversionResult.issues`（`converted` 仍 True，汇总计入 `with_issues` 并输出 WARN）；Builder 单通道失败记入 `BuildResult.issues`
 
 ### 测试
 - `tests/test_attribute_converter.py` 新增 `test_trace_alpha_plug_follows_only_upstream`：构造「source=True-only 会串到 otherFile」的假图，断言只沿上游解析到 `realFile`
@@ -33,6 +34,7 @@
 ### 重构
 - `MaterialConverter._resolve_inverted_attrs()` 按源配置 `material.invert` 解析需反转的通用属性（读取开关失败时按 glossiness 默认保守反转并记 WARN）；`AttributeConverter.transfer_all()` / `_transfer_one()` 增加 `invert` 通道，代码中不含任何渲染器专用属性名，渲染器语义全部保留在 JSON
 - `ConfigValidator` 新增对 `material.invert` 引用属性的拼写校验（与 prerequisites 同层）
+- 转换结果模型扩展 `issues`/`with_issues`：`ConversionResult`/`BuildResult` 新增 `issues`（非关键通道失败）；`prerequisites.apply_prerequisites`/`apply_attr_prerequisites`、`cc.transfer`、`bump.convert`/`reuse_existing`、`displacement.convert` 返回成败；`attribute.transfer_all` 返回 `TransferReport(issues, critical)`；`material_builder` 记录 `last_build_issues`；`summarize_results`/`summarize_build_results` 增列 `with_issues`；`convert_all`/`build_all` 汇总输出 `with_issues` WARN
 
 ### 文档
 - `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：新增 `invert` 字段说明

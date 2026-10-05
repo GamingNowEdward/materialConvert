@@ -14,33 +14,37 @@ class DisplacementConverter:
         self.log = logger or get_logger()
 
     def convert(self, source_mat, target_mat, source_config, target_config, target_renderer, sgs=None):
-        """Convert displacement for *every* shading engine fed by *source_mat*.
+        """Convert displacement for every shading engine fed by *source_mat*.
 
         Displacement lives on the shading engine, so a material bound to several
         SGs must be converted per SG.  SGs that share the same source
         displacement (same texture plug + scale) reuse a single target
         displacement node instead of duplicating networks.
+
+        Returns True when nothing was attempted or it succeeded, False when a
+        node could not be created or connected.
         """
         sgs = list(sgs or [])
         if not sgs:
             self.log.skip(f"No shading engine found for {source_mat}; displacement skipped", source=_SOURCE, nodes=(source_mat,))
-            return
+            return True
 
         disp_type = target_config.displacement_node_type
         disp_in = target_config.displacement_texture
         if not disp_type or not disp_in:
             self.log.skip("Target material has no displacement configuration", source=_SOURCE)
-            return
+            return True
 
         is_real_type = disp_type not in ("", "displacementShader")
         if not is_real_type and source_config.displacement_node_type == "displacementShader":
             self.log.skip("Source and target both use native displacementShader; nothing to convert", source=_SOURCE)
-            return
+            return True
 
         renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
         disp_by_source = {}
         converted = 0
         skipped = 0
+        failed = 0
 
         for sg in sgs:
             src_disp_data = self._collect(source_mat, sg, source_config)
@@ -58,21 +62,22 @@ class DisplacementConverter:
                     base_name, src_disp_data, source_mat,
                 )
                 if disp_node is None:
-                    skipped += 1
+                    failed += 1
                     continue
                 disp_by_source[key] = disp_node
 
             if self._connect_to_sg(disp_node, sg, target_config.displacement_output):
                 converted += 1
             else:
-                skipped += 1
+                failed += 1
 
         self.log.info(
             f"Displacement conversion finished for {source_mat}: {converted} shading engine(s) "
-            f"converted, {skipped} skipped",
+            f"converted, {skipped} skipped, {failed} failed",
             source=_SOURCE,
             nodes=(source_mat,),
         )
+        return failed == 0
 
     def _create_node(self, disp_type, disp_in, disp_scale, base_name, src_disp_data, source_mat):
         try:

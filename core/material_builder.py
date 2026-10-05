@@ -17,6 +17,7 @@ class MaterialBuilder:
         self.ctx = ctx
         self.config = config or ctx.config
         self.log = logger or get_logger()
+        self.last_build_issues = []
 
     def _resolve_weight_attr(self, common_attr):
         if not common_attr:
@@ -47,6 +48,7 @@ class MaterialBuilder:
                 self.log.error(f"Failed to load plugin {mat_config.plugin}: {exc}", source=_SOURCE)
                 raise
 
+        self.last_build_issues = []
         self.ctx._current_build_nodes = []
         m_node = self.ctx.create_node(node_type, 'material', base_name, as_type='shader')
         sg_node = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{m_node}SG")
@@ -205,6 +207,7 @@ class MaterialBuilder:
             if node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}", logger=self.log):
                 self.log.debug(f"Connected scalar {common_attr}: {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
             else:
+                self.last_build_issues.append(f"{common_attr}: texture not connected")
                 self.log.warn(f"Failed to connect scalar {common_attr} {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
 
         self.log.info(f"Built scalar channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
@@ -290,6 +293,7 @@ class MaterialBuilder:
                     logger=self.log):
                 self.log.debug(f"Connected displacement texture to {d_node}.{disp_in}", source=_SOURCE, nodes=(tex_disp, d_node))
             else:
+                self.last_build_issues.append("displacementTexture: texture not connected")
                 self.log.warn(f"Failed to connect displacement texture to {d_node}.{disp_in}", source=_SOURCE, nodes=(tex_disp, d_node))
 
         self.ctx.connect(d_node, mat_config.displacement_output, sg_node, "displacementShader")

@@ -18,7 +18,7 @@ its shading engines is ``unwired``: the scene still renders the old material,
 so callers must not present it as a plain success.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -31,6 +31,7 @@ class ConversionResult:
     reason: str = ""
     wired: int = 0
     total_sgs: int = 0
+    issues: list = field(default_factory=list)
 
     @property
     def unwired(self):
@@ -41,6 +42,11 @@ class ConversionResult:
     def partially_wired(self):
         """Wired to only some of the source's shading engines."""
         return self.total_sgs > 0 and 0 < self.wired < self.total_sgs
+
+    @property
+    def has_issues(self):
+        """Converted, but one or more non-critical channel operations failed."""
+        return bool(self.issues)
 
 
 def summarize_results(results):
@@ -53,7 +59,7 @@ def summarize_results(results):
     as converted but is flagged so callers can warn).
     """
     summary = {"converted": 0, "skipped": 0, "failed": 0,
-               "unwired": 0, "partial_wired": 0}
+               "unwired": 0, "partial_wired": 0, "with_issues": 0}
     for result in results:
         if result.skipped:
             summary["skipped"] += 1
@@ -66,6 +72,8 @@ def summarize_results(results):
             summary["converted"] += 1
             if result.partially_wired:
                 summary["partial_wired"] += 1
+            if result.has_issues:
+                summary["with_issues"] += 1
     return summary
 
 
@@ -76,24 +84,32 @@ class BuildResult:
     ``built`` is True only when the whole material network was created;
     ``reason`` carries the failure cause otherwise.  Kept separate from
     ``ConversionResult`` because conversion-specific wiring semantics
-    (``wired`` / ``total_sgs``) do not apply to builds.
+    (``wired`` / ``total_sgs``) do not apply to builds.  ``issues`` records
+    non-critical per-channel failures on an otherwise built material.
     """
 
     material: str
     new_material: str = None
     built: bool = False
     reason: str = ""
+    issues: list = field(default_factory=list)
+
+    @property
+    def has_issues(self):
+        return bool(self.issues)
 
 
 def summarize_build_results(results):
     """Classify a list of BuildResult into headline counts.
 
-    Returns a dict with keys: built / failed.
+    Returns a dict with keys: built / failed / with_issues.
     """
-    summary = {"built": 0, "failed": 0}
+    summary = {"built": 0, "failed": 0, "with_issues": 0}
     for result in results:
         if result.built:
             summary["built"] += 1
+            if result.has_issues:
+                summary["with_issues"] += 1
         else:
             summary["failed"] += 1
     return summary

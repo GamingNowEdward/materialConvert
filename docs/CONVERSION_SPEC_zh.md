@@ -81,6 +81,7 @@
 - **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
 - **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **源属性反转**：若源配置在 `material.invert` 声明某通用属性，则按 `1 - x` 反转——数值直接反转，贴图/CC 连接在连向目标插槽的边上串入 Maya `reverse` 节点（不改动源链）
+- **失败分流**：**关键通道**失败（前置条件 / CC 链 / bump-normal / displacement）→ 整个材质计为失败并中止转换（`reason` + `converted=False`）；**非关键通道**失败（单个属性 / emission / alphaIsLuminance / reverse）记入 `ConversionResult.issues`（`converted` 仍 True，`summarize_results` 计入 `with_issues`）
 - **连接链**：如果源属性连接来自 CC 节点，CC 节点会被转换并重新连接；中间节点（ramp、layeredTexture、multiplyDivide 等）保留
 
 ### 1.4 黑色颜色自动归零
