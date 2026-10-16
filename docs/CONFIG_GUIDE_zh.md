@@ -306,6 +306,7 @@ V-Ray 的 base/specular 段（注意属性名的差异与不支持项的处理�
 | `is_normal` / `is_normal_value` | 可选，**必须成对出现**；模式开关属性及 normal 模式下的取值。`is_normal_value` 可为标量或数组（数组表示多个取值均为 normal 模式，写入时取第一个元素）。Maya `bumpInterp`：0=Bump、1=Tangent Space Normals、2=Object Space Normals（normal 段配置 `[1, 2]`）；Redshift `inputType`、V-Ray `bumpMapType`：0=bump / 1=Tangent Space Normal / 2=Object Space Normal（normal 段同样配置 `[1, 2]`） |
 | `file_source` | 贴图节点的输出属性（默认 `outColor`） |
 | `default_scale` | Builder 构建时设置的默认强度 |
+| `path` | 仅 `normal.extra_nodes` 使用：节点**内嵌**贴图路径属性（如旧 `RedshiftNormalMap.tex0`）；非空表示该节点自带路径、无上游连接 |
 
 ### 三种模式判别
 
@@ -341,7 +342,15 @@ Redshift 段（共享类型，bump 与 normal 是同一节点类型，仅 `is_no
     "is_normal": "inputType",
     "is_normal_value": [1, 2],
     "file_source": "outColor",
-    "default_scale": 1.0
+    "default_scale": 1.0,
+    "extra_nodes": [
+      {
+        "node_type": "RedshiftNormalMap",
+        "path": "tex0",
+        "output": "outDisplacementVector",
+        "scale": "scale"
+      }
+    ]
   }
 }
 ```
@@ -352,6 +361,7 @@ Redshift 段（共享类型，bump 与 normal 是同一节点类型，仅 `is_no
 - **禁止添加无消费方的自定义字段**——字段必须被转换/构建代码消费（校验器只查属性拼写，不查字段是否被使用）
 - 未添加渲染器段时，涉及该渲染器的凹凸/法线转换整体跳过（源状态保留）
 - `maya` 段同样重要：跨渲染器场景中连接到任意材质上的 Maya 原生 bump 节点也要靠它识别
+- `normal.extra_nodes` 声明**共享 normal 模式的额外节点类型**（如旧 `RedshiftNormalMap`）：这类节点把贴图路径内嵌在 `path` 属性里，转换时补建 `file` 节点（复用已有 `place2dTexture`，否则新建 `p2d_{节点名}`，file 命名 `tex_{节点名}`）后走通用链路；`file_source` 继承 normal 段，不搬运 `repeats`/`wrap`/`uvSet`/`flipY`/`unbiasedNormalMap`，也不设色彩空间；`path` 为空时按跳过处理
 
 ---
 

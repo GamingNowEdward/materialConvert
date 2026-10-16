@@ -88,8 +88,36 @@ PySide 版本探测集中在 `ui/__init__.py` 一处，新增 tab 时只需一�
 | `is_normal` / `is_normal_value` | 可选，必须成对；模式开关属性及 normal 模式的取值。`is_normal_value` 可为标量或数组（数组表示多个取值均为 normal 模式，写入时取第一个元素）。Maya `bumpInterp`：0=Bump、1=Tangent Space Normals、2=Object Space Normals（normal 段配置 `[1, 2]`）；Redshift `inputType`、V-Ray `bumpMapType`：0=bump / 1=Tangent Space Normal / 2=Object Space Normal（normal 段配置 `[1, 2]`） |
 | `file_source` | 贴图节点输出属性（默认 `outColor`） |
 | `default_scale` | 构建时设置的默认强度 |
+| `path` | 仅 `normal.extra_nodes` 使用：节点**内嵌**贴图路径属性（如旧 `RedshiftNormalMap.tex0`）。非空表示该节点自带路径、没有上游连接，转换时会补建 `file` 节点 |
 
 `common` 段仅作缺失字段的默认值兜底。**新增字段必须接入消费代码**，禁止添加无消费方的键（`ConfigValidator` 会校验属性拼写，但不会校验字段本身是否被消费——接入渲染器时对照上表）。
+
+### `normal.extra_nodes`：共享 normal 模式的额外节点类型
+
+Redshift 有第二个 normal 节点——旧的 `RedshiftNormalMap`（文档称 Normal Map (Legacy)，已弃用）。它把贴图路径**内嵌**在节点属性 `tex0` 上，而不是接收上游连接。`normal` 段可声明 `extra_nodes` 列表补充这类节点：
+
+```json
+"normal": {
+  "node_type": "RedshiftBumpMap",
+  "input": "input",
+  "output": "out",
+  "scale": "scale",
+  "is_normal": "inputType",
+  "is_normal_value": [1, 2],
+  "file_source": "outColor",
+  "extra_nodes": [
+    { "node_type": "RedshiftNormalMap", "path": "tex0",
+      "output": "outDisplacementVector", "scale": "scale" }
+  ]
+}
+```
+
+- 每个 extra 项是一个独立映射，字段与普通段一致，但用 `path` 取代 `input`（内嵌路径）。
+- `file_source` 从合并后的 normal 段继承，**不要**在 extra 项里重复声明。
+- 识别为 normal 模式；转换时读取 `path` → 补建 Maya `file` 节点（复用旧节点已连的 `place2dTexture`，否则新建 `p2d_{节点名}`，file 命名 `tex_{节点名}`）→ 以 `file.<file_source>` 作为通用 `input_plug`，**下游转换逻辑不变**。
+- 同渲染器复用：按源节点实际类型取 `output` 重连（旧节点用 `outDisplacementVector`）。
+- 不搬运旧节点的 `repeats`/`wrap`/`uvSet`/`flipY`/`unbiasedNormalMap`，也不设置色彩空间（normal 贴图需自行用 Colorspace 标签页置 Raw）。
+- `path` 为空时不建 file/p2d，按跳过处理（不计失败）；但**关键物化失败**（建 `file`、写 `fileTextureName`、任一 `place2dTexture → file` 连接失败）会记 ERROR 并让整个材质转换计为失败，绝不留下"看似成功但不完整"的法线链路（失败时新建的节点保留在场景）。`_build_file_from_path` / `_collect_embedded_path_node` / `_collect_node` / `_collect` 以 `(data, ok)` 逐层传递失败状态，`convert()` 据此返回失败。
 
 ### 已知扩展点：渲染器纹理节点（tex node）
 当前构建路径（`MaterialBuilder.make_tex`）固定创建 Maya `file` 节点 + p2d 连接。若未来渲染器的 bump/normal 输入要求使用其自带的 tex node（而非 file）：

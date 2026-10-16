@@ -1,5 +1,25 @@
 # 更新日志
 
+## 2026-10-16
+
+### 新增
+- **兼容 Redshift 旧 Normal Map 节点（`RedshiftNormalMap`）**：Redshift 除 `RedshiftBumpMap` 外还有一个已弃用的 `RedshiftNormalMap`（贴图路径内嵌在 `tex0`，输出为 `outDisplacementVector`）。`config/bumpNormal.json` 的 `redshift.normal` 新增 `extra_nodes` 声明该节点；`core/config_loader.py` 新增 `NodeMapping.path`、`BumpNormalConfig.normal_extras`，`get_all_bn_types()` / `find_bn_renderer()` 纳入该类型
+- 转换采集（`core/converters/bump.py`）：带内嵌路径的节点读取 `path` → 复用旧节点已连的 `place2dTexture`（无则新建 `p2d_{节点名}`）→ 补建 `file` 节点（`tex_{节点名}`）→ 以 `file.<file_source>` 作为通用 `input_plug`，**下游 `_do_convert` / `_convert_to_node` / `_convert_to_material` 不变**；`file_source` 从合并后的 normal 段继承，`tex0` 为空时按跳过处理；重复采集/重复转换复用同名且路径一致的 file
+- 同渲染器复用（`reuse_existing`）：按源节点实际类型取 `output` 重连（旧节点用 `outDisplacementVector`），标准/共享类型行为不变
+- P2D 连接定义（`P2D_ATTRS` / `P2D_CONNECTIONS`）下沉到 `core/node_utils.py` 作为单一来源，`MaterialBuilder.make_tex` 与 bump 转换器共用；Builder 仍保留 `ctx.connect(quiet=True)` 的失败抛出语义
+- 配置校验（`core/config_validator.py`）：遍历 `normal.extra_nodes`，用临时节点校验 `node_type` / `path` / `output` / `scale`，`file_source` 复用现有 file 节点校验分支
+
+### 修复
+- **legacy 贴图物化失败被静默当作成功/跳过**：`core/converters/bump.py` 的 `_build_file_from_path` 在 `fileTextureName` 写入失败、或任一 `place2dTexture → file` 连接失败时只记 WARN 仍返回节点，目标材质会拿到不完整的法线链路而转换仍报成功。现改为关键失败返回 `(None, False)`：`_collect_embedded_path_node` / `_collect_node` / `_collect` 逐层传递 `ok`，`convert()` 收到失败即记 ERROR 并返回 False（计为失败）；失败时新建的 file/p2d 节点保留在场景（不删除）
+
+### 测试
+- `tests/test_config_loader.py` 新增 `extra_nodes` 解析、`file_source` 继承、缺 `node_type` 健壮性用例
+- `tests/mayapy/test_conversion_bump_normal_live.py` 新增 legacy 用例：转 Arnold、转 V-Ray、P2D 复用/新建、空路径 skip、同渲染器重连、重复转换不重复建 file、物化失败计失败、p2d 连接失败计失败
+
+### 文档
+- `docs/AGENTS.md` / `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`：bumpNormal schema 新增 `path` 字段与 `normal.extra_nodes` 说明（含不搬运属性与色彩空间限制）
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`：新增 2.7 Redshift 旧 Normal Map 兼容小节
+
 ## 2026-10-06
 
 ### 修复

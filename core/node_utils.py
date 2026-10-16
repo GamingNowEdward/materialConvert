@@ -4,6 +4,18 @@ from core.logger import get_logger
 
 RENDERER_SHORT = {"arnold": "ai", "redshift": "rs", "vray": "vray"}
 
+# Shared place2dTexture -> file connection definition. Attribute names match on
+# both ends except the UV/filter outputs. The Material Builder and the
+# bump/normal converter both consume this list, so it lives here as the single
+# source instead of being duplicated in each module.
+P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
+             'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
+
+P2D_CONNECTIONS = [(attr, attr) for attr in P2D_ATTRS] + [
+    ("outUV", "uvCoord"),
+    ("outUvFilterSize", "uvFilterSize"),
+]
+
 _SOURCE = "node_utils"
 
 

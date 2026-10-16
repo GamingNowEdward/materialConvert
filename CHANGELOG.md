@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-16
+
+### Added
+- **Legacy Redshift Normal Map node (`RedshiftNormalMap`) compatibility**: besides `RedshiftBumpMap`, Redshift ships a deprecated `RedshiftNormalMap` (texture path embedded in `tex0`, output `outDisplacementVector`). `redshift.normal` in `config/bumpNormal.json` gains an `extra_nodes` declaration; `core/config_loader.py` gains `NodeMapping.path` and `BumpNormalConfig.normal_extras`, and `get_all_bn_types()` / `find_bn_renderer()` now cover the type
+- Conversion collection (`core/converters/bump.py`): an embedded-path node is read via `path` → the legacy node's existing `place2dTexture` is reused (or `p2d_{node}` is created) → a `file` node (`tex_{node}`) is built → `file.<file_source>` becomes the generic `input_plug`, with **`_do_convert` / `_convert_to_node` / `_convert_to_material` unchanged**; `file_source` is inherited from the merged normal section, an empty `tex0` is treated as a skip, and repeated collection/conversion reuses the matching file node
+- Same-renderer reuse (`reuse_existing`): resolves the source node's real `output` (the legacy node uses `outDisplacementVector`) when reconnecting; standard/shared types behave exactly as before
+- P2D connection definition (`P2D_ATTRS` / `P2D_CONNECTIONS`) moved to `core/node_utils.py` as the single source, shared by `MaterialBuilder.make_tex` and the bump converter; the Builder keeps `ctx.connect(quiet=True)`'s raise-on-failure semantics
+- Config validation (`core/config_validator.py`): iterates `normal.extra_nodes` and checks `node_type` / `path` / `output` / `scale` with temporary nodes; `file_source` reuses the existing file-node check
+
+### Fixed
+- **Legacy texture materialization failures were silently treated as success/skip**: `core/converters/bump.py`'s `_build_file_from_path` only logged WARN and still returned the node when writing `fileTextureName` failed or any `place2dTexture -> file` connection failed, so the target material received an incomplete normal chain while the conversion still reported success. Critical failures now return `(None, False)`: `_collect_embedded_path_node` / `_collect_node` / `_collect` propagate an `ok` flag and `convert()` logs ERROR and returns False (counted as failed); file/p2d nodes created before the failure are left in the scene (never deleted)
+
+### Tests
+- `tests/test_config_loader.py` gains `extra_nodes` parsing, `file_source` inheritance and missing-`node_type` robustness cases
+- `tests/mayapy/test_conversion_bump_normal_live.py` gains legacy cases: to Arnold, to V-Ray, P2D reuse/creation, empty-path skip, same-renderer reconnect, no duplicate file on repeat, materialization-failure counted as failed, and p2d-connection-failure counted as failed
+
+### Docs
+- `docs/AGENTS.md` / `docs/CONFIG_GUIDE_zh.md` / `docs/CONFIG_GUIDE.md`: bumpNormal schema gains the `path` field and a `normal.extra_nodes` note (including the untransferred attributes and color-space limitation)
+- `docs/CONVERSION_SPEC_zh.md` / `docs/CONVERSION_SPEC.md`: new section 2.7 on legacy Redshift Normal Map compatibility
+
 ## 2026-10-06
 
 ### Fixed

@@ -168,6 +168,16 @@ New bump/normal node naming: `{source_node_name}_{renderer_short}{Bump|Nrm}`
 
 The converter can detect bump/normal nodes from **all** renderers, not limited to the source material type. A Maya `bump2d` node connected to an Arnold material will be correctly detected and read using the Maya configuration.
 
+### 2.7 Legacy Redshift Normal Map Compatibility
+
+Besides `RedshiftBumpMap`, Redshift ships a deprecated `RedshiftNormalMap` (texture path embedded in `tex0`, output `outDisplacementVector`), declared via `redshift.normal.extra_nodes` in `config/bumpNormal.json`:
+
+- Detected as normal mode (a mapping with an embedded path is judged normal directly)
+- Collection materializes the embedded path: it reuses the legacy node's existing `place2dTexture` (or creates `p2d_{node}`) and builds a `file` node (`tex_{node}`, `fileTextureName = tex0`), using `file.<file_source>` as the generic `input_plug`; downstream logic is unchanged
+- Same-renderer reuse resolves the source node's real `output` (`outDisplacementVector` for the legacy node) when reconnecting
+- `repeats`/`wrap`/`uvSet`/`flipY`/`unbiasedNormalMap` are not transferred and no color space is set; an empty `tex0` creates no nodes and is treated as a skip
+- **Critical materialization failures** (file creation, `fileTextureName` write, or any `place2dTexture -> file` connection) log ERROR and fail the whole conversion (never a silent skip); nodes created before the failure are left in the scene
+
 ---
 
 ## 3. Color Correction Conversion

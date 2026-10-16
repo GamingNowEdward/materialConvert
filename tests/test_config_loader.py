@@ -275,3 +275,78 @@ def test_material_config_defaults(tmp_path, monkeypatch):
     assert cfg.renderer == "unknown"
     assert cfg.uiPanel_display_name == ""
     assert cfg.get_maya_attr("baseColor") == ""
+
+
+def test_bn_extra_nodes_redshift_normal():
+    loader = ConfigLoader()
+    rs = loader.get_bump_normal_config("redshift")
+    assert len(rs.normal_extras) == 1
+    extra = rs.normal_extras[0]
+    assert extra.node_type == "RedshiftNormalMap"
+    assert extra.path == "tex0"
+    assert extra.output == "outDisplacementVector"
+    assert extra.scale == "scale"
+    # file_source inherited from the merged normal segment
+    assert extra.file_source == rs.normal.file_source == "outColor"
+    # node discovery
+    assert "RedshiftNormalMap" in loader.get_all_bn_types()
+    renderer, mapping = loader.find_bn_renderer("RedshiftNormalMap")
+    assert renderer == "redshift"
+    assert mapping is extra
+    # shared type still resolves to its own segment (extra must not shadow it)
+    renderer, mapping = loader.find_bn_renderer("RedshiftBumpMap")
+    assert renderer == "redshift"
+    assert mapping.node_type == "RedshiftBumpMap"
+    # other renderers declare no extras
+    for renderer in ("arnold", "vray", "maya"):
+        assert loader.get_bump_normal_config(renderer).normal_extras == []
+
+
+def _write_extra_bn_config(tmp_path, extra_nodes, normal_file_source="outAlpha"):
+    material_dir = tmp_path / "material"
+    material_dir.mkdir()
+    (material_dir / "common.json").write_text(json.dumps({}), encoding="utf-8")
+    bn = {
+        "common": {
+            "bump": {"scale": "scale", "file_source": "outAlpha", "default_scale": 0.1},
+            "normal": {"scale": "scale", "file_source": "outColor", "default_scale": 1.0},
+        },
+        "mytest": {
+            "bump": {"node_type": "TestBump", "input": "bumpValue"},
+            "normal": {
+                "node_type": "TestNormal",
+                "input": "input",
+                "output": "out",
+                "scale": "scale",
+                "file_source": normal_file_source,
+                "extra_nodes": extra_nodes,
+            },
+        },
+    }
+    (tmp_path / "bumpNormal.json").write_text(json.dumps(bn), encoding="utf-8")
+    (tmp_path / "colorCorrection.json").write_text(
+        json.dumps({"common": {}, "mytest": {}}), encoding="utf-8")
+    return material_dir
+
+
+def test_bn_extra_nodes_file_source_inherited(tmp_path, monkeypatch):
+    _write_extra_bn_config(tmp_path, [
+        {"node_type": "TestLegacy", "path": "tex0", "output": "outVec", "scale": "scale"},
+    ], normal_file_source="outAlpha")
+    monkeypatch.setattr(ConfigLoader, "_CONFIG_DIR", str(tmp_path))
+    loader = ConfigLoader()
+    extra = loader.get_bump_normal_config("mytest").normal_extras[0]
+    assert extra.file_source == "outAlpha"
+    assert extra.path == "tex0"
+    assert extra.output == "outVec"
+
+
+def test_bn_extra_nodes_missing_node_type(tmp_path, monkeypatch):
+    _write_extra_bn_config(tmp_path, [{"path": "tex0"}])
+    monkeypatch.setattr(ConfigLoader, "_CONFIG_DIR", str(tmp_path))
+    loader = ConfigLoader()
+    extras = loader.get_bump_normal_config("mytest").normal_extras
+    assert len(extras) == 1
+    assert extras[0].node_type == ""
+    # an empty node_type must not leak into the discovery set
+    assert "" not in loader.get_all_bn_types()

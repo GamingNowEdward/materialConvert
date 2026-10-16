@@ -9,13 +9,17 @@ def normalize_keyword(kw):
     return kw.lower().replace("_", "").replace("-", "")
 
 class NodeMapping:
-    def __init__(self, data, renderer):
+    def __init__(self, data, renderer, defaults=None):
+        merged = dict(defaults) if defaults else {}
+        merged.update(data)
+        data = merged
         self.renderer = renderer
         self.is_material_attribute = data.get("is_material_attribute", False)
         self.node_type = data.get("node_type", "")
         self.input = data.get("input", "")
         self.output = data.get("output", "")
         self.scale = data.get("scale", "")
+        self.path = data.get("path", "")
         self.is_normal = data.get("is_normal", "")
         self.is_normal_value = data.get("is_normal_value", None)
         self.file_source = data.get("file_source", "outColor")
@@ -49,6 +53,27 @@ class BumpNormalConfig:
         normal_data = data.get("normal", {})
         self.bump = NodeMapping(bump_data, renderer) if bump_data else None
         self.normal = NodeMapping(normal_data, renderer) if normal_data else None
+        self.normal_extras = self._parse_extra_nodes(normal_data)
+
+    def _parse_extra_nodes(self, normal_data):
+        """Additional normal node types that share the normal mode.
+
+        Example: the legacy Redshift ``RedshiftNormalMap`` stores its texture
+        path inside the node (``tex0``) instead of taking an upstream
+        connection. ``file_source`` is inherited from the merged normal mapping
+        so the converter never hard-codes the texture output.
+        """
+        raw_extras = normal_data.get("extra_nodes", []) or []
+        if not isinstance(raw_extras, list):
+            return []
+        defaults = {}
+        if self.normal and self.normal.file_source:
+            defaults["file_source"] = self.normal.file_source
+        return [
+            NodeMapping(extra, self.renderer, defaults=defaults)
+            for extra in raw_extras
+            if isinstance(extra, dict)
+        ]
 
 
 class ColorCorrectionConfig:
@@ -255,6 +280,9 @@ class ConfigLoader:
                 types.add(bn.bump.node_type)
             if bn.normal and bn.normal.node_type:
                 types.add(bn.normal.node_type)
+            for extra in getattr(bn, "normal_extras", []):
+                if extra.node_type:
+                    types.add(extra.node_type)
         return types
 
     def find_bn_renderer(self, node_type):
@@ -263,6 +291,9 @@ class ConfigLoader:
                 return r, bn.bump
             if bn.normal and bn.normal.node_type == node_type:
                 return r, bn.normal
+            for extra in getattr(bn, "normal_extras", []):
+                if extra.node_type == node_type:
+                    return r, extra
         return None, None
 
     def get_color_correction_config(self, renderer):

@@ -76,7 +76,15 @@
       "is_normal": "inputType",
       "is_normal_value": [1, 2],
       "file_source": "outColor",
-      "default_scale": 1.0
+      "default_scale": 1.0,
+      "extra_nodes": [
+        {
+          "node_type": "RedshiftNormalMap",
+          "path": "tex0",
+          "output": "outDisplacementVector",
+          "scale": "scale"
+        }
+      ]
     }
   },
   "vray": {

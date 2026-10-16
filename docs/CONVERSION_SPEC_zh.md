@@ -168,6 +168,16 @@
 
 转换器可识别**所有**渲染器的 bump/normal 节点，不限于源材质类型。连接在 Arnold 材质上的 Maya `bump2d` 节点会被正确识别，并用 Maya 配置读取属性。
 
+### 2.7 Redshift 旧 Normal Map (Legacy) 兼容
+
+除 `RedshiftBumpMap` 外，Redshift 还有一个已弃用的 `RedshiftNormalMap`（贴图路径内嵌在 `tex0`，输出为 `outDisplacementVector`），由 `config/bumpNormal.json` 的 `redshift.normal.extra_nodes` 声明：
+
+- 识别为 normal 模式（带内嵌路径的映射直接判 normal）
+- 采集时把内嵌路径物化：复用旧节点已连的 `place2dTexture`（无则新建 `p2d_{节点名}`），补建 `file` 节点（`tex_{节点名}`，`fileTextureName = tex0`），以 `file.<file_source>` 作为通用 `input_plug`；下游转换逻辑不变
+- 同渲染器复用按源节点实际类型取 `output`（旧节点用 `outDisplacementVector`）重连
+- 不搬运 `repeats`/`wrap`/`uvSet`/`flipY`/`unbiasedNormalMap`，不设置色彩空间；`tex0` 为空时不建节点、按跳过处理
+- **关键物化失败**（建 `file`、写 `fileTextureName`、`place2dTexture → file` 连接失败）→ 记 ERROR 并使整个转换计为失败（不静默跳过）；失败时新建的节点保留在场景
+
 ---
 
 ## 三、颜色校正转换

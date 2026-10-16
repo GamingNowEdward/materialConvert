@@ -259,6 +259,34 @@ class ConfigValidator:
                     continue
                 self._validate_bn_mapping(mapping, renderer, mode, scope)
 
+            for extra in getattr(bn, "normal_extras", []):
+                self._validate_bn_extra(extra, renderer, scope)
+
+    def _validate_bn_extra(self, mapping, renderer, scope):
+        """Validate an extra normal node type declared under ``normal.extra_nodes``."""
+        sub = f"{scope}.normal.extra.{mapping.node_type or '?'}"
+        if not mapping.node_type:
+            self._add(Level.ERROR, sub, "extra normal node_type is empty")
+            return
+
+        node = self._create_temp(mapping.node_type, "utility", sub)
+        if not node:
+            return
+
+        for label, attr in (("path", mapping.path),
+                            ("output", mapping.output),
+                            ("scale", mapping.scale)):
+            if not attr:
+                continue
+            self._check_attr(node, mapping.node_type, attr, sub,
+                             f"{label} -> '{attr}'")
+
+        if mapping.file_source:
+            f_node = self._create_temp("file", "texture", sub)
+            if f_node:
+                self._check_attr(f_node, "file", mapping.file_source, sub,
+                                 f"file_source -> '{mapping.file_source}'")
+
     def _validate_bn_mapping(self, mapping, renderer, mode, scope):
         sub = f"{scope}.{mode}"
         raw = self._bn_raw or self._read_raw("bumpNormal.json")

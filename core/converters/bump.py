@@ -1,7 +1,7 @@
 import maya.cmds as cmds
 
 from core.logger import get_logger
-from core.node_utils import RENDERER_SHORT
+from core.node_utils import RENDERER_SHORT, P2D_CONNECTIONS
 
 _SOURCE = "BumpConverter"
 
@@ -31,7 +31,13 @@ class BumpConverter:
         tgt_bump = tgt_bn_config.bump
         tgt_normal = tgt_bn_config.normal
 
-        src_bn_info = self._collect(source_mat, src_bn_config)
+        src_bn_info, collect_ok = self._collect(source_mat, src_bn_config)
+        if not collect_ok:
+            self.log.error(
+                f"Bump/Normal collection failed for {source_mat}",
+                source=_SOURCE, nodes=(source_mat,),
+            )
+            return False
         if not src_bn_info:
             self.log.skip(f"No source bump/normal data found on {source_mat}", source=_SOURCE, nodes=(source_mat,))
             return True
@@ -98,7 +104,8 @@ class BumpConverter:
                 self.log.skip(f"No source bump connection on {source_mat}.{src_bump_attr}", source=_SOURCE, nodes=(source_mat,))
                 return True
             src_node = conns[0]
-            cmds.connectAttr(f"{src_node}.{src_bn_config.bump.output}",
+            out_attr = self._resolve_source_output(src_node, src_bn_config.bump.output)
+            cmds.connectAttr(f"{src_node}.{out_attr}",
                              f"{new_mat}.{new_bump_attr}", force=True)
             self.log.info(
                 f"Bump/Normal: reconnected existing {src_node} -> {new_mat}.{new_bump_attr}",
@@ -110,8 +117,30 @@ class BumpConverter:
             self.log.warn(f"Bump/Normal reuse failed for {source_mat} -> {new_mat}: {exc}", source=_SOURCE, nodes=(source_mat, new_mat))
             return False
 
+    def _resolve_source_output(self, src_node, fallback_attr):
+        """Output attribute of an existing bump/normal node.
+
+        Shared types and standard nodes expose the renderer's bump-segment
+        output, but legacy nodes such as ``RedshiftNormalMap`` expose a
+        different output (``outDisplacementVector``). The actual node type is
+        resolved first and its configured output is used when available.
+        """
+        try:
+            src_type = cmds.nodeType(src_node)
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to identify source bump/normal node {src_node}: {exc}",
+                source=_SOURCE, nodes=(src_node,),
+            )
+            return fallback_attr
+        _, mapping = self.config.find_bn_renderer(src_type)
+        if mapping is not None and mapping.output:
+            return mapping.output
+        return fallback_attr
+
     def _collect(self, source_mat, src_bn_config):
         result = {}
+        ok = True
 
         standalone_segments = []
         for key, seg in (("bump", src_bn_config.bump), ("normal", src_bn_config.normal)):
@@ -135,7 +164,9 @@ class BumpConverter:
             if bn_node is None:
                 self.log.debug(f"No bump/normal node found on {source_mat}", source=_SOURCE, nodes=(source_mat,))
             for key, seg in standalone_segments:
-                data = self._collect_node(bn_node, seg, key)
+                data, seg_ok = self._collect_node(bn_node, seg, key)
+                if not seg_ok:
+                    ok = False
                 if data:
                     result[key] = data
 
@@ -144,7 +175,7 @@ class BumpConverter:
             source=_SOURCE,
             nodes=(source_mat,),
         )
-        return result
+        return result, ok
 
     def _read_material_bn(self, source_mat, bn_mapping):
         scale_attr = bn_mapping.scale
@@ -193,12 +224,16 @@ class BumpConverter:
 
     def _collect_node(self, bn_node, bn_mapping, mode):
         if bn_node is None:
-            return None
+            return None, True
 
         node_actual_type = cmds.nodeType(bn_node)
         bn_renderer, bn_cfg = self.config.find_bn_renderer(node_actual_type)
 
-        is_normal = self._detect_bn_mode(bn_node, node_actual_type, bn_renderer, mode)
+        if bn_cfg is not None and bn_cfg.path:
+            return self._collect_embedded_path_node(bn_node, bn_cfg)
+
+        is_normal = self._detect_bn_mode(bn_node, node_actual_type, bn_renderer, mode,
+                                         mapping=bn_cfg)
         scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
         input_plug = self._read_bn_attrs(bn_node, bn_cfg, "input", is_connection=True)
 
@@ -213,7 +248,165 @@ class BumpConverter:
             "scale": scale_val,
             "input_plug": input_plug,
             "is_normal": is_normal,
-        }
+        }, True
+
+    def _collect_embedded_path_node(self, bn_node, bn_cfg):
+        """Collect a legacy node whose texture path is stored inside the node.
+
+        ``RedshiftNormalMap`` keeps the bitmap path in ``tex0`` and has no
+        upstream connection, so the path is materialized as a Maya ``file`` node
+        (plus a ``place2dTexture``) whose output becomes the generic
+        ``input_plug``; downstream conversion logic is left untouched.
+
+        Returns ``(data, ok)``: ``ok=False`` marks a critical materialization
+        failure so the caller fails the conversion instead of silently skipping
+        it.
+        """
+        try:
+            path = cmds.getAttr(f"{bn_node}.{bn_cfg.path}")
+        except Exception as exc:
+            self.log.error(
+                f"Failed to read embedded texture path {bn_node}.{bn_cfg.path}: {exc}",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None, False
+
+        if not path:
+            self.log.skip(
+                f"{bn_node} has an empty embedded texture path ({bn_cfg.path}); skipped",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None, True
+
+        file_node, ok = self._build_file_from_path(bn_node, path, bn_cfg)
+        if file_node is None:
+            return None, ok
+
+        scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
+        file_source = bn_cfg.file_source or "outColor"
+        input_plug = f"{file_node}.{file_source}"
+
+        self.log.debug(
+            f"Collected embedded-path node {bn_node}: path={path!r}, "
+            f"file={file_node}, is_normal=True",
+            source=_SOURCE, nodes=(bn_node, file_node),
+        )
+        return {
+            "bn_node": bn_node,
+            "scale": scale_val,
+            "input_plug": input_plug,
+            "is_normal": True,
+        }, True
+
+    def _build_file_from_path(self, bn_node, path, bn_cfg):
+        """Materialize an embedded texture path as a ``file`` node.
+
+        Returns ``(file_node, ok)``. ``file_node`` is ``None`` when
+        materialization failed and ``ok`` is False for critical failures (node
+        creation, path write, or any place2dTexture connection) so incomplete
+        wiring never masquerades as a successful conversion. Nodes created
+        before the failure are left in the scene (old nodes are never deleted).
+        """
+        existing = self._find_existing_embedded_file(bn_node, path)
+        if existing is not None:
+            self.log.debug(
+                f"Reusing existing file node {existing} for {bn_node}",
+                source=_SOURCE, nodes=(bn_node, existing),
+            )
+            return existing, True
+
+        p2d = self._find_place2d(bn_node)
+        if p2d is None:
+            p2d = self._create_place2d(bn_node)
+
+        try:
+            file_node = cmds.shadingNode("file", asTexture=True, name="tex_" + bn_node)
+        except Exception as exc:
+            self.log.error(
+                f"Failed to create file node for {bn_node}: {exc}",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None, False
+        self.log.debug(f"Created file node {file_node} for {bn_node}", source=_SOURCE, nodes=(file_node,))
+
+        failed = False
+        try:
+            cmds.setAttr(f"{file_node}.fileTextureName", path, type="string")
+        except Exception as exc:
+            failed = True
+            self.log.error(
+                f"Failed to set {file_node}.fileTextureName={path!r}: {exc}",
+                source=_SOURCE, nodes=(file_node,),
+            )
+
+        if p2d is not None:
+            for src_attr, dst_attr in P2D_CONNECTIONS:
+                try:
+                    if cmds.isConnected(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}"):
+                        continue
+                    cmds.connectAttr(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}", force=True)
+                except Exception as exc:
+                    failed = True
+                    self.log.error(
+                        f"Failed to connect {p2d}.{src_attr} -> {file_node}.{dst_attr}: {exc}",
+                        source=_SOURCE, nodes=(p2d, file_node),
+                    )
+
+        if failed:
+            return None, False
+        return file_node, True
+
+    def _find_existing_embedded_file(self, bn_node, path):
+        prefix = "tex_" + bn_node
+        for node in cmds.ls(type="file") or []:
+            if node == prefix or (node.startswith(prefix)
+                                  and node[len(prefix):].isdigit()):
+                try:
+                    if cmds.getAttr(f"{node}.fileTextureName") == path:
+                        return node
+                except Exception as exc:
+                    self.log.warn(
+                        f"Failed to read {node}.fileTextureName: {exc}",
+                        source=_SOURCE, nodes=(node,),
+                    )
+        return None
+
+    def _find_place2d(self, bn_node):
+        try:
+            conns = cmds.listConnections(f"{bn_node}.uvCoord", source=True, plugs=True) or []
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to query uvCoord upstream on {bn_node}: {exc}",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None
+        for conn in conns:
+            node = conn.split(".", 1)[0]
+            try:
+                if cmds.nodeType(node) == "place2dTexture":
+                    self.log.debug(
+                        f"Reusing existing place2dTexture {node} from {bn_node}",
+                        source=_SOURCE, nodes=(bn_node, node),
+                    )
+                    return node
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to identify node type for {node}: {exc}",
+                    source=_SOURCE, nodes=(node,),
+                )
+        return None
+
+    def _create_place2d(self, bn_node):
+        try:
+            p2d = cmds.shadingNode("place2dTexture", asUtility=True, name="p2d_" + bn_node)
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to create place2dTexture for {bn_node}: {exc}",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None
+        self.log.debug(f"Created place2dTexture {p2d} for {bn_node}", source=_SOURCE, nodes=(bn_node, p2d))
+        return p2d
 
     def _find_bn_node(self, material):
         try:
@@ -277,7 +470,14 @@ class BumpConverter:
         self.log.debug(f"No bump/normal node found for {material}", source=_SOURCE, nodes=(material,))
         return None
 
-    def _detect_bn_mode(self, bn_node, node_actual_type, bn_renderer, default_mode):
+    def _detect_bn_mode(self, bn_node, node_actual_type, bn_renderer, default_mode, mapping=None):
+        if mapping is not None and mapping.path:
+            self.log.debug(
+                f"{node_actual_type} uses an embedded texture path; treated as normal",
+                source=_SOURCE,
+                nodes=(bn_node,),
+            )
+            return True
         if bn_renderer is None:
             self.log.warn(
                 f"Unknown bump/normal node type {node_actual_type}; defaulting mode to "

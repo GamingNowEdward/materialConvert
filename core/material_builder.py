@@ -10,8 +10,7 @@ _SOURCE = "MaterialBuilder"
 
 class MaterialBuilder:
 
-    P2D_ATTRS = ['coverage', 'translateFrame', 'rotateFrame', 'mirrorU', 'mirrorV',
-                 'stagger', 'wrapU', 'wrapV', 'repeatUV', 'offset', 'rotateUV', 'noiseUV']
+    P2D_ATTRS = node_utils.P2D_ATTRS
 
     def __init__(self, ctx: BuilderContext, logger=None, config=None):
         self.ctx = ctx
@@ -94,15 +93,10 @@ class MaterialBuilder:
                 cmds.setAttr(f"{f}.alphaIsLuminance", 1)
             if invert and cmds.attributeQuery("invert", node=f, exists=True):
                 cmds.setAttr(f"{f}.invert", 1)
-            p2d_connections = [(attr, attr) for attr in self.P2D_ATTRS]
-            p2d_connections += [
-                ("outUV", "uvCoord"),
-                ("outUvFilterSize", "uvFilterSize"),
-            ]
-            for src_attr, dst_attr in p2d_connections:
+            for src_attr, dst_attr in node_utils.P2D_CONNECTIONS:
                 self.ctx.connect(p2d, src_attr, f, dst_attr, quiet=True)
             self.log.debug(
-                f"Connected {len(p2d_connections)} p2d attribute(s) to {f}",
+                f"Connected {len(node_utils.P2D_CONNECTIONS)} p2d attribute(s) to {f}",
                 source=_SOURCE,
                 nodes=(p2d, f),
             )
