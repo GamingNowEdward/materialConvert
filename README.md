@@ -148,6 +148,7 @@ materialConvert/
 │   │   ├── cc.py                    # Color correction conversion
 │   │   └── displacement.py          # Displacement conversion
 │   ├── config_loader.py             # JSON config parser
+│   ├── config_schema.py             # Offline JSON structure validation (pure Python)
 │   ├── module_reload.py             # Path-based purge of this project's modules on reload
 │   ├── node_utils.py                # Maya node utility functions
 │   ├── prerequisites.py             # Renderer prerequisite handling
@@ -161,6 +162,7 @@ materialConvert/
 ├── ui/                              # User interface
 │   ├── main_window.py               # Main window (QMainWindow + QTabWidget)
 │   ├── feedback.py                  # Best-effort operation feedback decorator
+│   ├── operation_state.py           # Re-entrancy guard for UI operations (busy state)
 │   ├── log_panel.py                 # Embedded global log viewer (polling, filters, QTableView)
 │   ├── styles.py                    # QSS dark theme
 │   ├── widgets.py                   # Shared target-combo population helper
@@ -182,16 +184,21 @@ materialConvert/
 ├── scripts/                         # Repository maintenance scripts
 │   └── check_no_silent_pass.py      # CI guard: no silent except/print in core/ui
 ├── tests/                           # Test suites
+│   ├── conftest.py                  # Stubs maya.cmds for the pure suite
+│   ├── support.py                   # Shared mayapy harness (standalone + plugins)
 │   ├── mayapy/                      # Maya integration tests (local, not in CI)
 │   └── README.md                    # Test layout and coverage table
 ├── pytest.ini                       # pytest config (ignores tests/mayapy)
+├── requirements-dev.txt             # Dev/CI-only deps (pytest, PySide6)
 ├── .github/
 │   └── workflows/test.yml           # CI: pytest + guard script (Python 3.11 + PySide6)
 ├── main.py                          # Entry script
 ├── copy_launch.bat                  # Double-click to copy launch command
 ├── LICENSE
 ├── CHANGELOG.md                     # Changelog
-└── CHANGELOG_zh.md                  # 中文版更新日志
+├── CHANGELOG_zh.md                  # 中文版更新日志
+├── README.md                        # This file (English)
+└── .gitignore                       # Ignored caches / local tooling dirs
 ```
 
 ## Documentation

@@ -147,6 +147,7 @@ materialConvert/
 │   │   ├── cc.py                    # 颜色校正转换
 │   │   └── displacement.py          # 置换转换
 │   ├── config_loader.py             # JSON 配置解析
+│   ├── config_schema.py             # 离线 JSON 结构校验（纯 Python）
 │   ├── module_reload.py             # 重载时按物理路径清理本项目模块
 │   ├── node_utils.py                # Maya 节点工具函数
 │   ├── prerequisites.py             # 渲染器前提条件处理
@@ -160,6 +161,7 @@ materialConvert/
 ├── ui/                              # 用户界面
 │   ├── main_window.py               # 主窗口 (QMainWindow + QTabWidget)
 │   ├── feedback.py                  # best-effort 操作反馈装饰器
+│   ├── operation_state.py           # UI 操作重入守卫（忙碌状态）
 │   ├── log_panel.py                 # 嵌入式全局日志查看器（拉取、过滤、QTableView）
 │   ├── styles.py                    # QSS 暗色主题
 │   ├── widgets.py                   # 目标材质下拉框共用填充
@@ -181,16 +183,21 @@ materialConvert/
 ├── scripts/                         # 仓库维护脚本
 │   └── check_no_silent_pass.py      # CI 守卫：core/ui 禁止静默 except/print
 ├── tests/                           # 测试
+│   ├── conftest.py                  # 纯套件的 maya.cmds stub
+│   ├── support.py                   # mayapy 共享测试基座（standalone + 插件）
 │   ├── mayapy/                      # Maya 集成测试（本地跑，不进 CI）
 │   └── README.md                    # 测试说明与覆盖表
 ├── pytest.ini                       # pytest 配置（忽略 tests/mayapy）
+├── requirements-dev.txt             # CI/开发依赖（pytest、PySide6）
 ├── .github/
 │   └── workflows/test.yml           # CI：pytest + 守卫脚本（Python 3.11 + PySide6）
 ├── main.py                          # 入口脚本
 ├── copy_launch.bat                  # 双击复制启动命令
 ├── LICENSE
 ├── CHANGELOG.md                     # 变更日志
-└── CHANGELOG_zh.md                  # 中文版更新日志
+├── CHANGELOG_zh.md                  # 中文版更新日志
+├── README.md                        # 英文版 README
+└── .gitignore                       # 忽略缓存与本地工具目录
 ```
 
 ## 文档
