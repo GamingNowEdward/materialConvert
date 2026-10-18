@@ -232,26 +232,24 @@
 
 ### 3.6 连接链保留
 
-当 CC 节点位于纹理和中间节点之间时：
+转换按源 CC 与材质属性之间的拓扑分流，**源网络永不被改写**：
+
+| 拓扑 | 结构 | 处理 |
+|---|---|---|
+| `direct` | `file → CC → 材质` | 新 CC 直接连接目标材质属性；新 CC 的其它非材质下游一并改接，源材质改接回原 CC |
+| `single_hop` | `file → CC → layeredTexture/ramp → 材质` | **复制**中间节点（仅一层），新 CC 接入副本、副本输出接目标材质；源中间节点与其参数完全不动 |
+| `unsupported` | 两级及以上中间链、或无法定位 CC 的输入槽 | 不创建目标 CC、不改写任何源连接，记入结果 `issues`（显式限制） |
+
+`single_hop` 的复制只重建"新 CC → 副本"这一段输入连接，副本的其它图层参数（`inputs[*].color`、`blendMode` 等）随节点一起复制：
 
 ```
-file → CC → layeredTexture → 材质
+file → 原CC → layeredTexture → 源材质        （保持原样）
+file → 新CC → layeredTexture_conv → 目标材质
 ```
 
-新 CC 插入到相同位置：
+无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性，并在源 CC 有其它非材质下游时把源材质属性改接回原 CC。
 
-```
-file → 新CC → layeredTexture → 材质
-```
-
-当中间节点**与源材质共享**（源材质属性仍连接 `layeredTexture.outColor`）时，新 CC 接管中间节点输入之前，先把源材质属性改接回原 CC 输出——**源材质链永不被目标渲染器节点污染**：
-
-```
-file → 原CC → 源材质        （源链保持完整）
-file → 新CC → layeredTexture → 目标材质
-```
-
-无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性。
+> 早期版本在共享中间节点的场景下会把源材质属性直接接回原 CC（绕过 layeredTexture），导致源材质丢失中间处理。该行为已移除。
 
 ### 3.7 节点命名
 

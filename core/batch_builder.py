@@ -65,8 +65,14 @@ class BatchBuilder:
                 use_qss=use_qss,
             )
         except Exception as exc:
+            failures = list(getattr(self.builder, "last_build_issues", []))
             self.log.error(f"Failed to build {name}: {exc}", source=_SOURCE)
-            return BuildResult(material=name, reason=str(exc))
+            if failures:
+                self.log.warn(
+                    f"{name}: failure detail(s): {'; '.join(failures)}",
+                    source=_SOURCE,
+                )
+            return BuildResult(material=name, reason=str(exc), failures=failures)
 
         issues = list(getattr(self.builder, "last_build_issues", []))
         if issues:

@@ -1,5 +1,41 @@
 # 更新日志
 
+## 2026-10-18
+
+### 修复（可靠性：成功判定可信）
+- **置换失败被当成成功**：`core/converters/displacement.py` 的 `_create_node` 在贴图连接失败/强度写入失败后只记 WARN 仍返回节点。现拆为 `prepare()`（建节点 + 校验输出 + 写强度，不改 SG）与 `apply()`（提交 SG），返回 `TransferOutcome`：建节点、贴图接入、输出缺失、源数据读取失败为**关键失败**，强度写入失败为 `issues`；"无源置换"与"读取失败"不再混为一谈
+- **Builder 丢弃前置条件失败**：`apply_prerequisites()` 现返回 `PrerequisiteOutcome(ok, failures)`（`__bool__` 兼容旧调用），`MaterialBuilder._build()` 在失败时把具体失败项写入 `last_build_issues` 后抛 `RuntimeError`，`BatchBuilder` 把它们记入 `BuildResult.failures`，不再产生 `built=True` 且无告警的结果
+- **Legacy Normal 的 P2D 失败未上报**：`_create_place2d` 失败现为关键失败（不再跳过 UV 接线后返回成功）；物化出的 `file` 节点打 `mcEmbeddedSource` 标记，复用前三路判定（标记匹配 + UV 链完整 / 标记匹配但可修补 / 无标记时要求名称+路径+UV 完整），同名同路径但无 UV 链的手工节点不再被复用
+- **部分 SG 接线不出现在横幅**：`show_result_banner()` 新增 `partial` 参数，`failed > partial > with_issues > success`；转换页传入 `summary["partial_wired"]`
+
+### 修复（场景一致性）
+- **置换先提交、surface 后提交**：`core/converter.py` 改为事务提交——先 `_snapshot_sg_wiring()` 快照每个 SG 的 surface/displacement 上游，再依次提交；任一失败即 `_restore_sg_wiring()` 回滚已改写连接，`result.restored` / `result.sg_failures` 记录恢复情况，`converted` 保持 False。快照读取失败记 `_UNKNOWN_WIRING`，回滚时不猜测（记 ERROR），未提交过的插槽不会被误断开
+- **共享 CC 链绕过中间节点**：`core/converters/cc.py` 按拓扑分流——`direct`（CC 直连材质）保留原有共享恢复逻辑；`single_hop`（CC → layeredTexture/ramp → 材质）**复制中间节点**、新 CC 接副本、副本输出接目标材质，源网络零改写；`unsupported`（多级链）不创建节点、不触碰源连接，记入结果 `unsupported/issues`。移除了 `attribute.py` 中把中间节点输出直连目标材质的分支
+- **UI 批处理可重入**：新增 `ui/operation_state.py:OperationGuard`（Qt-free），三个操作页在入口拒绝重入并在 `finally` 解锁；`ui/main_window.py:_set_busy()` 通过 `ui/widgets.py:set_enabled()` 禁用提交控件；`processEvents` 回调对已销毁窗口的访问降级为 DEBUG
+
+### 新增（语义与交互）
+- **法线空间保留**：`config/bumpNormal.json` 的 maya/redshift/vray `normal` 段新增 `normal_space`（`{"tangent": 1, "object": 2}`），`NodeMapping` 新增 `supported_spaces` / `space_for_value()` / `mode_value_for_space()`；采集侧携带 `normal_space`，写入侧按源空间取值，目标无法表达时记 `issues` 而不是写入默认值。`bump.py` / `reuse_existing()` 统一返回 `TransferOutcome`
+- **贴图冲突可见**：`TextureScanner` 冲突记录新增 `kept` / `candidates` / `dropped`，结果新增 `conflict_materials`；Batch Builder 表格新增 `CONFLICT` / `CONFLICT (kept)` 行与 `Skip Materials With Conflicts` 开关，Materials to Build 列表标注冲突数
+- **启动不再依赖 `__file__`**：`main.py` 新增 `_resolve_root()`——校验 `__file__` 目录确属本项目，否则从 `sys.path` 解析；两者都失败时仅写 stderr 并跳过接管，不再静默使用错误根
+- **颜色空间证据完整性**：`ChannelDriver.trace_channel_targets()` 返回 `TraceResult`（`complete`/`truncated`/`depth_limited`/`errors`），`MatchResult` 新增 `evidence_complete`；仅有 channel 证据且不完整时降级为 `AMBIGUOUS`；`apply_matched(..., revalidate=True)` 应用前重新匹配，过期建议计入 `stale` 且不写入；NameDriver 改用与 Scanner 共用的 token/边界匹配
+
+### 新增（工程化与性能）
+- **统一通道结果**：`core/results.py` 新增 `TransferOutcome`（`ok`/`issues`/`critical`/`unsupported`），`TransferReport` 继承它；`ConversionResult` 新增 `sg_failures`/`restored`，`BuildResult` 新增 `failures`
+- **离线配置结构校验**：新增 `core/config_schema.py`（纯 Python）校验必需字段/类型、重复 `node_type`、段结构、`prerequisites`/`invert`、`is_normal`/`is_normal_value` 成对、`normal_space` 值域、`extra_nodes`、跨配置引用与 `builder_naming` 数组长度；`ConfigValidator.validate_all()` 先跑离线校验再进 Maya；`ConfigLoader` 按文件名排序加载、重复 `node_type` 保留首个并记 ERROR，`MaterialConfig` 对非对象段记 ERROR 后跳过
+- **批次级场景索引**：`BumpConverter.reset_index()` 管理 `file` / bump-normal 节点索引（生命周期 = 一次批次或一次独立转换，由 `MaterialConverter._in_batch` 控制），`_find_bn_node` / `_find_existing_embedded_file` 不再反复全场景 `cmds.ls()`；`TextureScanner` 初始化时预编译并排序 alias 表
+- **测试矩阵**：CI 增加 `windows-latest`（ubuntu + windows / Python 3.11 / PySide6），依赖改用 `requirements-dev.txt`；mayapy 套件启动打印 `support.describe_environment()`；新增 `tests/mayapy/test_perf_baseline.py` 记录 cmds 调用次数与耗时
+
+### 测试
+- 纯套件新增：`test_displacement_converter.py`（置换 6 类失败）、`test_bump_legacy.py`（P2D 关键失败与复用判定矩阵）、`test_bump_converter.py`（object/tangent 空间传递）、`test_cc_topology.py`（direct/single_hop/unsupported）、`test_busy_guard.py`、`test_config_schema.py`（含损坏配置）、`test_main_entry.py`（4 种启动场景）；`test_converter.py` 新增提交/回滚、`test_conversion_results.py`/`test_feedback.py`/`test_material_builder.py`/`test_batch_builder.py`/`test_colorspace.py`/`test_texture_scanner.py`/`test_config_loader.py` 扩充对应断言。纯套件 **285 passed**
+- mayapy 新增/扩展：置换失败注入、Legacy P2D 失败/修补/手工同名、法线空间保留与 Arnold 上报、共享 layeredTexture 复制、多级链上报、场景保存重开后的接线断言、性能基线。mayapy 套件 **88 passed, 3 skipped**（Maya 2024 + mtoa/redshift4maya/vrayformaya/lookdevKit）
+
+### 文档
+- `docs/AGENTS.md`：启动契约、CC 拓扑分流、事务提交、结果模型语义、法线空间 schema、颜色空间证据完整性、离线配置校验、操作状态、性能缓存生命周期、Windows CI
+- `docs/CONVERSION_SPEC.md` / `_zh`：3.6 连接链保留改写为 direct/single_hop/unsupported 三态与复制策略
+- `docs/CONFIG_GUIDE.md` / `_zh`：`bumpNormal.json` schema 新增 `normal_space` 行
+- `README.md` / `docs/README_zh.md`：启动说明、法线空间与事务提交、Batch Builder 冲突列与跳过开关、Colorspace 证据完整性/复核
+- `tests/README.md`：CI 双平台、环境行、新增测试文件、手动 UI 验证清单
+
 ## 2026-10-16
 
 ### 新增

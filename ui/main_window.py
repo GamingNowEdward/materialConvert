@@ -4,6 +4,7 @@ from core.config_loader import ConfigLoader
 from core.logger import get_logger
 from ui.feedback import show_error_dialog, report_terminal
 from ui.styles import FULL_STYLESHEET
+from ui.widgets import set_enabled
 from ui.tabs import (ConverterTab, BuilderTab, NodeToolsTab, ColorspaceTab, BatchBuilderTab, LogTab)
 
 
@@ -31,6 +32,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.logger = get_logger()
         self.config = ConfigLoader()
         self.ctx = BuilderContext(logger=self.logger, config_loader=self.config)
+        self._busy = False
 
         self.converter_tab = ConverterTab(logger=self.logger, config=self.config)
         self.builder_tab = BuilderTab(self.ctx, logger=self.logger)
@@ -38,6 +40,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.colorspace_tab = ColorspaceTab(logger=self.logger, config=self.config)
         self.batch_builder_tab = BatchBuilderTab(self.ctx, logger=self.logger)
         self.log_tab = LogTab(logger=self.logger)
+
+        # Every tab that runs a scene-modifying operation reports its busy state
+        # here, so a second submission from another tab is impossible while one
+        # operation is already running on the main thread.
+        for _tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab):
+            _tab.on_busy_change = self._set_busy
 
         self.setObjectName(self.WINDOW_NAME)
         self.setWindowTitle(self.WINDOW_TITLE)
@@ -49,6 +57,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _apply_style(self):
         self.setStyleSheet(FULL_STYLESHEET)
+
+    def _set_busy(self, active):
+        """Disable every operation entry point while a batch run is in progress."""
+        active = bool(active)
+        if active == self._busy:
+            return
+        self._busy = active
+        widgets = []
+        for tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab):
+            widgets.extend(getattr(tab, "_busy_widgets", []))
+        set_enabled(widgets, not active)
+        if active:
+            self.logger.debug("Operation in progress: cross-tab actions locked",
+                              source="MainWindow")
+        else:
+            self.logger.debug("Operation finished: cross-tab actions unlocked",
+                              source="MainWindow")
 
     def _build_ui(self):
         central = QtWidgets.QWidget()

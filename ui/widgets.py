@@ -1,6 +1,20 @@
 from core.logger import get_logger
 
 
+def set_enabled(widgets, enabled):
+    """Enable/disable a group of widgets, ignoring ones already destroyed.
+
+    Batch operations call this around their work so a second click cannot enter
+    the same run again while ``processEvents()`` keeps the UI responsive.
+    """
+    for widget in widgets:
+        try:
+            widget.setEnabled(bool(enabled))
+        except RuntimeError:
+            # Widget was deleted (window closed mid-run): nothing to restore.
+            continue
+
+
 def populate_material_targets(combo, config, logger=None, source="", label="material"):
     """Fill a material-target combo with ``(display name, node_type)`` entries.
 

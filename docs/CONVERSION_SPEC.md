@@ -232,26 +232,30 @@ If the same source CC node drives multiple material channels (e.g., baseColor + 
 
 ### 3.6 Connection Chain Preservation
 
-When a CC node sits between texture and intermediate nodes:
+The conversion branches on the topology between the source CC and the material
+attribute, and the **source network is never rewritten**:
+
+| Topology | Structure | Handling |
+|---|---|---|
+| `direct` | `file → CC → material` | New CC connects straight to the target attribute; the source CC's other non-material downstream nodes follow the new CC and the source material is re-pointed at its own CC |
+| `single_hop` | `file → CC → layeredTexture/ramp → material` | The intermediate node is **copied** (one level only); the new CC feeds the copy and the copy feeds the target attribute. The source node and its parameters stay untouched |
+| `unsupported` | two or more intermediate levels, or the CC input slot cannot be located | No target CC is created and no source connection is rewritten; reported as an explicit limitation in the result `issues` |
+
+The copy only rewires the "new CC → copy" input; every other layer parameter
+(`inputs[*].color`, `blendMode`, ...) is duplicated with the node:
 
 ```
-file → CC → layeredTexture → material
+file → originalCC → layeredTexture → source material      (unchanged)
+file → newCC → layeredTexture_conv → target material
 ```
 
-New CC is inserted at the same position:
+Without an intermediate node (CC directly on the material), the new CC connects
+to the target attribute directly, and the source material is re-pointed at its own
+CC when the source CC has other non-material downstream nodes.
 
-```
-file → newCC → layeredTexture → material
-```
-
-When the intermediate node is **shared with the source material** (source attribute still connected to `layeredTexture.outColor`), the source attribute is reconnected back to the original CC output before the new CC takes over the intermediate node input — the **source material chain is never polluted** with target-renderer nodes:
-
-```
-file → originalCC → source material      (source chain preserved)
-file → newCC → layeredTexture → target material
-```
-
-Without intermediate nodes (CC directly connected to material), new CC connects directly to target material attribute.
+> Older versions re-pointed the source attribute straight back at the original CC
+> (bypassing the layeredTexture), which silently dropped the source material's
+> intermediate processing. That behaviour is gone.
 
 ### 3.7 Node Naming
 

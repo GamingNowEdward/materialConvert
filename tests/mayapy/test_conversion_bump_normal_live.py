@@ -107,10 +107,60 @@ class BumpNormalConversionLive(support.MayaTestCase):
                 # object-space normal must map to a NORMAL node, not a bump node
                 self.assertEqual(cmds.nodeType(upstream.split(".")[0]), "aiNormalMap")
 
+    def test_object_space_normal_is_preserved_on_vray_target(self):
+        """回归保护（B05）：Redshift object-space 法线转到 V-Ray 仍是 object space。"""
+        if not support.is_plugin_loaded("redshift4maya"):
+            self.skipTest("redshift4maya not available")
+        if not support.is_plugin_loaded("vrayformaya"):
+            self.skipTest("vrayformaya not available")
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        src_cfg = self.loader.get_material_config("RedshiftMaterial")
+        mat = support.build_material(
+            self.loader, "RedshiftMaterial", "osnKeep",
+            {"normal_bump": "C:/tex/osn.png"},
+            channel_options={"normal_bump": {"mode": "normal"}},
+        )
+        bn = support.upstream_plug(
+            "%s.%s" % (mat, src_cfg.get_maya_attr("normal_bump"))).split(".")[0]
+        cmds.setAttr(bn + ".inputType", 2)  # object space
+
+        result = MaterialConverter(config=self.loader).convert(mat, "VRayMtl")
+
+        self.assertTrue(result.converted, result.reason)
+        mapping = self.loader.get_bump_normal_config("vray").normal
+        self.assertEqual(cmds.getAttr("%s.%s" % (result.new_material, mapping.is_normal)), 2)
+
+    def test_object_space_normal_is_reported_for_arnold_target(self):
+        """回归保护（B05）：目标无法表达 object space 时必须显式上报。"""
+        if not support.is_plugin_loaded("redshift4maya"):
+            self.skipTest("redshift4maya not available")
+        if not support.is_plugin_loaded("mtoa"):
+            self.skipTest("mtoa not available")
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        src_cfg = self.loader.get_material_config("RedshiftMaterial")
+        mat = support.build_material(
+            self.loader, "RedshiftMaterial", "osnWarn",
+            {"normal_bump": "C:/tex/osn.png"},
+            channel_options={"normal_bump": {"mode": "normal"}},
+        )
+        bn = support.upstream_plug(
+            "%s.%s" % (mat, src_cfg.get_maya_attr("normal_bump"))).split(".")[0]
+        cmds.setAttr(bn + ".inputType", 2)
+
+        result = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+
+        self.assertTrue(result.converted, result.reason)
+        self.assertTrue(
+            any("object-space normal" in issue for issue in result.issues),
+            "object-space limitation must be reported: %r" % (result.issues,))
+
     # ------------------------------------------------------------------ #
     # Legacy RedshiftNormalMap (embedded texture path) compatibility
     # ------------------------------------------------------------------ #
-
     def _build_legacy_normal_source(self, tex_path=None, with_p2d=False):
         mat = cmds.shadingNode("RedshiftMaterial", asShader=True, name="legacyMat")
         sg = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name="legacyMatSG")
@@ -311,3 +361,94 @@ class BumpNormalConversionLive(support.MayaTestCase):
         self.assertIn("bump", (result.reason or "").lower())
         # the partially built file node is left in the scene (old nodes are never deleted)
         self.assertTrue([n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")])
+
+    def test_legacy_p2d_creation_failure_fails_conversion(self):
+        """回归保护（B04）：P2D 创建失败是关键失败，不得返回成功。"""
+        self._require_legacy_renderers()
+        from core.converter import MaterialConverter
+        from core.converters.bump import BumpConverter
+
+        cmds.file(new=True, force=True)
+        mat, nm, _ = self._build_legacy_normal_source(tex_path="C:/tex/legacy_nrm.png")
+
+        original = BumpConverter._create_place2d
+        BumpConverter._create_place2d = lambda self, bn_node: None
+        try:
+            result = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+        finally:
+            BumpConverter._create_place2d = original
+
+        self.assertFalse(result.converted, "missing place2dTexture must fail conversion")
+        self.assertIn("bump", (result.reason or "").lower())
+        # no half-wired file node is created when the UV source is unavailable
+        self.assertEqual(
+            [n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")], [])
+
+    def test_legacy_partial_uv_failure_is_repaired_on_retry(self):
+        """回归保护（B04）：失败产物在重试时被修补复用，而不是重复新建。"""
+        self._require_legacy_renderers()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat, nm, _ = self._build_legacy_normal_source(tex_path="C:/tex/legacy_nrm.png")
+
+        original = cmds.connectAttr
+
+        def _connect(src, dst, *args, **kwargs):
+            if dst.startswith("tex_") and dst.endswith(".uvCoord"):
+                raise RuntimeError("simulated uv connection failure")
+            return original(src, dst, *args, **kwargs)
+
+        cmds.connectAttr = _connect
+        try:
+            first = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+        finally:
+            cmds.connectAttr = original
+
+        self.assertFalse(first.converted, "uv connection failure must fail conversion")
+        files_after_failure = [n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")]
+        self.assertTrue(files_after_failure, "failed materialization leaves its nodes in the scene")
+
+        second = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+        self.assertTrue(second.converted, second.reason)
+        files_after_retry = [n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")]
+        self.assertEqual(len(files_after_retry), len(files_after_failure),
+                         "retry must repair the tagged node instead of duplicating it")
+        self.assertIsNotNone(
+            support.upstream_plug(files_after_retry[0] + ".uvCoord"),
+            "repaired file node still has no UV source")
+
+    def test_legacy_manual_file_with_same_name_is_not_reused(self):
+        """回归保护（B04）：同名同路径但无 UV 链的手工 file 不得被复用。"""
+        self._require_legacy_renderers()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat, nm, _ = self._build_legacy_normal_source(tex_path="C:/tex/legacy_nrm.png")
+        manual = cmds.shadingNode("file", asTexture=True, name="tex_%s" % nm)
+        cmds.setAttr("%s.fileTextureName" % manual, "C:/tex/legacy_nrm.png", type="string")
+
+        result = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+        self.assertTrue(result.converted, result.reason)
+
+        up = self._target_normal_upstream(result.new_material, "aiStandardSurface")
+        self.assertIsNotNone(up)
+        file_node = support.upstream_plug("%s.input" % up.split(".")[0]).split(".")[0]
+        self.assertNotEqual(file_node, manual,
+                            "manual file without a UV chain must not be reused")
+        self.assertIsNotNone(support.upstream_plug("%s.uvCoord" % file_node))
+
+    def test_legacy_reused_file_is_tagged_with_its_source(self):
+        """B04：物化产物带来源标记，复用不依赖名称猜测。"""
+        self._require_legacy_renderers()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat, nm, _ = self._build_legacy_normal_source(tex_path="C:/tex/legacy_nrm.png")
+
+        result = MaterialConverter(config=self.loader).convert(mat, "aiStandardSurface")
+        self.assertTrue(result.converted, result.reason)
+
+        files = [n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")]
+        self.assertEqual(len(files), 1)
+        self.assertEqual(cmds.getAttr("%s.mcEmbeddedSource" % files[0]), nm)

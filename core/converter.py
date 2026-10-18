@@ -11,12 +11,17 @@ from core.results import ConversionResult, summarize_results
 
 _SOURCE = "MaterialConverter"
 
+#: Sentinel for "the previous SG connection could not be read".  Distinct from
+#: ``None`` (= there was nothing connected) so a rollback never guesses.
+_UNKNOWN_WIRING = object()
+
 
 class MaterialConverter:
 
     def __init__(self, logger=None, config=None):
         self.logger = logger or get_logger()
         self.config = config or ConfigLoader()
+        self._in_batch = False
         self.cc_converter = CCConverter(self.config, node_utils, logger=self.logger)
         self.attr_converter = AttributeConverter(self.config, node_utils, self.cc_converter, logger=self.logger)
         self.bump_converter = BumpConverter(self.config, node_utils, logger=self.logger)
@@ -32,6 +37,10 @@ class MaterialConverter:
         old material.
         """
         self.cc_converter.reset()
+        if not self._in_batch:
+            # A standalone conversion starts a new scene-query scope; during a
+            # batch the index is shared across materials (see convert_all).
+            self.bump_converter.reset_index()
         result = ConversionResult(material=source_mat)
 
         with self.logger.scope(source=_SOURCE, material=source_mat, target=target_node_type):
@@ -104,17 +113,25 @@ class MaterialConverter:
                 result.reason = "failed to apply prerequisites"
                 return result
 
+            disp_plan = None
             try:
                 if source_renderer == target_renderer:
                     self.logger.debug("Same renderer: reusing existing bump/normal node", source=_SOURCE)
                     cc_cache = {}
-                    bump_ok = self.bump_converter.reuse_existing(source_mat, new_mat, source_renderer)
+                    bump_outcome = self.bump_converter.reuse_existing(source_mat, new_mat, source_renderer)
                 else:
                     cc_cache = self.cc_converter.collect_chains(attr_info)
-                    bump_ok = self.bump_converter.convert(source_mat, new_mat, source_renderer, target_renderer)
+                    bump_outcome = self.bump_converter.convert(source_mat, new_mat, source_renderer, target_renderer)
 
-                if not bump_ok:
-                    self.logger.error(f"Bump/Normal conversion failed for {source_mat}", nodes=(source_mat, new_mat))
+                # Limitations (e.g. an object-space normal on a target without a
+                # space switch) are reported, not silently dropped.
+                result.issues.extend(bump_outcome.issues)
+                if not bump_outcome:
+                    self.logger.error(
+                        f"Bump/Normal conversion failed for {source_mat}: "
+                        f"{'; '.join(bump_outcome.critical) or 'unknown cause'}",
+                        nodes=(source_mat, new_mat),
+                    )
                     result.reason = "bump/normal conversion failed"
                     return result
 
@@ -134,10 +151,19 @@ class MaterialConverter:
                 result.issues.extend(report.issues)
 
                 if source_renderer != target_renderer:
-                    if not self.disp_converter.convert(
-                            source_mat, new_mat, source_config, target_config,
-                            target_renderer, sgs):
-                        self.logger.error(f"Displacement conversion failed for {source_mat}", nodes=(source_mat, new_mat))
+                    # Prepare only: displacement nodes are created and validated
+                    # here, but no shading engine is touched until the commit
+                    # phase below, so a later failure cannot leave a mixed scene.
+                    disp_plan = self.disp_converter.prepare(
+                        source_mat, new_mat, source_config, target_config,
+                        target_renderer, sgs)
+                    result.issues.extend(disp_plan.issues)
+                    if not disp_plan.ok:
+                        self.logger.error(
+                            f"Displacement preparation failed for {source_mat}: "
+                            f"{'; '.join(disp_plan.critical) or 'unknown cause'}",
+                            nodes=(source_mat, new_mat),
+                        )
                         result.reason = "displacement conversion failed"
                         return result
             except Exception as exc:
@@ -145,34 +171,130 @@ class MaterialConverter:
                 result.reason = f"conversion failed: {exc}"
                 return result
 
-            result.converted = True
+            return self._commit_shading_engines(
+                result, source_mat, new_mat, sgs, disp_plan)
 
-            wired_nodes = []
-            for sg in sgs:
-                try:
-                    cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
-                    result.wired += 1
-                    wired_nodes.append(sg)
-                    self.logger.info(f"Reconnected shading engine: {new_mat}.outColor -> {sg}.surfaceShader", nodes=(new_mat, sg))
-                except Exception as exc:
-                    self.logger.error(f"Failed to connect {new_mat} to {sg}.surfaceShader: {exc}", nodes=(new_mat, sg))
+    def _commit_shading_engines(self, result, source_mat, new_mat, sgs, disp_plan=None):
+        """Wire the new material into every SG as one transaction.
 
-            if wired_nodes:
-                self.logger.info(
-                    f"Reconnected {result.wired} shading engine(s); old material disconnected: {source_mat}",
-                    nodes=(source_mat, new_mat, *wired_nodes),
-                )
-            elif result.total_sgs:
-                self.logger.error(
-                    f"No shading engine reconnected for {new_mat}: {result.total_sgs} shading engine(s) "
-                    f"of {source_mat} still reference the old material",
-                    nodes=(source_mat, new_mat),
-                )
-                result.reason = "shading engine reconnection failed"
-            else:
-                self.logger.warn(f"No shading engine connected for {new_mat}", nodes=(new_mat,))
+        The previous surface/displacement wiring is snapshotted first.  If any
+        connection fails, every SG touched so far is restored and the material
+        is reported as failed: a half-converted scene where one SG renders the
+        new material and another still renders the old one must never be
+        presented as success.
+        """
+        snapshot = self._snapshot_sg_wiring(sgs)
+        failures = []
+        wired_nodes = []
 
+        for sg in sgs:
+            try:
+                cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
+                wired_nodes.append(sg)
+                self.logger.info(f"Reconnected shading engine: {new_mat}.outColor -> {sg}.surfaceShader", nodes=(new_mat, sg))
+            except Exception as exc:
+                reason = f"failed to connect {new_mat}.outColor -> {sg}.surfaceShader: {exc}"
+                self.logger.error(reason, nodes=(new_mat, sg))
+                failures.append({"sg": sg, "reason": reason})
+
+        if disp_plan is not None and not failures:
+            failures.extend(self.disp_converter.apply(disp_plan))
+
+        if failures:
+            restored = self._restore_sg_wiring(snapshot)
+            result.restored = restored
+            result.sg_failures = failures
+            result.wired = 0
+            result.reason = "shading engine commit failed"
+            self.logger.error(
+                f"Shading engine commit failed for {new_mat}; "
+                f"{'all' if restored else 'not all'} SG connection(s) restored: "
+                f"{'; '.join(item['reason'] for item in failures)}",
+                nodes=(source_mat, new_mat, *[item["sg"] for item in failures]),
+            )
             return result
+
+        result.converted = True
+        result.wired = len(wired_nodes)
+        if wired_nodes:
+            self.logger.info(
+                f"Reconnected {result.wired} shading engine(s); old material disconnected: {source_mat}",
+                nodes=(source_mat, new_mat, *wired_nodes),
+            )
+        elif result.total_sgs:
+            self.logger.error(
+                f"No shading engine reconnected for {new_mat}: {result.total_sgs} shading engine(s) "
+                f"of {source_mat} still reference the old material",
+                nodes=(source_mat, new_mat),
+            )
+            result.reason = "shading engine reconnection failed"
+        else:
+            self.logger.warn(f"No shading engine connected for {new_mat}", nodes=(new_mat,))
+
+        return result
+
+    def _snapshot_sg_wiring(self, sgs):
+        """Record the current surface/displacement upstream of every SG.
+
+        A failed query is stored as ``_UNKNOWN_WIRING`` rather than ``None``:
+        "there was nothing connected" and "I could not read the connection" must
+        not be confused when restoring.
+        """
+        snapshot = {}
+        for sg in sgs:
+            entry = {}
+            for key, attr in (("surface", "surfaceShader"), ("displacement", "displacementShader")):
+                try:
+                    conns = cmds.listConnections(
+                        f"{sg}.{attr}", source=True, destination=False, plugs=True) or []
+                    entry[key] = conns[0] if conns else None
+                except Exception as exc:
+                    self.logger.warn(
+                        f"Failed to snapshot {sg}.{attr}: {exc}; "
+                        f"it cannot be restored if the commit fails",
+                        nodes=(sg,),
+                    )
+                    entry[key] = _UNKNOWN_WIRING
+            snapshot[sg] = entry
+        return snapshot
+
+    def _restore_sg_wiring(self, snapshot):
+        """Restore snapshotted SG wiring; returns True when everything was restored."""
+        restored_all = True
+        restored_nodes = []
+        for sg, entry in snapshot.items():
+            for key, attr in (("surface", "surfaceShader"), ("displacement", "displacementShader")):
+                original = entry.get(key)
+                try:
+                    if original is None:
+                        # Only drop a connection we actually created; when the
+                        # commit never reached this SG there is nothing to undo.
+                        conns = cmds.listConnections(
+                            f"{sg}.{attr}", source=True, destination=False) or []
+                        if not conns:
+                            continue
+                        cmds.disconnectAttr(f"{sg}.{attr}")
+                    elif original is _UNKNOWN_WIRING:
+                        restored_all = False
+                        self.logger.error(
+                            f"Cannot restore {sg}.{attr}: the original wiring was not readable",
+                            nodes=(sg,),
+                        )
+                        continue
+                    else:
+                        cmds.connectAttr(original, f"{sg}.{attr}", force=True)
+                    restored_nodes.append(sg)
+                except Exception as exc:
+                    restored_all = False
+                    self.logger.error(
+                        f"Failed to restore {sg}.{attr}: {exc}", nodes=(sg,),
+                    )
+        if restored_nodes:
+            self.logger.info(
+                f"Restored {len(set(restored_nodes))} shading engine(s) to their pre-conversion wiring",
+                nodes=tuple(dict.fromkeys(restored_nodes)),
+            )
+        return restored_all
 
     def _find_shading_engines(self, source_mat):
         """Shading engines fed by *source_mat* as ``(list, ok)``.
@@ -285,6 +407,8 @@ class MaterialConverter:
         results = []
         started = time.perf_counter()
 
+        self._in_batch = True
+        self.bump_converter.reset_index()
         try:
             cmds.undoInfo(openChunk=True)
         except Exception as exc:
@@ -301,6 +425,8 @@ class MaterialConverter:
                     except Exception as exc:
                         self.logger.warn(f"Progress callback failed after {index}/{total}: {exc}", source=_SOURCE)
         finally:
+            self._in_batch = False
+            self.bump_converter.reset_index()
             try:
                 cmds.undoInfo(closeChunk=True)
             except Exception as exc:

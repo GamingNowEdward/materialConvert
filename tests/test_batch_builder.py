@@ -1,5 +1,6 @@
 from core.batch_builder import BatchBuilder
 from core.logger import Logger
+from core.results import summarize_build_results
 
 
 class FakeMaterialBuilder:
@@ -169,3 +170,20 @@ def test_build_all_closes_undo_chunk_on_progress_failure(monkeypatch):
     bb.build_all(_materials("a"), "aiStandardSurface", on_progress=on_progress)
 
     assert undo_calls[-1] == {"closeChunk": True}
+
+
+def test_build_all_reports_prerequisite_failures(monkeypatch):
+    """回归保护（B03）：失败结果必须携带具体前置条件失败项。"""
+    bb = _make_batch(monkeypatch)
+
+    def failing_build(*args, **kwargs):
+        bb.builder.last_build_issues = ["M_bad.useRoughness=1 (locked)"]
+        raise RuntimeError("prerequisites failed for M_bad")
+
+    bb.builder.build = failing_build
+    results = bb.build_all(_materials("bad"), "VRayMtl")
+
+    assert [r.built for r in results] == [False]
+    assert "prerequisites failed" in results[0].reason
+    assert results[0].failures == ["M_bad.useRoughness=1 (locked)"]
+    assert summarize_build_results(results)["failed"] == 1

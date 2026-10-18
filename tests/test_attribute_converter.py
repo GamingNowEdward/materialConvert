@@ -26,7 +26,9 @@ class FakeUtils:
 
 class FakeCC:
     def transfer(self, *args, **kwargs):
-        pass
+        from core.results import TransferOutcome
+
+        return TransferOutcome()
 
 
 def _conv(logger=None):

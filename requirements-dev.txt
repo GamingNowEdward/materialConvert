@@ -1,0 +1,6 @@
+# Development-only dependencies (CI + local pure suite).
+# The shipped Maya tool itself has zero external dependencies: it uses Maya's
+# bundled Python, PySide and maya.cmds at runtime.
+pytest>=8
+pytest-timeout>=2
+PySide6>=6.5

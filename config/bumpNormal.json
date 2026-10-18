@@ -31,6 +31,7 @@
       "scale": "bumpDepth",
       "is_normal": "bumpInterp",
       "is_normal_value": [1, 2],
+      "normal_space": {"tangent": 1, "object": 2},
       "file_source": "outColor",
       "default_scale": 1.0
     }
@@ -75,6 +76,7 @@
       "scale": "scale",
       "is_normal": "inputType",
       "is_normal_value": [1, 2],
+      "normal_space": {"tangent": 1, "object": 2},
       "file_source": "outColor",
       "default_scale": 1.0,
       "extra_nodes": [
@@ -103,6 +105,7 @@
       "input": "bumpMap",
       "is_normal": "bumpMapType",
       "is_normal_value": [1, 2],
+      "normal_space": {"tangent": 1, "object": 2},
       "file_source": "outColor",
       "default_scale": 1.0
     }

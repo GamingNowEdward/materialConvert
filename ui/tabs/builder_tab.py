@@ -1,6 +1,7 @@
 from ui import QtWidgets
 from ui.feedback import qt_maya_logger
 from ui.widgets import populate_material_targets
+from ui.operation_state import OperationGuard
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.material_builder import MaterialBuilder
@@ -15,6 +16,16 @@ class BuilderTab:
         self.log = logger or get_logger()
         self.config = ctx.config
         self.builder = MaterialBuilder(ctx, logger=self.log)
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -73,6 +84,7 @@ class BuilderTab:
         btn_build.setFixedHeight(52)
         btn_build.clicked.connect(self._create_material_logic)
         layout.addWidget(btn_build)
+        self._busy_widgets = [btn_build, self.mat_combo, self.name_input]
 
         self._populate_material_list()
         return widget
@@ -152,10 +164,16 @@ class BuilderTab:
             f"channels={sorted(input_paths)}",
             source=_SOURCE,
         )
-        new_mat = self.builder.build(
-            node_type, mat_base, input_paths,
-            use_qss=self.cb_qss.isChecked(),
-            channel_options=channel_options,
-        )
-        self._last_operation_warnings = len(getattr(self.builder, "last_build_issues", []))
-        return new_mat
+
+        if not self.guard.try_begin():
+            return None
+        try:
+            new_mat = self.builder.build(
+                node_type, mat_base, input_paths,
+                use_qss=self.cb_qss.isChecked(),
+                channel_options=channel_options,
+            )
+            self._last_operation_warnings = len(getattr(self.builder, "last_build_issues", []))
+            return new_mat
+        finally:
+            self.guard.end()

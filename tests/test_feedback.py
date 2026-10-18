@@ -245,3 +245,26 @@ def test_show_result_banner_is_best_effort(monkeypatch):
 
     monkeypatch.setattr(cmds, "inViewMessage", broken)
     assert feedback.show_result_banner(1, 0) is False
+
+
+def test_show_result_banner_partial_wiring(monkeypatch):
+    """回归保护（B09）：仅部分 SG 接线成功时不能显示普通成功。"""
+    views = []
+    monkeypatch.setattr(cmds, "inViewMessage", lambda **k: views.append(k.get("amg", "")))
+
+    assert feedback.show_result_banner(0, 0, partial=2) is True
+    assert "color:orange" in views[-1]
+    assert "partially wired" in views[-1]
+
+    # failed outranks partial wiring
+    assert feedback.show_result_banner(1, 0, partial=2) is True
+    assert "color:red" in views[-1]
+
+    # channel issues are still reported when nothing was partially wired
+    assert feedback.show_result_banner(0, 3) is True
+    assert "color:orange" in views[-1] and "issues" in views[-1]
+
+    # a clean run stays green even with the new keyword available
+    assert feedback.show_result_banner(0, 0, partial=0,
+                                       ok_message="2 material(s) converted") is True
+    assert "color:green" in views[-1]

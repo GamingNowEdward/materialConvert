@@ -1,10 +1,42 @@
 import os
 import sys
 
-try:
-    _ROOT = os.path.dirname(os.path.abspath(__file__))
-except NameError:
-    _ROOT = None
+
+def _resolve_root():
+    """Project root used for the top-level module takeover and reload.
+
+    The documented Shelf snippet runs this file with ``exec(open(...).read())``,
+    which does **not** define ``__file__``; the surrounding Script Editor
+    namespace may even still hold another tool's ``__file__``.  The candidate is
+    therefore validated by its contents, and a missing/invalid one falls back to
+    the directories already on ``sys.path`` (the snippet inserts the project root
+    before executing this file).
+    """
+    candidate = globals().get("__file__")
+    if isinstance(candidate, str) and candidate:
+        root = os.path.dirname(os.path.abspath(candidate))
+        if os.path.isfile(os.path.join(root, "core", "__init__.py")):
+            return root
+
+    for entry in list(sys.path):
+        if not entry:
+            continue
+        root = os.path.abspath(entry)
+        if (os.path.isfile(os.path.join(root, "main.py"))
+                and os.path.isfile(os.path.join(root, "core", "__init__.py"))):
+            return root
+    return None
+
+
+_ROOT = _resolve_root()
+
+if not _ROOT:
+    # Not a project module, so the logger is not available yet: stderr is the
+    # only channel that cannot depend on this project being importable.
+    sys.stderr.write(
+        "[materialConvert] project root not found; put the materialConvert "
+        "folder on sys.path before launching\n"
+    )
 
 
 def _owned_by_root(module, root):

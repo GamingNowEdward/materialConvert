@@ -22,7 +22,9 @@ class PrerequisitesLive(support.MayaTestCase):
             self.skipTest("VRayMtl missing")
         mat = support.create_material("VRayMtl", "pre_src")
         from core import prerequisites
-        prerequisites.apply_prerequisites(mat, cfg)
+        outcome = prerequisites.apply_prerequisites(mat, cfg)
+        self.assertTrue(outcome, "material prerequisites must succeed")
+        self.assertEqual(outcome.failures, [])
         self.assertEqual(cmds.getAttr(mat + ".useRoughness"), 1)
         for value in cmds.getAttr(mat + ".reflectionColor")[0]:
             self.assertAlmostEqual(value, 1.0, places=5)
@@ -34,7 +36,8 @@ class PrerequisitesLive(support.MayaTestCase):
         cfg = self.loader.get_material_config("RedshiftMaterial")
         mat = support.create_material("RedshiftMaterial", "pre_rs")
         from core import prerequisites
-        prerequisites.apply_attr_prerequisites(mat, cfg, "metallic")
+        outcome = prerequisites.apply_attr_prerequisites(mat, cfg, "metallic")
+        self.assertTrue(outcome)
         self.assertEqual(cmds.getAttr(mat + ".refl_fresnel_mode"), 2)
 
     def test_invalid_prerequisite_only_warns(self):
@@ -46,6 +49,10 @@ class PrerequisitesLive(support.MayaTestCase):
         try:
             mat = support.create_material("VRayMtl", "pre_bad")
             from core import prerequisites
-            prerequisites.apply_prerequisites(mat, cfg)  # must not raise
+            outcome = prerequisites.apply_prerequisites(mat, cfg)  # must not raise
         finally:
             cfg.prerequisites = saved
+
+        self.assertFalse(outcome, "an unwritable prerequisite must not report success")
+        self.assertTrue(outcome.failures)
+        self.assertIn("definitelyNotAnAttr", outcome.failures[0])

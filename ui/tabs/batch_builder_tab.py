@@ -3,6 +3,7 @@ import os
 from ui import QtWidgets, QtCore, QtGui
 from ui.widgets import populate_material_targets
 from ui.feedback import show_result_banner
+from ui.operation_state import OperationGuard
 from core.builder_context import BuilderContext
 from core.logger import get_logger
 from core.texture_scanner import TextureScanner
@@ -29,10 +30,21 @@ class BatchBuilderTab:
         self.target_combo = None
         self.cb_full_chain = None
         self.cb_qss = None
+        self.cb_skip_conflicts = None
         self.table = None
         self.materials_to_build_list = None
         self.materials_to_build_label = None
         self.progress_bar = None
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -75,6 +87,10 @@ class BatchBuilderTab:
         self.cb_qss.setChecked(True)
         opt_layout.addWidget(self.cb_qss)
 
+        self.cb_skip_conflicts = QtWidgets.QCheckBox("Skip Materials With Conflicts")
+        self.cb_skip_conflicts.setChecked(False)
+        opt_layout.addWidget(self.cb_skip_conflicts)
+
         layout.addWidget(opt_group)
 
         btn_row = QtWidgets.QHBoxLayout()
@@ -88,6 +104,11 @@ class BatchBuilderTab:
         btn_row.addWidget(btn_build_all)
         btn_row.addWidget(btn_build_selected)
         layout.addLayout(btn_row)
+        self._busy_widgets = [
+            btn_scan, btn_browse, self.directory_input, self.target_combo,
+            self.cb_full_chain, self.cb_qss, self.cb_skip_conflicts,
+            btn_build_all, btn_build_selected,
+        ]
 
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setVisible(False)
@@ -150,6 +171,9 @@ class BatchBuilderTab:
         self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
 
+        conflicts = self.scan_result.get("conflicts", [])
+        conflicting = {(item["material"], item["common_attr"]) for item in conflicts}
+
         for material in self.scan_result["materials"]:
             for common_attr, data in material["channels"].items():
                 row = self.table.rowCount()
@@ -163,7 +187,31 @@ class BatchBuilderTab:
                 self.table.setItem(row, 0, name_item)
                 self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(data["channel"]))
                 self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(data["path"]))
-                self.table.setItem(row, 3, QtWidgets.QTableWidgetItem("OK"))
+                status = ("CONFLICT (kept)"
+                          if (material["name"], common_attr) in conflicting else "OK")
+                status_item = QtWidgets.QTableWidgetItem(status)
+                self.table.setItem(row, 3, status_item)
+                if (material["name"], common_attr) in conflicting:
+                    self._paint_row(row, "#5a2d2d")
+
+        # Every rejected candidate gets its own row so the conflict is visible
+        # instead of only living in the log.
+        for item in conflicts:
+            for path in item.get("dropped", []):
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+
+                name_item = QtWidgets.QTableWidgetItem(item["material"])
+                name_item.setData(QtCore.Qt.UserRole, {
+                    "type": "parsed",
+                    "material": item["material"],
+                })
+                self.table.setItem(row, 0, name_item)
+                self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(
+                    self._channel_label(item["material"], item["common_attr"])))
+                self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(path))
+                self.table.setItem(row, 3, QtWidgets.QTableWidgetItem("CONFLICT"))
+                self._paint_row(row, "#5a2d2d")
 
         for path in self.scan_result["unparsed"]:
             row = self.table.rowCount()
@@ -176,12 +224,24 @@ class BatchBuilderTab:
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(path))
             self.table.setItem(row, 3, QtWidgets.QTableWidgetItem("UNPARSED"))
 
-            for col in range(4):
-                item = self.table.item(row, col)
-                if item:
-                    item.setBackground(QtGui.QColor("#5a2d2d"))
+            self._paint_row(row, "#5a2d2d")
 
         self.table.setSortingEnabled(True)
+
+    def _paint_row(self, row, color):
+        for col in range(4):
+            item = self.table.item(row, col)
+            if item:
+                item.setBackground(QtGui.QColor(color))
+
+    def _channel_label(self, material_name, common_attr):
+        for material in self.scan_result["materials"]:
+            if material["name"] != material_name:
+                continue
+            data = material["channels"].get(common_attr)
+            if data:
+                return data.get("channel", common_attr)
+        return common_attr
 
     def _populate_materials_to_build(self):
         self.materials_to_build_list.clear()
@@ -193,10 +253,16 @@ class BatchBuilderTab:
         self.materials_to_build_label.setText(
             f"{len(materials)} material(s) will be created."
         )
+        conflicts_per_material = {}
+        for item in self.scan_result.get("conflicts", []):
+            name = item["material"]
+            conflicts_per_material[name] = conflicts_per_material.get(name, 0) + 1
         for material in materials:
             channel_count = len(material["channels"])
+            conflict_count = conflicts_per_material.get(material["name"], 0)
+            suffix = f", {conflict_count} conflict(s)" if conflict_count else ""
             self.materials_to_build_list.addItem(
-                f"{material['name']} ({channel_count} channels)"
+                f"{material['name']} ({channel_count} channels{suffix})"
             )
 
     def _selected_material_names(self):
@@ -234,46 +300,78 @@ class BatchBuilderTab:
         else:
             materials = self.scan_result["materials"]
 
+        # Snapshot the list: a re-scan while the batch runs must not alter it.
+        materials = list(materials)
+        conflict_names = set(self.scan_result.get("conflict_materials", []))
+        if conflict_names and self.cb_skip_conflicts.isChecked():
+            kept = [m for m in materials if m["name"] not in conflict_names]
+            skipped = len(materials) - len(kept)
+            if skipped:
+                self.log.warn(
+                    f"Skipping {skipped} material(s) with unresolved texture conflicts: "
+                    f"{', '.join(sorted(conflict_names))}",
+                    source=_SOURCE,
+                )
+            materials = kept
+            if not materials:
+                self.log.error(
+                    "Every selected material has unresolved texture conflicts; nothing built.",
+                    source=_SOURCE,
+                )
+                return
+
         total = len(materials)
-        self.progress_bar.setMaximum(total)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
-        QtWidgets.QApplication.processEvents()
+        if not self.guard.try_begin():
+            return
+        try:
+            self.progress_bar.setMaximum(total)
+            self.progress_bar.setValue(0)
+            self.progress_bar.setVisible(True)
+            QtWidgets.QApplication.processEvents()
 
-        def _on_progress(done, total_count, result):
-            # Throttle repaints: roughly every 5 materials and always the last one.
-            if done == total_count or done % 5 == 0:
-                self.progress_bar.setValue(done)
-                QtWidgets.QApplication.processEvents()
+            def _on_progress(done, total_count, result):
+                # Throttle repaints: roughly every 5 materials and always the last one.
+                if done == total_count or done % 5 == 0:
+                    try:
+                        self.progress_bar.setValue(done)
+                        QtWidgets.QApplication.processEvents()
+                    except RuntimeError as exc:
+                        self.log.debug(f"Progress UI unavailable: {exc}", source=_SOURCE)
 
-        results = self.batch_builder.build_all(
-            materials,
-            target_node_type,
-            use_full_chain=use_full_chain,
-            use_qss=use_qss,
-            on_progress=_on_progress,
-        )
-
-        self.progress_bar.setValue(total)
-        self.progress_bar.setVisible(False)
-
-        summary = summarize_build_results(results)
-        issue_results = [r for r in results if r.has_issues]
-        if issue_results:
-            self.log.warn(
-                f"{summary['with_issues']} material(s) built with channel issue(s); "
-                f"see the log for details",
-                source=_SOURCE,
-                nodes=tuple(r.new_material or r.material for r in issue_results),
+            results = self.batch_builder.build_all(
+                materials,
+                target_node_type,
+                use_full_chain=use_full_chain,
+                use_qss=use_qss,
+                on_progress=_on_progress,
             )
-        failed_results = [r for r in results if not r.built]
-        if failed_results:
-            self.log.error(
-                f"{summary['failed']} material(s) failed to build; see the log for details",
-                source=_SOURCE,
-                nodes=tuple(r.new_material or r.material for r in failed_results),
+
+            self.progress_bar.setValue(total)
+            self.progress_bar.setVisible(False)
+
+            summary = summarize_build_results(results)
+            issue_results = [r for r in results if r.has_issues]
+            if issue_results:
+                self.log.warn(
+                    f"{summary['with_issues']} material(s) built with channel issue(s); "
+                    f"see the log for details",
+                    source=_SOURCE,
+                    nodes=tuple(r.new_material or r.material for r in issue_results),
+                )
+            failed_results = [r for r in results if not r.built]
+            if failed_results:
+                self.log.error(
+                    f"{summary['failed']} material(s) failed to build; see the log for details",
+                    source=_SOURCE,
+                    nodes=tuple(r.new_material or r.material for r in failed_results),
+                )
+            show_result_banner(
+                summary["failed"], summary["with_issues"],
+                ok_message=f"{summary['built']} material(s) built",
             )
-        show_result_banner(
-            summary["failed"], summary["with_issues"],
-            ok_message=f"{summary['built']} material(s) built",
-        )
+        finally:
+            self.guard.end()
+            try:
+                self.progress_bar.setVisible(False)
+            except RuntimeError as exc:
+                self.log.debug(f"Progress bar already destroyed: {exc}", source=_SOURCE)

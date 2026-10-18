@@ -397,3 +397,134 @@ def test_apply_matched_reports_failures(monkeypatch):
     assert outcome["applied"] == []
     assert len(outcome["failed"]) == 1
     assert any(r.level == LogLevel.WARN for r in log.poll(0))
+# --------------------------------------------------------------------------- #
+# Evidence completeness / stale revalidation (review finding O04)
+# --------------------------------------------------------------------------- #
+
+def test_name_driver_requires_token_boundaries():
+    driver = _name_driver()
+    # a keyword inside a longer word must not match (old substring behaviour did)
+    assert driver.match("C:/tex/hero_roughnessblur.png").status == DriverStatus.NO_MATCH
+    assert driver.match("C:/tex/hero_roughness.png").status == DriverStatus.MATCH
+
+
+def test_channel_driver_marks_depth_truncation_incomplete(monkeypatch):
+    driver, _log = _channel_driver(monkeypatch)
+    connections = {
+        "file1": ["aiStandardSurface1.baseColor", "a1.out"],
+        "a1": ["a2.out"],
+        "a2": ["a3.out"],
+        "a3": ["a4.out"],
+        "a4": ["aiStandardSurface1.specularColor"],
+    }
+    monkeypatch.setattr(cs.cmds, "nodeType",
+                        lambda node: "aiStandardSurface" if node.startswith("ai") else "transform")
+    monkeypatch.setattr(cs.cmds, "listConnections",
+                        lambda node, **kwargs: connections.get(node, []))
+
+    res = driver.trace_channel_targets("file1")
+
+    assert res.targets == ["baseColor"]
+    assert res.complete is False
+    assert res.depth_limited is True
+    assert res.truncated is False
+
+
+def test_channel_driver_marks_budget_truncation_incomplete(monkeypatch):
+    driver, _log = _channel_driver(monkeypatch)
+    driver._TRACE_NODE_BUDGET = 2
+
+    def list_connections(node, **kwargs):
+        if node == "file1":
+            return ["n0.out"]
+        return ["n%d.out" % (int(node[1:]) + 1)]
+
+    monkeypatch.setattr(cs.cmds, "nodeType", lambda node: "transform")
+    monkeypatch.setattr(cs.cmds, "listConnections", list_connections)
+
+    result = driver.match("file1")
+
+    assert result.truncated is True
+    assert result.evidence_complete is False
+
+
+def test_channel_match_on_incomplete_evidence_is_ambiguous(monkeypatch):
+    connections = {
+        "file1": ["aiStd1.baseColor", "a1.out"],
+        "a1": ["a2.out"],
+        "a2": ["a3.out"],
+        "a3": ["a4.out"],
+        "a4": ["aiStd1.specularColor"],
+    }
+    matcher = _matcher(monkeypatch, paths={"file1": "C:/t_untitled.png"},
+                       connections=connections)
+
+    res = matcher.match("file1")
+
+    assert res.state == MatchState.AMBIGUOUS
+    assert res.prematch_colorspace == ""
+    assert "incomplete evidence" in res.diagnostic
+    assert res.evidence_complete is False
+
+
+def test_complete_filename_evidence_still_matches(monkeypatch):
+    connections = {
+        "file1": ["aiStd1.baseColor", "a1.out"],
+        "a1": ["a2.out"],
+        "a2": ["a3.out"],
+        "a3": ["a4.out"],
+        "a4": ["aiStd1.specularColor"],
+    }
+    matcher = _matcher(monkeypatch, paths={"file1": "C:/t_baseColor.png"},
+                       connections=connections)
+
+    res = matcher.match("file1")
+
+    # the filename is independent, complete evidence
+    assert res.state == MatchState.MATCHED
+    assert res.evidence_complete is False
+
+
+def test_unmatched_with_incomplete_trace_says_so(monkeypatch):
+    connections = {
+        "file1": ["a1.out"],
+        "a1": ["a2.out"],
+        "a2": ["a3.out"],
+        "a3": ["a4.out"],
+        "a4": ["aiStd1.baseColor"],
+    }
+    matcher = _matcher(monkeypatch, paths={"file1": "C:/t_untitled.png"},
+                       connections=connections)
+
+    res = matcher.match("file1")
+
+    assert res.state == MatchState.UNMATCHED
+    assert "not exhaustive" in res.diagnostic
+
+
+def test_apply_matched_revalidation_skips_stale(monkeypatch):
+    matcher = _matcher(monkeypatch, paths={"file1": "C:/t_baseColor.png"})
+    set_attr_calls = []
+    monkeypatch.setattr(cs.cmds, "setAttr", lambda *a, **k: set_attr_calls.append(a))
+    monkeypatch.setattr(cs.cmds, "undoInfo", lambda **k: None)
+
+    stale_result = _match_result("file1", MatchState.MATCHED, "Utility - Raw")
+    outcome = matcher.apply_matched([stale_result], revalidate=True)
+
+    assert outcome["applied"] == []
+    assert outcome["stale"] == ["file1"]
+    assert set_attr_calls == []
+
+
+def test_apply_matched_revalidation_applies_fresh_result(monkeypatch):
+    matcher = _matcher(monkeypatch, paths={"file1": "C:/t_baseColor.png"})
+    set_attr_calls = []
+    monkeypatch.setattr(cs.cmds, "setAttr", lambda *a, **k: set_attr_calls.append(a))
+    monkeypatch.setattr(cs.cmds, "undoInfo", lambda **k: None)
+
+    fresh_result = _match_result("file1", MatchState.MATCHED,
+                                 "Utility - sRGB - Texture")
+    outcome = matcher.apply_matched([fresh_result], revalidate=True)
+
+    assert outcome["stale"] == []
+    assert outcome["applied"] == [("file1", "Utility - sRGB - Texture")]

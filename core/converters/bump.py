@@ -2,8 +2,14 @@ import maya.cmds as cmds
 
 from core.logger import get_logger
 from core.node_utils import RENDERER_SHORT, P2D_CONNECTIONS
+from core.results import TransferOutcome
 
 _SOURCE = "BumpConverter"
+
+#: String attribute stamped on file nodes materialized by this converter.
+#: It records which legacy node the file belongs to, so reuse never depends on
+#: guessing ownership from the node name alone.
+_EMBEDDED_MARKER = "mcEmbeddedSource"
 
 
 class BumpConverter:
@@ -12,10 +18,37 @@ class BumpConverter:
         self.config = config
         self.utils = utils
         self.log = logger or get_logger()
+        self._file_index = None
+        self._bn_type_nodes = None
+
+    def reset_index(self):
+        """Drop the batch-scoped scene indexes (``file`` / bump-normal nodes)."""
+        self._file_index = None
+        self._bn_type_nodes = None
+
+    def _bn_nodes(self):
+        """Batch-scoped list of all configured bump/normal nodes in the scene."""
+        if self._bn_type_nodes is None:
+            nodes = []
+            for node_type in self.config.get_all_bn_types():
+                try:
+                    nodes.extend(cmds.ls(type=node_type) or [])
+                except Exception as exc:
+                    self.log.warn(
+                        f"Failed to list bump/normal nodes of type {node_type}: {exc}",
+                        source=_SOURCE,
+                    )
+            self._bn_type_nodes = nodes
+        return self._bn_type_nodes
 
     def convert(self, source_mat, target_mat, source_renderer, target_renderer):
-        """Convert bump/normal; return True when nothing was attempted or it
-        succeeded, False when a conversion step failed."""
+        """Convert bump/normal.
+
+        Returns a :class:`core.results.TransferOutcome`; ``ok`` False on a
+        critical conversion step.  Object-space normal maps that the target
+        cannot express are reported through ``issues`` instead of silently
+        becoming tangent-space maps.
+        """
         src_bn_config = self.config.get_bump_normal_config(source_renderer)
         tgt_bn_config = self.config.get_bump_normal_config(target_renderer)
 
@@ -26,10 +59,7 @@ class BumpConverter:
                 source=_SOURCE,
                 nodes=(source_mat, target_mat),
             )
-            return True
-
-        tgt_bump = tgt_bn_config.bump
-        tgt_normal = tgt_bn_config.normal
+            return TransferOutcome()
 
         src_bn_info, collect_ok = self._collect(source_mat, src_bn_config)
         if not collect_ok:
@@ -37,10 +67,12 @@ class BumpConverter:
                 f"Bump/Normal collection failed for {source_mat}",
                 source=_SOURCE, nodes=(source_mat,),
             )
-            return False
+            return TransferOutcome(
+                ok=False,
+                critical=[f"failed to collect bump/normal data from {source_mat}"])
         if not src_bn_info:
             self.log.skip(f"No source bump/normal data found on {source_mat}", source=_SOURCE, nodes=(source_mat,))
-            return True
+            return TransferOutcome()
 
         bump_info = src_bn_info.get("bump")
         normal_info = src_bn_info.get("normal")
@@ -48,12 +80,12 @@ class BumpConverter:
         info = bump_info or normal_info
         if not info:
             self.log.skip(f"No usable bump/normal mapping collected from {source_mat}", source=_SOURCE, nodes=(source_mat,))
-            return True
+            return TransferOutcome()
 
         node = info.pop("bn_node", None)
         base_name = node if node else source_mat
         is_normal_mode = info.get("is_normal", False)
-        tgt_mapping = tgt_normal if is_normal_mode else tgt_bump
+        tgt_mapping = tgt_bn_config.normal if is_normal_mode else tgt_bn_config.bump
 
         return self._do_convert(
             info, target_mat, tgt_mapping,
@@ -63,46 +95,46 @@ class BumpConverter:
     def reuse_existing(self, source_mat, new_mat, source_renderer):
         """Same-renderer path: reuse the existing bump/normal node.
 
-        Returns True when nothing to do or the reuse succeeded, False on failure.
+        Returns a :class:`core.results.TransferOutcome`.
         """
         src_bn_config = self.config.get_bump_normal_config(source_renderer)
         if not src_bn_config:
             self.log.skip(f"No bump/normal config for source renderer {source_renderer}", source=_SOURCE, nodes=(source_mat, new_mat))
-            return True
+            return TransferOutcome()
 
         try:
             source_type = self.utils.identify_node_type(source_mat, logger=self.log)
         except Exception as exc:
             self.log.warn(f"Failed to identify source material {source_mat}: {exc}", source=_SOURCE, nodes=(source_mat,))
-            return False
+            return TransferOutcome(ok=False, critical=[f"failed to identify {source_mat}: {exc}"])
         src_mat_config = self.config.get_material_config(source_type)
         if not src_mat_config:
             self.log.warn(f"No material config for {source_type}", source=_SOURCE, nodes=(source_mat,))
-            return False
+            return TransferOutcome(ok=False, critical=[f"no material config for {source_type}"])
         src_bump_attr = src_mat_config.attr_map.get("normal_bump", "")
         if not src_bump_attr:
             self.log.skip(f"Source material {source_mat} has no normal_bump mapping", source=_SOURCE, nodes=(source_mat,))
-            return True
+            return TransferOutcome()
 
         try:
             target_type = self.utils.identify_node_type(new_mat, logger=self.log)
         except Exception as exc:
             self.log.warn(f"Failed to identify target material {new_mat}: {exc}", source=_SOURCE, nodes=(new_mat,))
-            return False
+            return TransferOutcome(ok=False, critical=[f"failed to identify {new_mat}: {exc}"])
         new_mat_config = self.config.get_material_config(target_type)
         if not new_mat_config:
             self.log.warn(f"No material config for {target_type}", source=_SOURCE, nodes=(new_mat,))
-            return False
+            return TransferOutcome(ok=False, critical=[f"no material config for {target_type}"])
         new_bump_attr = new_mat_config.attr_map.get("normal_bump", "")
         if not new_bump_attr:
             self.log.skip(f"Target material {new_mat} has no normal_bump mapping", source=_SOURCE, nodes=(new_mat,))
-            return True
+            return TransferOutcome()
 
         try:
             conns = cmds.listConnections(f"{source_mat}.{src_bump_attr}", source=True, destination=False) or []
             if not conns:
                 self.log.skip(f"No source bump connection on {source_mat}.{src_bump_attr}", source=_SOURCE, nodes=(source_mat,))
-                return True
+                return TransferOutcome()
             src_node = conns[0]
             out_attr = self._resolve_source_output(src_node, src_bn_config.bump.output)
             cmds.connectAttr(f"{src_node}.{out_attr}",
@@ -112,10 +144,10 @@ class BumpConverter:
                 source=_SOURCE,
                 nodes=(src_node, new_mat),
             )
-            return True
+            return TransferOutcome()
         except Exception as exc:
             self.log.warn(f"Bump/Normal reuse failed for {source_mat} -> {new_mat}: {exc}", source=_SOURCE, nodes=(source_mat, new_mat))
-            return False
+            return TransferOutcome(ok=False, critical=[f"bump/normal reuse failed: {exc}"])
 
     def _resolve_source_output(self, src_node, fallback_attr):
         """Output attribute of an existing bump/normal node.
@@ -153,6 +185,7 @@ class BumpConverter:
                         "scale": data["scale_val"],
                         "input_plug": data["input_plug"],
                         "is_normal": key == "normal",
+                        "normal_space": data.get("normal_space"),
                     }
                 else:
                     self.log.debug(f"Source {key} material attribute skipped on {source_mat}", source=_SOURCE, nodes=(source_mat,))
@@ -202,6 +235,7 @@ class BumpConverter:
                 self.log.warn(f"Failed to read bump/normal input on {source_mat}.{input_attr}: {exc}", source=_SOURCE, nodes=(source_mat,))
 
         should_skip = False
+        normal_space = None
         if bn_mapping.is_normal:
             try:
                 actual = cmds.getAttr(f"{source_mat}.{bn_mapping.is_normal}")
@@ -213,6 +247,8 @@ class BumpConverter:
                         source=_SOURCE,
                         nodes=(source_mat,),
                     )
+                else:
+                    normal_space = bn_mapping.space_for_value(actual)
             except Exception as exc:
                 self.log.warn(f"Failed to read {source_mat}.{bn_mapping.is_normal}: {exc}", source=_SOURCE, nodes=(source_mat,))
 
@@ -220,6 +256,7 @@ class BumpConverter:
             "scale_val": scale_val,
             "input_plug": input_plug,
             "should_skip": should_skip,
+            "normal_space": normal_space,
         }
 
     def _collect_node(self, bn_node, bn_mapping, mode):
@@ -232,14 +269,14 @@ class BumpConverter:
         if bn_cfg is not None and bn_cfg.path:
             return self._collect_embedded_path_node(bn_node, bn_cfg)
 
-        is_normal = self._detect_bn_mode(bn_node, node_actual_type, bn_renderer, mode,
-                                         mapping=bn_cfg)
+        is_normal, normal_space = self._detect_bn_modes(
+            bn_node, node_actual_type, bn_renderer, mode, mapping=bn_cfg)
         scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
         input_plug = self._read_bn_attrs(bn_node, bn_cfg, "input", is_connection=True)
 
         self.log.debug(
             f"Collected bump/normal node {bn_node}: type={node_actual_type}, "
-            f"renderer={bn_renderer}, is_normal={is_normal}",
+            f"renderer={bn_renderer}, is_normal={is_normal}, space={normal_space}",
             source=_SOURCE,
             nodes=(bn_node,),
         )
@@ -248,6 +285,7 @@ class BumpConverter:
             "scale": scale_val,
             "input_plug": input_plug,
             "is_normal": is_normal,
+            "normal_space": normal_space,
         }, True
 
     def _collect_embedded_path_node(self, bn_node, bn_cfg):
@@ -296,6 +334,9 @@ class BumpConverter:
             "scale": scale_val,
             "input_plug": input_plug,
             "is_normal": True,
+            # The legacy node has no space switch; its normal maps are tangent
+            # space by convention.
+            "normal_space": "tangent",
         }, True
 
     def _build_file_from_path(self, bn_node, path, bn_cfg):
@@ -303,9 +344,11 @@ class BumpConverter:
 
         Returns ``(file_node, ok)``. ``file_node`` is ``None`` when
         materialization failed and ``ok`` is False for critical failures (node
-        creation, path write, or any place2dTexture connection) so incomplete
-        wiring never masquerades as a successful conversion. Nodes created
-        before the failure are left in the scene (old nodes are never deleted).
+        creation, missing/unusable place2dTexture, path write, or any
+        place2dTexture connection) so incomplete wiring never masquerades as a
+        successful conversion. Nodes created before the failure are left in the
+        scene (old nodes are never deleted) and stay tagged, so a later retry can
+        repair their UV chain instead of duplicating them.
         """
         existing = self._find_existing_embedded_file(bn_node, path)
         if existing is not None:
@@ -318,6 +361,15 @@ class BumpConverter:
         p2d = self._find_place2d(bn_node)
         if p2d is None:
             p2d = self._create_place2d(bn_node)
+        if p2d is None:
+            # Without a place2dTexture the file node has no UV source: that is a
+            # critical materialization failure, not a cosmetic one.
+            self.log.error(
+                f"Could not create or reuse a place2dTexture for {bn_node}; "
+                f"refusing to build an incomplete normal chain",
+                source=_SOURCE, nodes=(bn_node,),
+            )
+            return None, False
 
         try:
             file_node = cmds.shadingNode("file", asTexture=True, name="tex_" + bn_node)
@@ -328,6 +380,12 @@ class BumpConverter:
             )
             return None, False
         self.log.debug(f"Created file node {file_node} for {bn_node}", source=_SOURCE, nodes=(file_node,))
+        self._tag_embedded_file(file_node, bn_node)
+        if self._file_index is not None and file_node not in self._file_index:
+            # Keep the batch-scoped index fresh: the same legacy node is collected
+            # once per bump/normal segment, and the second pass must reuse this
+            # node instead of materializing a duplicate.
+            self._file_index.append(file_node)
 
         failed = False
         try:
@@ -339,36 +397,167 @@ class BumpConverter:
                 source=_SOURCE, nodes=(file_node,),
             )
 
-        if p2d is not None:
-            for src_attr, dst_attr in P2D_CONNECTIONS:
-                try:
-                    if cmds.isConnected(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}"):
-                        continue
-                    cmds.connectAttr(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}", force=True)
-                except Exception as exc:
-                    failed = True
-                    self.log.error(
-                        f"Failed to connect {p2d}.{src_attr} -> {file_node}.{dst_attr}: {exc}",
-                        source=_SOURCE, nodes=(p2d, file_node),
-                    )
+        for src_attr, dst_attr in P2D_CONNECTIONS:
+            try:
+                if cmds.isConnected(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}"):
+                    continue
+                cmds.connectAttr(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}", force=True)
+            except Exception as exc:
+                failed = True
+                self.log.error(
+                    f"Failed to connect {p2d}.{src_attr} -> {file_node}.{dst_attr}: {exc}",
+                    source=_SOURCE, nodes=(p2d, file_node),
+                )
 
         if failed:
             return None, False
         return file_node, True
 
+    def _file_nodes(self):
+        """Batch-scoped list of ``file`` nodes (invalidated by ``reset_index``)."""
+        if self._file_index is None:
+            try:
+                self._file_index = list(cmds.ls(type="file") or [])
+            except Exception as exc:
+                self.log.warn(f"Failed to list file nodes: {exc}", source=_SOURCE)
+                self._file_index = []
+        return self._file_index
+
+    def _tag_embedded_file(self, file_node, bn_node):
+        """Record ownership on the materialized file node (best effort)."""
+        try:
+            if not cmds.attributeQuery(_EMBEDDED_MARKER, node=file_node, exists=True):
+                cmds.addAttr(file_node, longName=_EMBEDDED_MARKER, dataType="string")
+            cmds.setAttr(f"{file_node}.{_EMBEDDED_MARKER}", bn_node, type="string")
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to tag {file_node} with {_EMBEDDED_MARKER}: {exc}; "
+                f"reuse falls back to name + path matching",
+                source=_SOURCE, nodes=(file_node,),
+            )
+
+    def _embedded_source_of(self, file_node):
+        try:
+            if not cmds.attributeQuery(_EMBEDDED_MARKER, node=file_node, exists=True):
+                return None
+            return cmds.getAttr(f"{file_node}.{_EMBEDDED_MARKER}") or None
+        except Exception as exc:
+            self.log.warn(
+                f"Failed to read {_EMBEDDED_MARKER} on {file_node}: {exc}",
+                source=_SOURCE, nodes=(file_node,),
+            )
+            return None
+
+    def _uv_chain_complete(self, file_node):
+        """Every P2D-driven input of *file_node* is fed by a place2dTexture."""
+        for _src_attr, dst_attr in P2D_CONNECTIONS:
+            try:
+                conns = cmds.listConnections(
+                    f"{file_node}.{dst_attr}", source=True, destination=False,
+                    plugs=True) or []
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to query {file_node}.{dst_attr}: {exc}",
+                    source=_SOURCE, nodes=(file_node,),
+                )
+                return False
+            if not conns:
+                self.log.debug(
+                    f"{file_node}.{dst_attr} has no UV source; chain incomplete",
+                    source=_SOURCE, nodes=(file_node,),
+                )
+                return False
+            node = conns[0].split(".", 1)[0]
+            try:
+                if cmds.nodeType(node) != "place2dTexture":
+                    return False
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to identify UV node {node}: {exc}",
+                    source=_SOURCE, nodes=(node,),
+                )
+                return False
+        return True
+
+    def _repair_uv_chain(self, file_node, bn_node):
+        """Reconnect a previously failed file node to a place2dTexture."""
+        p2d = self._find_place2d(bn_node) or self._find_place2d(file_node)
+        if p2d is None:
+            p2d = self._create_place2d(bn_node)
+        if p2d is None:
+            return False
+
+        repaired = True
+        for src_attr, dst_attr in P2D_CONNECTIONS:
+            try:
+                if cmds.isConnected(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}"):
+                    continue
+                cmds.connectAttr(f"{p2d}.{src_attr}", f"{file_node}.{dst_attr}", force=True)
+            except Exception as exc:
+                repaired = False
+                self.log.warn(
+                    f"Failed to repair {p2d}.{src_attr} -> {file_node}.{dst_attr}: {exc}",
+                    source=_SOURCE, nodes=(p2d, file_node),
+                )
+        if repaired:
+            self.log.info(
+                f"Repaired UV chain for {file_node} using {p2d}",
+                source=_SOURCE, nodes=(file_node, p2d),
+            )
+        return repaired
+
     def _find_existing_embedded_file(self, bn_node, path):
+        """Reusable file node for *bn_node* + *path*, or None.
+
+        Reuse requires a complete P2D chain and unambiguous ownership: a node
+        tagged with this legacy source wins, an untagged node only qualifies when
+        its name prefix, path and UV chain all match (legacy scenes).  A tagged
+        node with a broken chain is repaired instead of being reused as-is.
+        """
         prefix = "tex_" + bn_node
-        for node in cmds.ls(type="file") or []:
-            if node == prefix or (node.startswith(prefix)
-                                  and node[len(prefix):].isdigit()):
-                try:
-                    if cmds.getAttr(f"{node}.fileTextureName") == path:
-                        return node
-                except Exception as exc:
-                    self.log.warn(
-                        f"Failed to read {node}.fileTextureName: {exc}",
-                        source=_SOURCE, nodes=(node,),
+        for node in self._file_nodes():
+            if not (node == prefix or (node.startswith(prefix)
+                                       and node[len(prefix):].isdigit())):
+                continue
+            try:
+                if cmds.getAttr(f"{node}.fileTextureName") != path:
+                    continue
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to read {node}.fileTextureName: {exc}",
+                    source=_SOURCE, nodes=(node,),
+                )
+                continue
+
+            tagged_source = self._embedded_source_of(node)
+            if tagged_source is not None:
+                if tagged_source != bn_node:
+                    self.log.debug(
+                        f"File node {node} belongs to {tagged_source}, not {bn_node}",
+                        source=_SOURCE, nodes=(node, bn_node),
                     )
+                    continue
+                if self._uv_chain_complete(node):
+                    return node
+                if self._repair_uv_chain(node, bn_node):
+                    return node
+                self.log.warn(
+                    f"Reusable file node {node} has an unrepairable UV chain; "
+                    f"a new node will be created",
+                    source=_SOURCE, nodes=(node,),
+                )
+                continue
+
+            if self._uv_chain_complete(node):
+                self.log.debug(
+                    f"Reusing untagged file node {node} (name + path + UV chain match)",
+                    source=_SOURCE, nodes=(node,),
+                )
+                return node
+            self.log.debug(
+                f"Untagged file node {node} has an incomplete UV chain; not reused",
+                source=_SOURCE, nodes=(node,),
+            )
         return None
 
     def _find_place2d(self, bn_node):
@@ -400,7 +589,7 @@ class BumpConverter:
         try:
             p2d = cmds.shadingNode("place2dTexture", asUtility=True, name="p2d_" + bn_node)
         except Exception as exc:
-            self.log.warn(
+            self.log.error(
                 f"Failed to create place2dTexture for {bn_node}: {exc}",
                 source=_SOURCE, nodes=(bn_node,),
             )
@@ -433,14 +622,7 @@ class BumpConverter:
                         nodes=(material,),
                     )
 
-        all_nodes = []
-        for nt in self.config.get_all_bn_types():
-            try:
-                found = cmds.ls(type=nt) or []
-            except Exception as exc:
-                self.log.warn(f"Failed to list bump/normal nodes of type {nt}: {exc}", source=_SOURCE)
-                continue
-            all_nodes.extend(found)
+        all_nodes = self._bn_nodes()
 
         self.log.debug(f"Scanning {len(all_nodes)} bump/normal node(s) for {material}", source=_SOURCE, nodes=tuple(all_nodes))
         for node in all_nodes:
@@ -470,14 +652,19 @@ class BumpConverter:
         self.log.debug(f"No bump/normal node found for {material}", source=_SOURCE, nodes=(material,))
         return None
 
-    def _detect_bn_mode(self, bn_node, node_actual_type, bn_renderer, default_mode, mapping=None):
+    def _detect_bn_modes(self, bn_node, node_actual_type, bn_renderer, default_mode, mapping=None):
+        """``(is_normal, space)`` for a bump/normal node.
+
+        ``space`` is ``"tangent"`` / ``"object"`` when the renderer encodes the
+        normal space on the mode switch, otherwise None (unknown/not applicable).
+        """
         if mapping is not None and mapping.path:
             self.log.debug(
                 f"{node_actual_type} uses an embedded texture path; treated as normal",
                 source=_SOURCE,
                 nodes=(bn_node,),
             )
-            return True
+            return True, "tangent"
         if bn_renderer is None:
             self.log.warn(
                 f"Unknown bump/normal node type {node_actual_type}; defaulting mode to "
@@ -485,24 +672,28 @@ class BumpConverter:
                 source=_SOURCE,
                 nodes=(bn_node,),
             )
-            return default_mode == "normal"
+            return default_mode == "normal", None
 
         r_config = self.config.get_bump_normal_config(bn_renderer)
         bump_type = r_config.bump.node_type if r_config.bump else ""
         normal_type = r_config.normal.node_type if r_config.normal else ""
 
         if normal_type and normal_type == node_actual_type and normal_type != bump_type:
-            return True
+            return True, None
         if bump_type and bump_type == node_actual_type and bump_type != normal_type:
-            return False
+            return False, None
         if r_config.bump and r_config.bump.is_normal:
             try:
                 actual = cmds.getAttr(f"{bn_node}.{r_config.bump.is_normal}")
-                if r_config.normal and r_config.normal.is_normal_value is not None:
-                    return r_config.normal.matches_mode_value(actual)
             except Exception as exc:
                 self.log.warn(f"Failed to read {bn_node}.{r_config.bump.is_normal}: {exc}", source=_SOURCE, nodes=(bn_node,))
-        return default_mode == "normal"
+                return default_mode == "normal", None
+
+            if r_config.normal and r_config.normal.matches_mode_value(actual):
+                return True, r_config.normal.space_for_value(actual)
+            if r_config.bump.matches_mode_value(actual):
+                return False, None
+        return default_mode == "normal", None
 
     def _read_bn_attrs(self, bn_node, bn_cfg, attr_name, is_connection=False):
         if bn_cfg is None:
@@ -525,6 +716,7 @@ class BumpConverter:
 
     def _do_convert(self, bn_info, target_mat, tgt_mapping,
                     target_renderer, is_normal, source_name):
+        outcome = TransferOutcome()
         if not tgt_mapping:
             self.log.skip(
                 f"Target renderer {target_renderer} has no "
@@ -532,20 +724,60 @@ class BumpConverter:
                 source=_SOURCE,
                 nodes=(target_mat,),
             )
-            return True
+            return outcome
 
         input_plug = bn_info.get("input_plug")
         if not input_plug:
             self.log.skip("Bump/Normal conversion skipped: no input connection", source=_SOURCE, nodes=(target_mat,))
-            return True
+            return outcome
+
+        source_space = bn_info.get("normal_space")
+        if is_normal and source_space == "object" and not tgt_mapping.supported_spaces:
+            outcome.issues.append(
+                f"{target_renderer}: object-space normal not representable on this "
+                f"target; its default normal space is used")
+            self.log.warn(
+                f"Target {target_renderer} cannot express object-space normals; "
+                f"the map will be interpreted in the renderer default space",
+                source=_SOURCE, nodes=(target_mat,),
+            )
 
         if tgt_mapping.is_material_attribute:
-            return self._convert_to_material(bn_info, target_mat, tgt_mapping, input_plug)
-        return self._convert_to_node(bn_info, target_mat, tgt_mapping,
-                                     target_renderer, is_normal, source_name, input_plug)
+            self._convert_to_material(bn_info, target_mat, tgt_mapping, input_plug,
+                                      outcome, source_space)
+        else:
+            self._convert_to_node(bn_info, target_mat, tgt_mapping,
+                                  target_renderer, is_normal, source_name, input_plug,
+                                  outcome, source_space)
+        return outcome
 
-    def _convert_to_material(self, bn_info, target_mat, tgt_mapping, input_plug):
-        ok = True
+    def _apply_normal_mode(self, node, mapping, source_space, outcome):
+        """Write the mode switch while preserving the source normal space."""
+        if not mapping.is_normal:
+            return
+        value = mapping.mode_value_for_space(source_space)
+        if value is None:
+            value = mapping.effective_mode_value()
+            if value is None:
+                return
+            if source_space:
+                outcome.issues.append(
+                    f"{node}: {source_space}-space normal not supported by this "
+                    f"target; wrote mode {value!r}")
+        try:
+            cmds.setAttr(f"{node}.{mapping.is_normal}", value)
+            self.log.debug(
+                f"Set {node}.{mapping.is_normal} = {value!r} (space={source_space or 'unknown'})",
+                source=_SOURCE,
+                nodes=(node,),
+            )
+        except Exception as exc:
+            outcome.ok = False
+            outcome.critical.append(f"failed to set mode on {node}: {exc}")
+            self.log.warn(f"Failed to set is_normal on {node}: {exc}", source=_SOURCE, nodes=(node,))
+
+    def _convert_to_material(self, bn_info, target_mat, tgt_mapping, input_plug,
+                             outcome, source_space):
         scale_attr = tgt_mapping.scale
         input_attr = tgt_mapping.input
 
@@ -554,42 +786,38 @@ class BumpConverter:
                 cmds.setAttr(f"{target_mat}.{scale_attr}", bn_info["scale"])
                 self.log.debug(f"Set {target_mat}.{scale_attr} = {bn_info['scale']!r}", source=_SOURCE, nodes=(target_mat,))
             except Exception as exc:
-                ok = False
+                outcome.ok = False
+                outcome.critical.append(f"failed to set scale {scale_attr} on {target_mat}: {exc}")
                 self.log.warn(f"Failed to set scale [{scale_attr}] on {target_mat}: {exc}", source=_SOURCE, nodes=(target_mat,))
 
         if input_attr:
             if self.utils.smart_connect(input_plug, f"{target_mat}.{input_attr}", logger=self.log):
                 self.log.debug(f"Connected bump/normal input {input_plug} -> {target_mat}.{input_attr}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(input_plug), target_mat))
             else:
-                ok = False
+                outcome.ok = False
+                outcome.critical.append(f"failed to connect {input_plug} -> {target_mat}.{input_attr}")
                 self.log.warn(f"Failed to connect {input_plug} -> {target_mat}.{input_attr}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(input_plug), target_mat))
 
-        mode_val = tgt_mapping.effective_mode_value()
-        if tgt_mapping.is_normal and mode_val is not None:
-            try:
-                cmds.setAttr(f"{target_mat}.{tgt_mapping.is_normal}", mode_val)
-                self.log.debug(
-                    f"Set {target_mat}.{tgt_mapping.is_normal} = {mode_val!r}",
-                    source=_SOURCE,
-                    nodes=(target_mat,),
-                )
-            except Exception as exc:
-                ok = False
-                self.log.warn(f"Failed to set is_normal on {target_mat}: {exc}", source=_SOURCE, nodes=(target_mat,))
+        self._apply_normal_mode(target_mat, tgt_mapping, source_space, outcome)
 
-        if ok:
+        if outcome.ok:
             self.log.info("Bump/Normal: converted to material attributes", source=_SOURCE, nodes=(target_mat,))
         else:
             self.log.warn("Bump/Normal: material-attribute conversion incomplete", source=_SOURCE, nodes=(target_mat,))
-        return ok
 
     def _convert_to_node(self, bn_info, target_mat, tgt_mapping,
-                         target_renderer, is_normal, source_name, input_plug):
-        ok = True
+                         target_renderer, is_normal, source_name, input_plug,
+                         outcome, source_space):
         renderer_short = RENDERER_SHORT.get(target_renderer, target_renderer)
         bn_suffix = "_" + renderer_short + ("Nrm" if is_normal else "Bump")
-        bn_node = cmds.shadingNode(tgt_mapping.node_type, asUtility=True,
-                                   name=source_name + bn_suffix)
+        try:
+            bn_node = cmds.shadingNode(tgt_mapping.node_type, asUtility=True,
+                                       name=source_name + bn_suffix)
+        except Exception as exc:
+            outcome.ok = False
+            outcome.critical.append(f"failed to create {tgt_mapping.node_type}: {exc}")
+            self.log.error(f"Failed to create {tgt_mapping.node_type}: {exc}", source=_SOURCE, nodes=(target_mat,))
+            return
         self.log.debug(f"Created bump/normal node {bn_node}", source=_SOURCE, nodes=(bn_node,))
 
         if tgt_mapping.scale and bn_info.get("scale") is not None:
@@ -597,7 +825,8 @@ class BumpConverter:
                 cmds.setAttr(f"{bn_node}.{tgt_mapping.scale}", bn_info["scale"])
                 self.log.debug(f"Set {bn_node}.{tgt_mapping.scale} = {bn_info['scale']!r}", source=_SOURCE, nodes=(bn_node,))
             except Exception as exc:
-                ok = False
+                outcome.ok = False
+                outcome.critical.append(f"failed to set scale on {bn_node}: {exc}")
                 self.log.warn(f"Failed to set scale on {bn_node}: {exc}", source=_SOURCE, nodes=(bn_node,))
 
         if tgt_mapping.input:
@@ -608,31 +837,23 @@ class BumpConverter:
                     nodes=(self.utils.node_name_from_plug(input_plug), bn_node),
                 )
             else:
-                ok = False
+                outcome.ok = False
+                outcome.critical.append(f"failed to connect {input_plug} -> {bn_node}.{tgt_mapping.input}")
                 self.log.warn(
                     f"Failed to connect {input_plug} -> {bn_node}.{tgt_mapping.input}",
                     source=_SOURCE,
                     nodes=(self.utils.node_name_from_plug(input_plug), bn_node),
                 )
 
-        mode_val = tgt_mapping.effective_mode_value()
-        if tgt_mapping.is_normal and mode_val is not None:
-            try:
-                cmds.setAttr(f"{bn_node}.{tgt_mapping.is_normal}", mode_val)
-                self.log.debug(
-                    f"Set {bn_node}.{tgt_mapping.is_normal} = {mode_val!r}",
-                    source=_SOURCE,
-                    nodes=(bn_node,),
-                )
-            except Exception as exc:
-                ok = False
-                self.log.warn(f"Failed to set is_normal on {bn_node}: {exc}", source=_SOURCE, nodes=(bn_node,))
+        self._apply_normal_mode(bn_node, tgt_mapping, source_space, outcome)
 
         try:
             target_type = cmds.nodeType(target_mat)
         except Exception as exc:
+            outcome.ok = False
+            outcome.critical.append(f"failed to identify target material {target_mat}: {exc}")
             self.log.warn(f"Failed to identify target material {target_mat}: {exc}", source=_SOURCE, nodes=(target_mat,))
-            return False
+            return
         common_config = self.config.get_material_config(target_type)
         if common_config:
             bump_attr = common_config.attr_map.get("normal_bump", "")
@@ -646,11 +867,11 @@ class BumpConverter:
                         nodes=(bn_node, target_mat),
                     )
                 except Exception as exc:
-                    ok = False
+                    outcome.ok = False
+                    outcome.critical.append(f"failed to connect {bn_node} -> {target_mat}.{bump_attr}: {exc}")
                     self.log.warn(f"Failed to connect {bn_node} -> {target_mat}.{bump_attr}: {exc}", source=_SOURCE, nodes=(bn_node, target_mat))
 
-        if ok:
+        if outcome.ok:
             self.log.info(f"Bump/Normal: converted to {tgt_mapping.node_type} node", source=_SOURCE, nodes=(bn_node, target_mat))
         else:
             self.log.warn(f"Bump/Normal: conversion to {tgt_mapping.node_type} node incomplete", source=_SOURCE, nodes=(bn_node, target_mat))
-        return ok

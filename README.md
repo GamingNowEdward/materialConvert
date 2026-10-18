@@ -32,6 +32,8 @@ exec(open(r"your_path\materialConvert\main.py").read())
 
 Double-click `copy_launch.bat` to copy the launch command to clipboard, then paste directly into Maya Script Editor.
 
+`main.py` does **not** require `__file__`: it accepts the executing file's directory only when that directory really is this project, otherwise it falls back to the first `sys.path` entry containing `main.py` + `core/__init__.py`. Both `exec(open(...).read())` snippets above and the bat launcher therefore resolve the same project root.
+
 **Supported**: Maya 2024+
 **Requires**: none (zero external dependencies, pure `maya.cmds` API)
 
@@ -45,6 +47,8 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Auto-detect material types, one-click convert all
 - Supports bump/normal nodes, color correction nodes, and displacement nodes
 - Preserves roughness semantics: source channels stored as glossiness (e.g. V-Ray `reflectionGlossiness`) are inverted automatically
+- Preserves normal-space semantics: object-space normal maps keep their space on targets that expose a switch, and unsupported targets are reported instead of silently downgraded
+- Transactional shading-engine commit: a failed SG connection rolls the touched SGs back to their previous wiring and reports it
 - Progress bar for batch conversion, single-step undo (Ctrl+Z)
 - Supports 6 material types: `aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
@@ -65,7 +69,8 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 - Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
 - Group textures into materials and preview which materials will be created (`Materials to Build`)
-- Show parsed channels and unparsed files in one table with a sortable Status column
+- Show parsed channels, unparsed files **and every texture conflict** in one table with a sortable Status column (`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`); the first file in sorted order is kept and every rejected candidate stays visible
+- Optional `Skip Materials With Conflicts` toggle (off by default) so an unresolved channel conflict never silently builds with an arbitrary file
 - Batch build all / selected materials to any supported renderer
 - Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp) or simple direct connection
 - Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission

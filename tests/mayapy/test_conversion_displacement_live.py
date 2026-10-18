@@ -13,6 +13,8 @@ import support
 
 cmds = support.cmds
 
+from core.results import summarize_results
+
 
 @unittest.skipIf(cmds is None, "mayapy required")
 class DisplacementLive(support.MayaTestCase):
@@ -71,3 +73,100 @@ class DisplacementLive(support.MayaTestCase):
                     self.assertTrue(nodes, "no %s created" % tgt.displacement_node_type)
                     checked += 1
         self.assertGreater(checked, 0)
+
+    # ------------------------------------------------------------------ #
+    # Failure propagation (review finding B01)
+    # ------------------------------------------------------------------ #
+
+    def _real_displacement_pair(self):
+        """One (source, target) pair crossing renderers where the target uses a real disp node."""
+        for tgt in self.configs:
+            if tgt.displacement_node_type in ("", "displacementShader"):
+                continue
+            for src in self.configs:
+                if src.node_type == tgt.node_type or src.renderer == tgt.renderer:
+                    continue
+                if src.displacement_node_type in ("", "displacementShader"):
+                    continue
+                return src, tgt
+        self.skipTest("no available cross-renderer pair with a real displacement node")
+
+    def test_texture_connect_failure_fails_conversion(self):
+        src, tgt = self._real_displacement_pair()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat = support.build_material(
+            self.loader, src.node_type, "disp_tfail",
+            {"displacementTexture": "C:/tex/disp.exr"}, use_full_chain=False)
+
+        original = cmds.connectAttr
+
+        def _connect(s, d, *args, **kwargs):
+            if d.endswith("." + tgt.displacement_texture):
+                raise RuntimeError("simulated displacement texture failure")
+            return original(s, d, *args, **kwargs)
+
+        cmds.connectAttr = _connect
+        try:
+            result = MaterialConverter(config=self.loader).convert(mat, tgt.node_type)
+        finally:
+            cmds.connectAttr = original
+
+        self.assertFalse(result.converted, "texture connect failure must fail conversion")
+        self.assertIn("displacement", (result.reason or "").lower())
+
+    def test_scale_write_failure_is_a_reported_issue(self):
+        src, tgt = self._real_displacement_pair()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat = support.build_material(
+            self.loader, src.node_type, "disp_sfail",
+            {"displacementTexture": "C:/tex/disp.exr"}, use_full_chain=False)
+
+        original = cmds.setAttr
+
+        def _set_attr(plug, *args, **kwargs):
+            if (plug.startswith(mat + "_") and plug.endswith("." + tgt.displacement_scale)):
+                raise RuntimeError("simulated locked scale")
+            return original(plug, *args, **kwargs)
+
+        cmds.setAttr = _set_attr
+        try:
+            result = MaterialConverter(config=self.loader).convert(mat, tgt.node_type)
+        finally:
+            cmds.setAttr = original
+
+        self.assertTrue(result.converted, result.reason)
+        self.assertTrue(
+            any("displacement scale" in issue for issue in result.issues),
+            "a lost scale value must surface as an issue: %r" % (result.issues,))
+        self.assertEqual(
+            summarize_results([result])["with_issues"], 1)
+
+    def test_source_read_failure_fails_conversion(self):
+        src, tgt = self._real_displacement_pair()
+        from core.converter import MaterialConverter
+
+        cmds.file(new=True, force=True)
+        mat = support.build_material(
+            self.loader, src.node_type, "disp_rfail",
+            {"displacementTexture": "C:/tex/disp.exr"}, use_full_chain=False)
+
+        original = cmds.listConnections
+
+        def _list(plug, *args, **kwargs):
+            if plug.endswith(".displacementShader"):
+                raise RuntimeError("simulated scene read failure")
+            return original(plug, *args, **kwargs)
+
+        cmds.listConnections = _list
+        try:
+            result = MaterialConverter(config=self.loader).convert(mat, tgt.node_type)
+        finally:
+            cmds.listConnections = original
+
+        # A read failure on one SG must not be silently reported as success.
+        self.assertFalse(result.converted, "unreadable displacement must fail conversion")
+        self.assertIn("displacement", (result.reason or "").lower())

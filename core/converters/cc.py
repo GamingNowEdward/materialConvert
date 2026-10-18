@@ -2,6 +2,7 @@ import maya.cmds as cmds
 
 from core.logger import get_logger
 from core.node_utils import RENDERER_SHORT
+from core.results import TransferOutcome
 
 _SOURCE = "CCConverter"
 
@@ -96,7 +97,24 @@ class CCConverter:
         }
 
     def transfer(self, cc_entry, target_plug, target_renderer):
-        """Convert one CC chain; return True when the intended wiring succeeded."""
+        """Convert one CC chain without mutating the source network.
+
+        Returns a :class:`core.results.TransferOutcome`.  Three topologies are
+        distinguished:
+
+        * ``direct``      -- the source CC feeds the material attribute itself;
+          the original "shared CC" handling applies (the source material gets its
+          old CC back, other downstream nodes follow the new CC).
+        * ``single_hop``  -- the source CC feeds an intermediate node
+          (layeredTexture / ramp / ...) which feeds the material attribute.  The
+          intermediate node is **copied**, the copy is fed by the new CC and the
+          material attribute is connected to the copy.  The source sub-graph is
+          never rewritten.
+        * ``unsupported`` -- deeper or ambiguous chains.  Reported as an explicit
+          limitation (``unsupported``) instead of silently bypassing the lost
+          intermediate processing or polluting the source material.
+        """
+        outcome = TransferOutcome()
         cc_config = self.config.get_color_correction_config(target_renderer)
         if not cc_config or not cc_config.node_type:
             input_plug = cc_entry.get("input_plug")
@@ -106,10 +124,24 @@ class CCConverter:
                 source=_SOURCE,
             )
             if input_plug:
-                return self.utils.smart_connect(input_plug, target_plug, logger=self.log)
-            return False
+                outcome.ok = bool(self.utils.smart_connect(input_plug, target_plug, logger=self.log))
+            else:
+                outcome.ok = False
+                outcome.critical.append(
+                    f"no CC input to fall back to for {target_plug}")
+            return outcome
 
-        ok = True
+        topology, plan = self._plan_topology(cc_entry)
+        if topology == "unsupported":
+            reason = plan.get("reason", "unsupported CC chain")
+            self.log.warn(
+                f"Color correction not converted for {cc_entry.get('cc_node', '')}: {reason}; "
+                f"the source network is left untouched",
+                source=_SOURCE,
+                nodes=tuple(n for n in (cc_entry.get("cc_node"),) if n),
+            )
+            outcome.unsupported.append(reason)
+            return outcome
 
         src_cc_name = cc_entry.get("cc_node_name", "")
         if src_cc_name and src_cc_name in self._converted:
@@ -124,7 +156,9 @@ class CCConverter:
             input_plug = cc_entry.get("input_plug")
             if input_plug and cc_config.input:
                 if not self.utils.smart_connect(input_plug, f"{cc_node}.{cc_config.input}", logger=self.log):
-                    ok = False
+                    outcome.ok = False
+                    outcome.critical.append(
+                        f"failed to connect CC input {input_plug} -> {cc_node}.{cc_config.input}")
                     self.log.warn(
                         f"Failed to connect CC input {input_plug} -> {cc_node}.{cc_config.input}",
                         source=_SOURCE,
@@ -135,22 +169,19 @@ class CCConverter:
                 self._converted[src_cc_name] = cc_node
             self.log.debug(f"Created target CC node {cc_node}", source=_SOURCE, nodes=(cc_node,))
 
-        cc_out_dests = cc_entry.get("cc_out_dests", [])
-        filtered = []
-        for dest in cc_out_dests:
-            try:
-                dest_node = dest.split(".")[0]
-                dest_type = cmds.nodeType(dest_node)
-            except Exception as exc:
-                self.log.warn(f"Failed to identify CC destination {dest}: {exc}", source=_SOURCE, nodes=(dest_node,))
-                filtered.append(dest)
-                continue
-            if self.config.get_material_config(dest_type):
-                self.log.debug(f"Excluding material CC destination {dest}", source=_SOURCE, nodes=(dest_node,))
-            else:
-                filtered.append(dest)
-        cc_out_dests = filtered
+        if not outcome.ok:
+            return outcome
 
+        if topology == "single_hop":
+            if not self._transfer_via_clone(cc_node, cc_config, target_plug, plan, outcome):
+                return outcome
+            self.log.info(
+                f"Color correction converted through copied intermediate node: {cc_node}",
+                source=_SOURCE, nodes=(cc_node, plan.get("mid")),
+            )
+            return outcome
+
+        cc_out_dests = self._external_cc_destinations(cc_entry)
         if cc_out_dests:
             self._restore_shared_source_chain(cc_entry)
             for dest in cc_out_dests:
@@ -158,21 +189,164 @@ class CCConverter:
                     cmds.connectAttr(f"{cc_node}.{cc_config.output}", dest, force=True)
                     self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest))
                 except Exception as exc:
-                    ok = False
+                    outcome.ok = False
+                    outcome.critical.append(f"failed to connect CC {cc_node} -> {dest}: {exc}")
                     self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest))
         else:
             try:
                 cmds.connectAttr(f"{cc_node}.{cc_config.output}", target_plug, force=True)
                 self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
             except Exception as exc:
-                ok = False
+                outcome.ok = False
+                outcome.critical.append(f"failed to connect CC {cc_node} -> {target_plug}: {exc}")
                 self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
 
-        if ok:
+        if outcome.ok:
             self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE, nodes=(cc_node,))
         else:
             self.log.warn(f"Color correction conversion incomplete: {cc_node}", source=_SOURCE, nodes=(cc_node,))
-        return ok
+        return outcome
+
+    def _plan_topology(self, cc_entry):
+        """``(topology, plan)`` for the chain between the source CC and its consumer.
+
+        ``direct`` has no plan; ``single_hop`` carries the intermediate node, the
+        CC input slots on it and the output attribute the material reads;
+        ``unsupported`` carries a human-readable reason.
+        """
+        output_plug = cc_entry.get("output_plug")
+        src_cc_name = cc_entry.get("cc_node_name")
+        if not output_plug or not src_cc_name:
+            return "direct", {}
+
+        holder = output_plug.split(".", 1)[0]
+        if holder == src_cc_name:
+            return "direct", {}
+
+        # The intermediate node must be fed *directly* by the source CC: check the
+        # CC output slots recorded when the chain was collected (the material
+        # attribute's upstream plug itself has no upstream of its own).
+        mid_dests = [d for d in cc_entry.get("cc_out_dests", [])
+                     if d.split(".", 1)[0] == holder]
+        if not mid_dests:
+            return "unsupported", {
+                "reason": f"multi-hop CC chain through {holder}",
+            }
+
+        for dest in mid_dests:
+            try:
+                upstream = cmds.listConnections(
+                    dest, source=True, destination=False, plugs=True) or []
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to trace upstream of {dest}: {exc}",
+                    source=_SOURCE, nodes=(holder,),
+                )
+                return "unsupported", {"reason": f"could not trace upstream of {dest}"}
+            if len(upstream) != 1 or upstream[0].split(".", 1)[0] != src_cc_name:
+                return "unsupported", {
+                    "reason": f"multi-hop CC chain through {holder}",
+                }
+
+        return "single_hop", {
+            "mid": holder,
+            "dests": mid_dests,
+            "attr": output_plug.split(".", 1)[1],
+        }
+
+    def _transfer_via_clone(self, cc_node, cc_config, target_plug, plan, outcome):
+        """Copy the intermediate node and split the new CC into the copy."""
+        mid = plan["mid"]
+        try:
+            clones = cmds.duplicate(mid, upstreamNodes=False, name=mid + "_conv") or []
+        except Exception as exc:
+            outcome.ok = False
+            outcome.critical.append(f"failed to copy intermediate node {mid}: {exc}")
+            self.log.warn(f"Failed to copy {mid}: {exc}", source=_SOURCE, nodes=(mid,))
+            return False
+        if not clones:
+            outcome.ok = False
+            outcome.critical.append(f"failed to copy intermediate node {mid}: no node created")
+            self.log.warn(f"Duplicating {mid} returned no node", source=_SOURCE, nodes=(mid,))
+            return False
+
+        clone = clones[0]
+        self._disconnect_upstream(clone)
+
+        for dest in plan["dests"]:
+            suffix = dest.split(".", 1)[1]
+            try:
+                cmds.connectAttr(f"{cc_node}.{cc_config.output}", f"{clone}.{suffix}", force=True)
+                self.log.debug(f"Connected CC {cc_node} -> {clone}.{suffix}", source=_SOURCE, nodes=(cc_node, clone))
+            except Exception as exc:
+                outcome.ok = False
+                outcome.critical.append(
+                    f"failed to connect CC {cc_node} -> {clone}.{suffix}: {exc}")
+                self.log.warn(
+                    f"Failed to connect CC {cc_node} -> {clone}.{suffix}: {exc}",
+                    source=_SOURCE, nodes=(cc_node, clone),
+                )
+
+        try:
+            cmds.connectAttr(f"{clone}.{plan['attr']}", target_plug, force=True)
+            self.log.debug(f"Connected copied chain {clone}.{plan['attr']} -> {target_plug}",
+                           source=_SOURCE, nodes=(clone, self.utils.node_name_from_plug(target_plug)))
+        except Exception as exc:
+            outcome.ok = False
+            outcome.critical.append(f"failed to connect {clone}.{plan['attr']} -> {target_plug}: {exc}")
+            self.log.warn(
+                f"Failed to connect {clone}.{plan['attr']} -> {target_plug}: {exc}",
+                source=_SOURCE, nodes=(clone, self.utils.node_name_from_plug(target_plug)),
+            )
+        return outcome.ok
+
+    def _disconnect_upstream(self, node):
+        """Drop the connections a duplicated node inherited from the source graph."""
+        try:
+            pairs = cmds.listConnections(
+                node, source=True, destination=False, plugs=True,
+                connections=True) or []
+        except Exception as exc:
+            self.log.warn(f"Failed to inspect {node} inputs: {exc}",
+                          source=_SOURCE, nodes=(node,))
+            return
+        for index in range(0, len(pairs) - 1, 2):
+            first, second = pairs[index], pairs[index + 1]
+            # ``listConnections -connections`` returns pairs whose order is not
+            # documented as stable; pick the plug that belongs to the copy.
+            if first.split(".", 1)[0] == node:
+                dest_plug, src_plug = first, second
+            elif second.split(".", 1)[0] == node:
+                dest_plug, src_plug = second, first
+            else:
+                continue
+            try:
+                cmds.disconnectAttr(dest_plug, src_plug)
+                self.log.debug(f"Detached copied node input {dest_plug} <- {src_plug}",
+                               source=_SOURCE, nodes=(node,))
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to detach {dest_plug} <- {src_plug}: {exc}",
+                    source=_SOURCE, nodes=(node,),
+                )
+
+    def _external_cc_destinations(self, cc_entry):
+        """Source CC outputs that belong to non-material nodes (direct topology)."""
+        filtered = []
+        for dest in cc_entry.get("cc_out_dests", []):
+            try:
+                dest_node = dest.split(".")[0]
+                dest_type = cmds.nodeType(dest_node)
+            except Exception as exc:
+                self.log.warn(f"Failed to identify CC destination {dest}: {exc}",
+                              source=_SOURCE, nodes=(dest.split(".")[0],))
+                filtered.append(dest)
+                continue
+            if self.config.get_material_config(dest_type):
+                self.log.debug(f"Excluding material CC destination {dest}", source=_SOURCE, nodes=(dest_node,))
+            else:
+                filtered.append(dest)
+        return filtered
 
     def _restore_shared_source_chain(self, cc_entry):
         """After the original CC is displaced by a new CC, if the intermediate node is

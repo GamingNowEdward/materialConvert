@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-10-18
+
+### Fixed (trustworthy success reporting)
+- **Displacement failures were reported as success**: `DisplacementConverter._create_node` only logged a warning when the texture connection or the scale write failed, then still returned a node. It is now split into `prepare()` (create + validate output + write scale, no SG changes) and `apply()` (commit), returning `TransferOutcome`: node creation, texture connection, missing output and source read failures are **critical**, an unwritable scale is an `issue`, and "no source displacement" is no longer confused with "the source data could not be read"
+- **Builder dropped prerequisite failures**: `apply_prerequisites()` now returns `PrerequisiteOutcome(ok, failures)` (`__bool__` keeps old call sites working); `MaterialBuilder._build()` records the concrete failures in `last_build_issues` and raises, and `BatchBuilder` stores them in `BuildResult.failures` instead of producing `built=True` with no warning
+- **Legacy Normal P2D failures were hidden**: a failed `_create_place2d` is now critical (no more "skip UV wiring and report success"); materialized `file` nodes get an `mcEmbeddedSource` tag, and reuse requires either a matching tag with a complete (or repairable) UV chain, or — for legacy untagged nodes — matching name, path **and** a complete UV chain. A manually created same-name file is no longer reused
+- **Partially wired shading engines were missing from the banner**: `show_result_banner()` gains `partial` (`failed > partial > with_issues > success`) and the converter tab passes `summary["partial_wired"]`
+
+### Fixed (scene consistency)
+- **Displacement committed before the surface shader**: `core/converter.py` now commits transactionally — `_snapshot_sg_wiring()` records each SG's surface/displacement upstream, then the commit runs surface first and displacement second; any failure calls `_restore_sg_wiring()`, sets `result.restored` / `result.sg_failures` and keeps `converted` False. An unreadable snapshot is stored as `_UNKNOWN_WIRING` and never guessed (it is reported as an ERROR); a slot that was never committed is not disconnected
+- **Shared CC chains bypassed intermediate nodes**: `cc.py` branches on topology — `direct` (CC on the material) keeps the previous shared-source handling; `single_hop` (CC → layeredTexture/ramp → material) **copies the intermediate node**, feeds the copy with the new CC and connects the copy to the target material, leaving the source graph untouched; `unsupported` (multi-hop) creates nothing, rewrites nothing and is reported in `unsupported/issues`. The `attribute.py` branch that connected the intermediate node straight to the target material is gone
+- **UI batch runs could re-enter**: new `ui/operation_state.py:OperationGuard` (Qt-free) rejects re-entry and unlocks in `finally`; `ui/main_window.py:_set_busy()` disables the submit widgets through `ui/widgets.py:set_enabled()`; progress callbacks degrade to DEBUG when the window was destroyed
+
+### Added (semantics and interaction)
+- **Normal-space preservation**: the maya/redshift/vray `normal` sections gain `normal_space` (`{"tangent": 1, "object": 2}`); `NodeMapping` gains `supported_spaces` / `space_for_value()` / `mode_value_for_space()`. The collector carries `normal_space`, the writer uses the source space, and a target that cannot express it gets an `issue` instead of a silent default. `bump.py` / `reuse_existing()` now return `TransferOutcome`
+- **Texture conflicts are visible**: scan conflicts gain `kept` / `candidates` / `dropped` and the result gains `conflict_materials`; the Batch Builder table renders `CONFLICT` / `CONFLICT (kept)` rows, offers a `Skip Materials With Conflicts` toggle and annotates the Materials to Build list
+- **Startup no longer depends on `__file__`**: `main.py` resolves the project root from `__file__` only when that directory really is this project, then falls back to `sys.path`; when both fail it writes to stderr and skips the takeover instead of silently using a wrong root
+- **Colorspace evidence completeness**: `ChannelDriver.trace_channel_targets()` returns `TraceResult` (`complete`/`truncated`/`depth_limited`/`errors`) and `MatchResult` gains `evidence_complete`; a channel-only match resting on a truncated trace becomes `AMBIGUOUS`; `apply_matched(..., revalidate=True)` re-matches before writing and reports stale rows in `stale` without applying them; the name driver now uses the same token/boundary matching as the scanner
+
+### Added (engineering and performance)
+- **Unified channel outcomes**: `core/results.py` gains `TransferOutcome` (`ok`/`issues`/`critical`/`unsupported`) and `TransferReport` derives from it; `ConversionResult` gains `sg_failures`/`restored`, `BuildResult` gains `failures`
+- **Offline config validation**: new `core/config_schema.py` (pure Python) checks required fields/types, duplicate `node_type`, section shapes, `prerequisites`/`invert`, paired `is_normal`/`is_normal_value`, `normal_space` values, `extra_nodes`, cross references and `builder_naming` array lengths; `ConfigValidator.validate_all()` runs it before the Maya checks; `ConfigLoader` loads files in sorted order, keeps the first duplicate `node_type` and logs an ERROR, and `MaterialConfig` logs and skips non-object sections
+- **Batch-scoped scene indexes**: `BumpConverter.reset_index()` owns the `file` / bump-normal indexes (lifetime = one batch or one standalone conversion, driven by `MaterialConverter._in_batch`), so `_find_bn_node` / `_find_existing_embedded_file` stop re-scanning the scene; `TextureScanner` compiles and sorts its alias table once
+- **Test matrix**: CI adds `windows-latest` (ubuntu + windows / Python 3.11 / PySide6) and installs from `requirements-dev.txt`; the mayapy suite prints `support.describe_environment()`; new `tests/mayapy/test_perf_baseline.py` records `cmds` call counts and timings
+
+### Tests
+- New pure-suite files: `test_displacement_converter.py`, `test_bump_legacy.py`, `test_bump_converter.py`, `test_cc_topology.py`, `test_busy_guard.py`, `test_config_schema.py`, `test_main_entry.py`; extended `test_converter.py` (commit/rollback), `test_conversion_results.py`, `test_feedback.py`, `test_material_builder.py`, `test_batch_builder.py`, `test_colorspace.py`, `test_texture_scanner.py`, `test_config_loader.py`. Pure suite: **285 passed**
+- mayapy additions: displacement failure injection, legacy P2D failure/repair/manual file, normal space preservation and Arnold reporting, copied shared layeredTexture, multi-hop reporting, save/reopen wiring assertions, performance baseline. mayapy suite: **88 passed, 3 skipped** (Maya 2024 + mtoa/redshift4maya/vrayformaya/lookdevKit)
+
+### Documentation
+- `docs/AGENTS.md`, `docs/CONVERSION_SPEC.md` / `_zh` (3.6 topology + copy strategy), `docs/CONFIG_GUIDE.md` / `_zh` (`normal_space`), `README.md` / `docs/README_zh.md`, `tests/README.md`
 ## 2026-10-16
 
 ### Added

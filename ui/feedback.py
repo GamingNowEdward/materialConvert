@@ -48,14 +48,20 @@ def show_warning_banner(message):
         return False
 
 
-def show_result_banner(failed, with_issues, ok_message="Completed"):
+def show_result_banner(failed, with_issues, ok_message="Completed", partial=0):
     """Best-effort result banner driven by batch summary counts.
 
-    Red when anything failed, orange when some converted/built with issues,
-    green otherwise. Returns True on success.
+    Severity order: ``failed`` (red) > ``partial`` (orange, wiring reached only
+    some shading engines) > ``with_issues`` (orange, channel issues) > success
+    (green).  ``partial`` exists because a material that was wired to only some
+    of its shading engines has no channel issue but must never be presented as a
+    plain success.  Returns True on success.
     """
     if failed:
         body = f"<span style='color:red'>Warning:</span> {failed} material(s) failed; see the log"
+    elif partial:
+        body = (f"<span style='color:orange'>Warning:</span> {partial} material(s) "
+                f"converted but only partially wired; see the log")
     elif with_issues:
         body = (f"<span style='color:orange'>Warning:</span> {with_issues} material(s) "
                 f"completed with issues; see the log")

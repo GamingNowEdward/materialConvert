@@ -232,16 +232,26 @@ class ColorspaceTab:
         self._apply_rows(results, "Apply All Matched")
 
     def _apply_rows(self, results, label):
-        outcome = self.matcher.apply_matched(results)
+        # Revalidate right before writing: a cached recommendation can be stale
+        # after a re-path or an OCIO config change.
+        outcome = self.matcher.apply_matched(results, revalidate=True)
         for node, colorspace in outcome["applied"]:
             self._set_colorspace_column(node, colorspace)
 
+        stale = outcome.get("stale", [])
         self.log.info(
             f"{label}: applied {len(outcome['applied'])}, "
-            f"skipped {outcome['skipped']} non-MATCHED row(s), "
+            f"skipped {outcome['skipped']} non-MATCHED/stale row(s), "
             f"failed {len(outcome['failed'])}.",
             source=_SOURCE,
         )
+        if stale:
+            self.log.warn(
+                f"{label}: {len(stale)} recommendation(s) are no longer valid and "
+                f"were not applied; refresh the list and re-check",
+                source=_SOURCE,
+                nodes=tuple(stale),
+            )
 
     def _apply_manual(self):
         cs = self.manual_combo.currentText().strip()

@@ -32,6 +32,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 双击运行 `copy_launch.bat`，启动命令会自动复制到剪贴板，直接在 Maya Script Editor 中粘贴即可。
 
+`main.py` **不依赖 `__file__`**：只有当 `__file__` 指向的目录确实是本项目时才采用它，否则回退到 `sys.path` 中第一个含 `main.py` + `core/__init__.py` 的目录。因此上面两种 `exec(open(...).read())` 写法与 bat 启动器解析到同一个项目根。
+
 **支持版本**: Maya 2024+
 **依赖**: 无（零外部依赖，纯 `maya.cmds` API）
 
@@ -45,6 +47,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 自动识别材质类型，一键全部转换
 - 支持 bump/normal 节点、颜色校正节点、置换节点的连带转换
 - 保留粗糙度语义：源材质以 glossiness 存储的通道（如 V-Ray `reflectionGlossiness`）自动反转
+- 保留法线空间语义：object-space 法线在带空间开关的目标上保持 object，目标不支持时显式上报而不静默降级
+- SG 接线事务化：任一 SG 接线失败会回滚已改写的 SG 并在结果中断言恢复情况
 - 批量转换带进度条，支持单步撤销（Ctrl+Z）
 - 支持 6 种材质类型：`aiStandardSurface` / `aiOpenPBRSurface` / `RedshiftMaterial` / `RedshiftOpenPBRMaterial` / `RedshiftStandardMaterial` / `VRayMtl`
 
@@ -65,7 +69,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 - 选择目录并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）
 - 将贴图分组为材质，并预览将要创建的材质列表（Materials to Build）
-- 已解析通道与未解析文件合并展示在同一个表格，Status 列支持排序
+- 已解析通道、未解析文件**与全部贴图冲突**合并在同一表格展示，Status 列支持排序（`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`）；按字母序保留第一个文件，其余候选全部可见
+- 可选 `Skip Materials With Conflicts` 开关（默认关闭），未解决的通道冲突不会被悄悄按任意文件构建
 - 批量构建全部 / 选中材质到任意支持的渲染器
 - 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp）或简单直连
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
@@ -77,8 +82,8 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 独立 **Colorspace** 标签页——file 节点色彩空间操作的**唯一 UI 入口**（Node Tools 不再提供任何 colorspace UI）
 - **File Node List**：扫描场景全部 `file` 节点为可排序表格（File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic）；Diagnostic 列承载匹配状态（如 `CONFLICT: ...`）并按问题严重度排序而非字母序
 - **Refresh**：对每个 file 节点评估自动匹配，**不修改 scene**
-- **自动匹配** 由两个 driver 驱动：**Name Driver**（文件名关键词来自 `config/texture_channels.json`）与 **Channel Driver**（BFS 追踪全部下游连接，匹配 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词）；最终状态 `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`
-- **Apply Selected** / **Apply All Matched**：仅将 `MATCHED` 结果应用到 `file.colorSpace`（单步 undo chunk）；`CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` 一律不自动应用
+- **自动匹配** 由两个 driver 驱动：**Name Driver**（文件名关键词来自 `config/texture_channels.json`）与 **Channel Driver**（BFS 追踪全部下游连接，匹配 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词）；最终状态 `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`。追踪因深度/节点预算截断时证据不完整，仅有 channel 证据的匹配会降级为 `AMBIGUOUS`（不自动应用）
+- **Apply Selected** / **Apply All Matched**：仅将 `MATCHED` 结果应用到 `file.colorSpace`（单步 undo chunk），应用前逐项重新匹配，已过期的建议计入 `stale` 不写入；`CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` 一律不自动应用
 - **Manual Colorspace Assignment**：从 Maya 实际可用的 input spaces 中选择并只应用到选中行——不修改匹配规则或配置
 - 选中行会同步 Maya 选择到对应 file 节点；工具按钮可对所有 file 节点设置 `ignoreColorSpaceFileRules`
 

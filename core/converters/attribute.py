@@ -4,17 +4,20 @@ from dataclasses import dataclass, field
 
 from core.logger import get_logger
 from core.prerequisites import apply_attr_prerequisites
+from core.results import TransferOutcome
 
 _SOURCE = "AttributeConverter"
 
 
 @dataclass
-class TransferReport:
+class TransferReport(TransferOutcome):
     """Outcome of one ``transfer_all`` pass.
 
     ``critical`` holds failures that make the whole conversion unusable
     (prerequisites, CC chains) and must fail the material; ``issues`` holds
-    non-critical channel failures that leave a partially-built material.
+    non-critical channel failures that leave a partially-built material.  A
+    ``critical`` entry is also mirrored into ``critical`` of the shared
+    :class:`core.results.TransferOutcome` contract.
     """
     issues: list = field(default_factory=list)
     critical: list = field(default_factory=list)
@@ -227,9 +230,12 @@ class AttributeConverter:
                 skipped += 1
                 continue
 
-            if not apply_attr_prerequisites(target_mat, target_config, common_attr, logger=self.log):
+            prereq_outcome = apply_attr_prerequisites(
+                target_mat, target_config, common_attr, logger=self.log)
+            if not prereq_outcome:
                 # the mapping is meaningless without its switch (e.g. V-Ray useRoughness)
-                report.critical.append(f"{common_attr}: prerequisite failed")
+                detail = "; ".join(prereq_outcome.failures) or "unknown cause"
+                report.critical.append(f"{common_attr}: prerequisite failed ({detail})")
                 skipped += 1
                 continue
 
@@ -385,17 +391,22 @@ class AttributeConverter:
             if cc_entry:
                 if report is None:
                     report = TransferReport()
-                cc_ok = bool(self.cc_converter.transfer(cc_entry, target_plug, target_renderer))
-                chain_plug = cc_entry.get("output_plug")
-                if chain_plug and not self.utils.is_cc_node(
-                        chain_plug.split(".")[0], self.config, logger=self.log):
-                    if not self.utils.smart_connect(chain_plug, target_plug, logger=self.log):
-                        cc_ok = False
-                if not cc_ok:
-                    report.critical.append(f"{src_attr_name}: CC conversion failed")
+                cc_outcome = self.cc_converter.transfer(cc_entry, target_plug, target_renderer)
+                # An unsupported (e.g. multi-hop shared) chain is a known limit:
+                # the source network is untouched, so this is not a hard failure
+                # but it must be reported instead of looking like a plain success.
+                report.issues.extend(cc_outcome.unsupported)
+                if not cc_outcome:
+                    report.critical.extend(
+                        cc_outcome.critical or [f"{src_attr_name}: CC conversion failed"])
                     self.log.warn(f"{src_attr_name}: CC chain conversion failed for {target_plug}", source=_SOURCE, nodes=(target_mat,))
                     return False
-                self.log.debug(f"{src_attr_name}: transferred CC chain to {target_plug}", source=_SOURCE, nodes=(target_mat, self.utils.node_name_from_plug(chain_plug)))
+                if cc_outcome.unsupported:
+                    self.log.debug(
+                        f"{src_attr_name}: CC chain left unconverted for {target_plug}",
+                        source=_SOURCE, nodes=(target_mat,))
+                    return True
+                self.log.debug(f"{src_attr_name}: transferred CC chain to {target_plug}", source=_SOURCE, nodes=(target_mat, self.utils.node_name_from_plug(cc_entry.get("output_plug"))))
                 return True
 
             src_conn_plug = connection.get("plug")

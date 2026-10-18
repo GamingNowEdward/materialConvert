@@ -304,6 +304,7 @@ V-Ray 的 base/specular 段（注意属性名的差异与不支持项的处理�
 | `output` | 连向下游材质的输出属性；内嵌模式省略 |
 | `scale` | 强度属性 |
 | `is_normal` / `is_normal_value` | 可选，**必须成对出现**；模式开关属性及 normal 模式下的取值。`is_normal_value` 可为标量或数组（数组表示多个取值均为 normal 模式，写入时取第一个元素）。Maya `bumpInterp`：0=Bump、1=Tangent Space Normals、2=Object Space Normals（normal 段配置 `[1, 2]`）；Redshift `inputType`、V-Ray `bumpMapType`：0=bump / 1=Tangent Space Normal / 2=Object Space Normal（normal 段同样配置 `[1, 2]`） |
+| `normal_space` | 可选 `{空间名: 开关值}` 映射（如 `{"tangent": 1, "object": 2}`）。转换时按**源法线空间**取值；源为 object 空间而目标无法表达时记入结果 `issues`，不静默降级。未声明表示目标只有切线空间（如 Arnold `aiNormalMap` 无空间开关）。声明的值必须属于该段 `is_normal_value` |
 | `file_source` | 贴图节点的输出属性（默认 `outColor`） |
 | `default_scale` | Builder 构建时设置的默认强度 |
 | `path` | 仅 `normal.extra_nodes` 使用：节点**内嵌**贴图路径属性（如旧 `RedshiftNormalMap.tex0`）；非空表示该节点自带路径、无上游连接 |

@@ -22,6 +22,11 @@ class NodeMapping:
         self.path = data.get("path", "")
         self.is_normal = data.get("is_normal", "")
         self.is_normal_value = data.get("is_normal_value", None)
+        #: Optional ``{space: switch_value}`` map making the space of a normal
+        #: explicit (Maya/Redshift/V-Ray encode tangent vs object space on the
+        #: same switch attribute).  Renderers without a space switch omit it,
+        #: which means "tangent only".
+        self.normal_space = data.get("normal_space", {}) or {}
         self.file_source = data.get("file_source", "outColor")
         self.default_scale = data.get("default_scale", None)
 
@@ -44,6 +49,24 @@ class NodeMapping:
         if isinstance(value, (list, tuple)):
             return value[0] if value else None
         return value
+
+    @property
+    def supported_spaces(self):
+        """Space names this mapping can switch to (empty = no space switch)."""
+        return set(self.normal_space)
+
+    def space_for_value(self, actual):
+        """Reverse lookup: which space does an observed switch value mean."""
+        for space, value in self.normal_space.items():
+            if value == actual:
+                return space
+        return None
+
+    def mode_value_for_space(self, space):
+        """Switch value to write for *space*, or None when unsupported."""
+        if not space or not self.normal_space:
+            return None
+        return self.normal_space.get(space)
 
 
 class BumpNormalConfig:
@@ -98,9 +121,10 @@ class ColorCorrectionConfig:
 
 
 class MaterialConfig:
-    def __init__(self, data, filename):
+    def __init__(self, data, filename, logger=None):
         mat_data = data.get("material", {})
         self.filename = filename
+        self.log = logger or get_logger()
         self.node_type = mat_data.get("node_type", "")
         self.short_name = mat_data.get("short_name", "")
         self.uiPanel_display_name = mat_data.get("uiPanel_display_name", self.node_type)
@@ -123,6 +147,13 @@ class MaterialConfig:
 
         for section_name, section_data in data.items():
             if section_name in ("material",):
+                continue
+            if not isinstance(section_data, dict):
+                self.log.error(
+                    f"MaterialConfig[{filename}]: section '{section_name}' is not an "
+                    f"object of attribute mappings; ignored",
+                    source="ConfigLoader",
+                )
                 continue
 
             section_prereqs = {}
@@ -167,6 +198,7 @@ class ConfigLoader:
     _CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
 
     def __init__(self):
+        self.log = get_logger()
         self._material_configs = {}
         self._common_attrs = {}
         self._bump_normal_configs = {}
@@ -202,12 +234,28 @@ class ConfigLoader:
 
     def _load_materials(self):
         mat_dir = os.path.join(self._CONFIG_DIR, "material")
-        for fname in os.listdir(mat_dir):
+        try:
+            filenames = sorted(os.listdir(mat_dir))
+        except Exception as exc:
+            self.log.error(f"ConfigLoader: failed to list {mat_dir}: {exc}",
+                           source="ConfigLoader")
+            raise
+        for fname in filenames:
             if fname == "common.json" or not fname.endswith(".json"):
                 continue
             path = os.path.join(mat_dir, fname)
             raw = self._read_json(path)
-            config = MaterialConfig(raw, fname)
+            config = MaterialConfig(raw, fname, logger=self.log)
+            existing = self._material_configs.get(config.node_type)
+            if existing is not None:
+                # Deterministic: the first definition (sorted file order) wins,
+                # so a duplicate can never silently replace a renderer mapping.
+                self.log.error(
+                    f"ConfigLoader: duplicate node_type '{config.node_type}' in "
+                    f"{fname}; keeping the definition from {existing.filename}",
+                    source="ConfigLoader",
+                )
+                continue
             self._material_configs[config.node_type] = config
 
     def _load_bump_normal(self):

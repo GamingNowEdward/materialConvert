@@ -350,3 +350,30 @@ def test_bn_extra_nodes_missing_node_type(tmp_path, monkeypatch):
     assert extras[0].node_type == ""
     # an empty node_type must not leak into the discovery set
     assert "" not in loader.get_all_bn_types()
+
+def test_normal_space_mapping_round_trips():
+    """B05：normal_space 提供空间 -> 开关值的显式映射（配置驱动）。"""
+    from core.config_loader import ConfigLoader
+
+    loader = ConfigLoader()
+    maya_normal = loader.get_bump_normal_config("maya").normal
+    assert maya_normal.supported_spaces == {"tangent", "object"}
+    assert maya_normal.mode_value_for_space("tangent") == 1
+    assert maya_normal.mode_value_for_space("object") == 2
+    assert maya_normal.space_for_value(2) == "object"
+    assert maya_normal.space_for_value(0) is None
+    assert maya_normal.mode_value_for_space(None) is None
+
+    for renderer in ("redshift", "vray"):
+        mapping = loader.get_bump_normal_config(renderer).normal
+        assert mapping.mode_value_for_space("object") == 2
+
+
+def test_normal_space_absent_means_tangent_only():
+    from core.config_loader import ConfigLoader
+
+    arnold_normal = ConfigLoader().get_bump_normal_config("arnold").normal
+    assert arnold_normal.supported_spaces == set()
+    assert arnold_normal.mode_value_for_space("object") is None
+    # an unknown space must never be silently written
+    assert arnold_normal.mode_value_for_space("tangent") is None

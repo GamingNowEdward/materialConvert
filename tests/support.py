@@ -80,6 +80,30 @@ def ensure_plugins(names=PLUGINS):
 PLUGIN_STATUS = ensure_plugins()
 
 
+def describe_environment():
+    """One-line Maya / plugin / OCIO summary for test logs.
+
+    A suite that passed *with skips* must be distinguishable from one that
+    exercised every installed renderer, so the run announces what it loaded.
+    """
+    if cmds is None:
+        return "pure-python run (maya.cmds unavailable)"
+    try:
+        maya_version = cmds.about(version=True)
+    except Exception as exc:
+        maya_version = "unknown (%r)" % (exc,)
+    try:
+        ocio = cmds.colorManagementPrefs(query=True, configFilePath=True) or ""
+    except Exception as exc:
+        ocio = "unavailable (%r)" % (exc,)
+    plugins = ", ".join(
+        "%s=%s" % (name, "loaded" if PLUGIN_STATUS.get(name) else "missing")
+        for name in PLUGINS
+    )
+    return "maya=%s python=%s ocio=%s plugins[%s]" % (
+        maya_version, sys.version.split()[0], ocio, plugins)
+
+
 def is_plugin_loaded(name):
     return bool(PLUGIN_STATUS.get(name))
 

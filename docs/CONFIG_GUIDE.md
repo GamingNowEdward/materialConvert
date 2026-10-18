@@ -304,6 +304,7 @@ Each renderer's `bump` / `normal` sections share one **unified field schema** (o
 | `output` | Output attribute connecting downstream to the material; omitted in embedded mode |
 | `scale` | Strength attribute |
 | `is_normal` / `is_normal_value` | Optional, **must appear as a pair**; mode-switch attribute and its value(s) in normal mode. `is_normal_value` may be a scalar or an array (an array means every listed value is a normal mode; the first element is written when enabling the mode). Maya `bumpInterp`: 0=Bump, 1=Tangent Space Normals, 2=Object Space Normals (normal section uses `[1, 2]`); Redshift `inputType`, V-Ray `bumpMapType`: 0=bump / 1=Tangent Space Normal / 2=Object Space Normal (normal section also uses `[1, 2]`) |
+| `normal_space` | Optional `{space: switch_value}` map (e.g. `{"tangent": 1, "object": 2}`). The converter writes the value matching the **source** normal space; a source object-space map on a target that cannot express it is reported in the result `issues` instead of being silently downgraded. Omitted = tangent-only target (e.g. Arnold `aiNormalMap` has no space switch). Declared values must belong to this section's `is_normal_value` |
 | `file_source` | Texture node output attribute (default `outColor`) |
 | `default_scale` | Default strength applied by the Builder |
 | `path` | Only used by `normal.extra_nodes`: the node's **embedded** texture-path attribute (e.g. legacy `RedshiftNormalMap.tex0`). Non-empty means the node carries its own path and has no upstream connection |

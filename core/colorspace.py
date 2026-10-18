@@ -18,6 +18,7 @@ import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader, normalize_keyword
 from core.logger import get_logger
+from core.texture_scanner import find_alias, normalize_stem
 
 _SOURCE = "ColorSpaceCore"
 
@@ -37,10 +38,45 @@ class MatchState(Enum):
 
 
 @dataclass
+class TraceResult:
+    """Outcome of a downstream channel trace.
+
+    ``complete`` False means the search hit its depth or node budget and the
+    target set may be partial: "no conflicting channel found" must never be
+    presented as "there is no conflicting channel".
+    """
+
+    targets: list = field(default_factory=list)
+    complete: bool = True
+    truncated: bool = False
+    depth_limited: bool = False
+    errors: list = field(default_factory=list)
+
+    def __iter__(self):
+        return iter(self.targets)
+
+    def __len__(self):
+        return len(self.targets)
+
+    def __contains__(self, item):
+        return item in self.targets
+
+    def __eq__(self, other):
+        # Keep list-style comparisons readable in tests and callers.
+        if isinstance(other, (list, tuple)):
+            return self.targets == list(other)
+        return NotImplemented
+
+    def __bool__(self):
+        return bool(self.targets)
+
+
+@dataclass
 class NameDriverResult:
     status: DriverStatus = DriverStatus.NO_MATCH
     roles: list = field(default_factory=list)
     reason: str = ""
+    evidence_complete: bool = True
 
 
 @dataclass
@@ -48,6 +84,10 @@ class ChannelDriverResult:
     status: DriverStatus = DriverStatus.NO_MATCH
     roles: list = field(default_factory=list)
     reason: str = ""
+    evidence_complete: bool = True
+    truncated: bool = False
+    depth_limited: bool = False
+    errors: list = field(default_factory=list)
 
 
 @dataclass
@@ -60,6 +100,8 @@ class MatchResult:
     prematch_colorspace: str
     state: MatchState
     diagnostic: str
+    evidence_complete: bool = True
+    stale: bool = False
 
 
 def _result_from_roles(roles, no_match_reason, ambiguous_reason):
@@ -85,15 +127,20 @@ class NameDriver:
     def match(self, file_path):
         """Match a file path to one or more colorspace roles from its basename."""
         if not file_path:
-            return NameDriverResult(DriverStatus.NO_MATCH, [], "file path is empty")
-        filename = os.path.basename(file_path).lower().replace("_", "").replace("-", "")
+            return NameDriverResult(DriverStatus.NO_MATCH, [], "file path is empty",
+                                    evidence_complete=False)
+        filename = os.path.basename(file_path)
         if not filename:
-            return NameDriverResult(DriverStatus.NO_MATCH, [], "no filename")
+            return NameDriverResult(DriverStatus.NO_MATCH, [], "no filename",
+                                    evidence_complete=False)
 
+        # Same token/underscore-aware matching as the Batch Builder scanner, so
+        # short keywords never match inside unrelated words.
+        normalized = normalize_stem(filename)
         roles = []
         for role, keywords in self._filename_role_keywords.items():
             for kw in keywords:
-                if kw in filename:
+                if find_alias(normalized, kw):
                     roles.append(role)
                     break
 
@@ -163,9 +210,13 @@ class ChannelDriver:
         return result
 
     def trace_channel_targets(self, file_node, max_depth=_DEFAULT_MAX_DEPTH):
-        """BFS trace all output endpoints of a file node, returning the list of
-        attribute names on hit materials.
+        """BFS trace all output endpoints of a file node.
+
+        Returns a :class:`TraceResult` whose ``complete`` flag records whether the
+        search was exhaustive; truncated evidence must not be treated as proof
+        that no conflicting channel exists.
         """
+        trace = TraceResult()
         targets = []
         material_targets = set()
         visited = {file_node}
@@ -176,12 +227,27 @@ class ChannelDriver:
         while queue:
             node, depth = queue.popleft()
             if depth >= max_depth:
+                # Only mark the trace incomplete when there really is more to
+                # explore beyond the depth limit.
+                try:
+                    probe = cmds.listConnections(
+                        node, plugs=True, source=False, destination=True) or []
+                except Exception as exc:
+                    trace.errors.append(f"failed to probe downstream of {node}: {exc}")
+                    trace.complete = False
+                    continue
+                if any(dest.split(".", 1)[0] not in self._TRACE_SKIP_NODES
+                       for dest in probe if "." in dest):
+                    trace.depth_limited = True
+                    trace.complete = False
                 continue
             try:
                 destinations = cmds.listConnections(
                     node, plugs=True, source=False, destination=True
                 ) or []
             except Exception as exc:
+                trace.errors.append(f"failed to trace downstream from {node}: {exc}")
+                trace.complete = False
                 self.log.warn(f"Failed to trace downstream from {node}: {exc}", source=_SOURCE)
                 continue
 
@@ -212,6 +278,8 @@ class ChannelDriver:
                 queue.append((dnode, depth + 1))
 
             if budget_exceeded:
+                trace.truncated = True
+                trace.complete = False
                 self.log.warn(
                     f"Channel trace budget exceeded for {file_node} "
                     f"({self._TRACE_NODE_BUDGET} nodes); using partial targets",
@@ -219,14 +287,16 @@ class ChannelDriver:
                 )
                 break
 
-        return targets
+        trace.targets = targets
+        return trace
 
     def match(self, file_node):
         """Match a file node to colorspace roles from its downstream material
         channel attributes. Multiple conflicting channel roles -> AMBIGUOUS.
         """
+        trace = self.trace_channel_targets(file_node)
         roles = []
-        for attr_name in self.trace_channel_targets(file_node):
+        for attr_name in trace.targets:
             n_attr = normalize_keyword(attr_name)
             for role, keywords in self.expanded_keywords.items():
                 if n_attr in keywords:
@@ -238,7 +308,15 @@ class ChannelDriver:
             "no material channel matched",
             f"conflicting channels resolved to multiple roles: {', '.join(roles)}",
         )
-        return ChannelDriverResult(status, roles, reason)
+        return ChannelDriverResult(
+            status=status,
+            roles=roles,
+            reason=reason,
+            evidence_complete=trace.complete,
+            truncated=trace.truncated,
+            depth_limited=trace.depth_limited,
+            errors=list(trace.errors),
+        )
 
 
 class ColorSpaceResolver:
@@ -302,20 +380,39 @@ class ColorSpaceMatcher:
         self.reset()
         return [self.match(node) for node in file_nodes]
 
-    def apply_matched(self, results):
+    def apply_matched(self, results, revalidate=False):
         """Apply prematch colorspaces for MATCHED ``MatchResult`` entries only.
 
         Accepts the ``MatchResult`` objects returned by :meth:`scan`; every
-        non-MATCHED result is counted as skipped and never applied.
+        non-MATCHED result is counted as skipped and never applied.  With
+        ``revalidate=True`` each candidate is re-evaluated against the live scene
+        right before applying, so a stale scan (re-path, OCIO change) can never
+        silently write an outdated colorspace.
         """
         assignments = []
         skip_count = 0
+        stale = []
         for result in results:
-            if result.state == MatchState.MATCHED:
-                assignments.append((result.file_node, result.prematch_colorspace))
-            else:
+            if result.state != MatchState.MATCHED:
                 skip_count += 1
-        return self._set_colorspaces(assignments, skip_count=skip_count)
+                continue
+            if revalidate:
+                fresh = self.match(result.file_node)
+                if (fresh.state != MatchState.MATCHED
+                        or fresh.prematch_colorspace != result.prematch_colorspace):
+                    stale.append(result.file_node)
+                    skip_count += 1
+                    self.log.warn(
+                        f"Colorspace recommendation for {result.file_node} is stale "
+                        f"({result.prematch_colorspace!r} -> "
+                        f"{fresh.prematch_colorspace!r}); not applied",
+                        source=_SOURCE,
+                    )
+                    continue
+            assignments.append((result.file_node, result.prematch_colorspace))
+        outcome = self._set_colorspaces(assignments, skip_count=skip_count)
+        outcome["stale"] = stale
+        return outcome
 
     def set_colorspace(self, nodes, colorspace):
         return self._set_colorspaces([(node, colorspace) for node in nodes])
@@ -388,8 +485,10 @@ class ColorSpaceMatcher:
         channel_res = self.channel_driver.match(file_node)
 
         state, prematch, diagnostic = self._combine(name_res, channel_res)
+        evidence_complete = name_res.evidence_complete and channel_res.evidence_complete
         if errors:
             diagnostic = "; ".join(errors) + (f" | {diagnostic}" if diagnostic else "")
+            evidence_complete = False
 
         return MatchResult(
             file_node=file_node,
@@ -400,6 +499,7 @@ class ColorSpaceMatcher:
             prematch_colorspace=prematch,
             state=state,
             diagnostic=diagnostic,
+            evidence_complete=evidence_complete,
         )
 
     def _read_file_path(self, file_node, errors):
@@ -441,9 +541,25 @@ class ColorSpaceMatcher:
         elif name_res.status == DriverStatus.MATCH:
             role = name_res.roles[0]
         elif channel_res.status == DriverStatus.MATCH:
+            if not channel_res.evidence_complete:
+                # A partial trace can only prove what it saw, not that nothing
+                # else exists: do not auto-apply on that basis.
+                detail = self._incomplete_reason(channel_res)
+                return (
+                    MatchState.AMBIGUOUS,
+                    "",
+                    f"channel match '{channel_res.roles[0]}' rests on incomplete "
+                    f"evidence ({detail}); manual confirmation required",
+                )
             role = channel_res.roles[0]
         else:
-            return MatchState.UNMATCHED, "", "no match from filename or channel"
+            diagnostic = "no match from filename or channel"
+            if not channel_res.evidence_complete:
+                diagnostic += (
+                    f" (channel trace incomplete: {self._incomplete_reason(channel_res)}; "
+                    f"result is not exhaustive)"
+                )
+            return MatchState.UNMATCHED, "", diagnostic
 
         prematch = self.resolver.resolve(role)
         if prematch is None:
@@ -453,6 +569,18 @@ class ColorSpaceMatcher:
                 f"role '{role}' could not be resolved to an available Maya colorspace",
             )
         return MatchState.MATCHED, prematch, f"matched role '{role}'"
+
+    @staticmethod
+    def _incomplete_reason(result):
+        parts = []
+        if getattr(result, "truncated", False):
+            parts.append("node budget exceeded")
+        if getattr(result, "depth_limited", False):
+            parts.append("depth limit reached")
+        errors = getattr(result, "errors", None) or []
+        if errors:
+            parts.append(f"{len(errors)} read error(s)")
+        return ", ".join(parts) or "incomplete trace"
 
     @staticmethod
     def _driver_line(result):

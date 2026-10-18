@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import maya.cmds as _cmds
 
+from core import config_schema
 from core.config_loader import ConfigLoader
 from core.logger import get_logger, LogLevel as Level
 
@@ -124,6 +125,7 @@ class ConfigValidator:
 
     def validate_all(self):
         self._reset()
+        self._validate_structure()
         try:
             self.validate_materials()
             self.validate_bump_normal()
@@ -149,6 +151,20 @@ class ConfigValidator:
             source="ConfigValidator",
         )
         return list(self._results), summary
+
+    def _validate_structure(self):
+        """Offline JSON structure/semantic checks, before any Maya node exists.
+
+        Reports wrong field types, missing required fields, duplicate node types,
+        dangling cross references and invalid ``normal_space`` values with their
+        filename and field path.
+        """
+        for issue in config_schema.run_all():
+            level = Level.ERROR if issue.level == "ERROR" else Level.WARN
+            detail = issue.message
+            if issue.field_path:
+                detail = f"{issue.field_path}: {detail}"
+            self._add(level, f"config/{issue.filename}", detail)
 
     def validate_materials(self):
         for node_type in sorted(self.loader.get_all_material_configs()):

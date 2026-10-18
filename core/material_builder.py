@@ -75,7 +75,17 @@ class MaterialBuilder:
         self.ctx.connect(m_node, "outColor", sg_node, "surfaceShader")
         self.log.debug(f"Created shading engine {sg_node}", source=_SOURCE, nodes=(sg_node,))
 
-        self._apply_material_prereqs(m_node, mat_config)
+        prereq_outcome = self._apply_material_prereqs(m_node, mat_config)
+        if not prereq_outcome.ok:
+            # A missing prerequisite invalidates the mapped attributes it gates
+            # (e.g. a roughness mode switch): abort this material instead of
+            # producing a network with wrong numeric semantics.
+            raise RuntimeError(
+                "prerequisites failed for %s: %s" % (
+                    m_node,
+                    "; ".join(prereq_outcome.failures) or "unknown cause",
+                )
+            )
 
         p2d = self.ctx.create_node('place2dTexture', 'p2d', base_name)
 
@@ -158,7 +168,21 @@ class MaterialBuilder:
         return actual
 
     def _apply_material_prereqs(self, m_node, mat_config):
-        apply_prerequisites(m_node, mat_config, logger=self.log)
+        """Apply prerequisites and record failures for the result model.
+
+        The caller aborts the build on failure; recording the concrete items
+        first is what lets ``BuildResult.failures`` explain *what* is missing.
+        """
+        outcome = apply_prerequisites(m_node, mat_config, logger=self.log)
+        if not outcome.ok:
+            self.last_build_issues.extend(
+                outcome.failures or [f"{m_node}: prerequisites failed"])
+            self.log.error(
+                f"Prerequisite failure(s) on {m_node}: "
+                f"{'; '.join(outcome.failures) or 'unknown cause'}",
+                source=_SOURCE, nodes=(m_node,),
+            )
+        return outcome
 
     def _connect_color_channel(self, m_node, renderer, base_name, name_key, common_attr,
                                attr_name, tex,
@@ -258,7 +282,9 @@ class MaterialBuilder:
             if mapping.scale and mapping.default_scale is not None:
                 if cmds.attributeQuery(mapping.scale, node=m_node, exists=True):
                     cmds.setAttr(f"{m_node}.{mapping.scale}", mapping.default_scale)
-            mode_val = mapping.effective_mode_value()
+            mode_val = mapping.mode_value_for_space("tangent")
+            if mode_val is None:
+                mode_val = mapping.effective_mode_value()
             if mapping.is_normal and mode_val is not None \
                     and cmds.attributeQuery(mapping.is_normal, node=m_node, exists=True):
                 cmds.setAttr(f"{m_node}.{mapping.is_normal}", mode_val)
@@ -272,7 +298,10 @@ class MaterialBuilder:
         bn_node = self.ctx.create_node(mapping.node_type, nb_key, base_name)
         if mapping.scale and mapping.default_scale is not None:
             cmds.setAttr(f"{bn_node}.{mapping.scale}", mapping.default_scale)
-        mode_val = mapping.effective_mode_value()
+        # The Builder has no space switch; built normal maps are tangent space.
+        mode_val = mapping.mode_value_for_space("tangent")
+        if mode_val is None:
+            mode_val = mapping.effective_mode_value()
         if mapping.is_normal and mode_val is not None:
             cmds.setAttr(f"{bn_node}.{mapping.is_normal}", mode_val)
         if mapping.input:

@@ -8,6 +8,7 @@ from core.results import summarize_results
 import core.node_utils as node_utils
 from ui.widgets import populate_material_targets
 from ui.feedback import show_result_banner
+from ui.operation_state import OperationGuard
 
 _SOURCE = "ConverterTab"
 
@@ -23,6 +24,16 @@ class ConverterTab:
         self.mat_list = None
         self.target_combo = None
         self.progress_bar = None
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -81,6 +92,7 @@ class ConverterTab:
         btn_row.addStretch()
         btn_row.addWidget(convert_btn)
         conv_layout.addLayout(btn_row)
+        self._busy_widgets = [convert_btn, refresh_btn, self.target_combo]
 
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setVisible(False)
@@ -157,54 +169,70 @@ class ConverterTab:
             self.log.error("Execution halted: Target format undefined.", source=_SOURCE)
             return
 
-        total = len(self.current_materials)
-        self.progress_bar.setMaximum(total)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
-        QtWidgets.QApplication.processEvents()
+        # Snapshot the inputs so a mid-run selection change cannot alter the batch.
+        materials = list(self.current_materials)
+        total = len(materials)
+        if not self.guard.try_begin():
+            return
+        try:
+            self.progress_bar.setMaximum(total)
+            self.progress_bar.setValue(0)
+            self.progress_bar.setVisible(True)
+            QtWidgets.QApplication.processEvents()
 
-        def _on_progress(done, total_count, result):
-            # Throttle repaints: roughly every 5 materials and always the last one.
-            if done == total_count or done % 5 == 0:
-                self.progress_bar.setValue(done)
-                QtWidgets.QApplication.processEvents()
+            def _on_progress(done, total_count, result):
+                # Throttle repaints: roughly every 5 materials and always the last one.
+                if done == total_count or done % 5 == 0:
+                    try:
+                        self.progress_bar.setValue(done)
+                        QtWidgets.QApplication.processEvents()
+                    except RuntimeError as exc:
+                        # The window was closed while the batch was running.
+                        self.log.debug(f"Progress UI unavailable: {exc}", source=_SOURCE)
 
-        results = self.converter_obj.convert_all(
-            self.current_materials, target_node_type, on_progress=_on_progress
-        )
+            results = self.converter_obj.convert_all(
+                materials, target_node_type, on_progress=_on_progress
+            )
 
-        self.progress_bar.setValue(total)
-        self.progress_bar.setVisible(False)
+            self.progress_bar.setValue(total)
+            self.progress_bar.setVisible(False)
 
-        new_mats = [r.new_material for r in results if r.converted and r.new_material]
-        if new_mats:
+            new_mats = [r.new_material for r in results if r.converted and r.new_material]
+            if new_mats:
+                try:
+                    cmds.select(new_mats)
+                except Exception as exc:
+                    self.log.warn(f"Failed to select converted materials: {exc}", source=_SOURCE)
+
+            summary = summarize_results(results)
+            issue_results = [r for r in results if r.has_issues]
+            if issue_results:
+                self.log.warn(
+                    f"{summary['with_issues']} material(s) converted with channel issue(s); "
+                    f"see the log for details",
+                    source=_SOURCE,
+                    nodes=tuple(r.new_material or r.material for r in issue_results),
+                )
+            failed_results = [
+                r for r in results
+                if not r.skipped and (r.unwired or not (r.created and r.converted))
+            ]
+            if failed_results:
+                self.log.error(
+                    f"{summary['failed']} material(s) failed to convert; see the log for details",
+                    source=_SOURCE,
+                    nodes=tuple(r.new_material or r.material for r in failed_results),
+                )
+            show_result_banner(
+                summary["failed"], summary["with_issues"],
+                ok_message=f"{summary['converted']} material(s) converted",
+                partial=summary["partial_wired"],
+            )
+
+            self.refresh_materials()
+        finally:
+            self.guard.end()
             try:
-                cmds.select(new_mats)
-            except Exception as exc:
-                self.log.warn(f"Failed to select converted materials: {exc}", source=_SOURCE)
-
-        summary = summarize_results(results)
-        issue_results = [r for r in results if r.has_issues]
-        if issue_results:
-            self.log.warn(
-                f"{summary['with_issues']} material(s) converted with channel issue(s); "
-                f"see the log for details",
-                source=_SOURCE,
-                nodes=tuple(r.new_material or r.material for r in issue_results),
-            )
-        failed_results = [
-            r for r in results
-            if not r.skipped and (r.unwired or not (r.created and r.converted))
-        ]
-        if failed_results:
-            self.log.error(
-                f"{summary['failed']} material(s) failed to convert; see the log for details",
-                source=_SOURCE,
-                nodes=tuple(r.new_material or r.material for r in failed_results),
-            )
-        show_result_banner(
-            summary["failed"], summary["with_issues"],
-            ok_message=f"{summary['converted']} material(s) converted",
-        )
-
-        self.refresh_materials()
+                self.progress_bar.setVisible(False)
+            except RuntimeError as exc:
+                self.log.debug(f"Progress bar already destroyed: {exc}", source=_SOURCE)

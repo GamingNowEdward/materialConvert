@@ -14,3 +14,12 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _TESTS = os.path.dirname(_HERE)
 if _TESTS not in sys.path:
     sys.path.insert(0, _TESTS)
+
+# Announce the environment once per run: a suite that "passed with skips" must be
+# distinguishable from one that actually exercised every renderer.
+try:
+    import support
+
+    print("[mayapy] " + support.describe_environment())
+except Exception as exc:  # pragma: no cover - diagnostics only
+    print("[mayapy] environment probe failed: %r" % (exc,))

@@ -45,3 +45,26 @@ class SceneRoundTripLive(support.MayaTestCase):
         from core.converter import MaterialConverter
         result = MaterialConverter(config=self.loader).convert(mat, "VRayMtl")
         self.assertTrue(result.converted, result.reason)
+
+        # Verify the persisted result, not just that "some node exists": the
+        # target material must keep its own full chain after a save/reopen.
+        target = result.new_material
+        vray = self.loader.get_material_config("VRayMtl")
+        for common_attr in ("baseColor", "specularRoughness"):
+            plug = "%s.%s" % (target, vray.get_maya_attr(common_attr))
+            self.assertIsNotNone(support.upstream_plug(plug),
+                                 "%s must stay connected" % common_attr)
+
+        done_path = os.path.join(self.temp_dir(), "roundtrip_done.ma")
+        cmds.file(rename=done_path)
+        cmds.file(save=True, type="mayaAscii")
+        cmds.file(new=True, force=True)
+        cmds.file(done_path, open=True, force=True)
+
+        self.assertTrue(cmds.objExists(target))
+        sgs = cmds.listConnections("%s.outColor" % target, type="shadingEngine") or []
+        self.assertTrue(sgs, "target material must stay wired to its shading engine")
+        for common_attr in ("baseColor", "specularRoughness"):
+            plug = "%s.%s" % (target, vray.get_maya_attr(common_attr))
+            self.assertIsNotNone(support.upstream_plug(plug),
+                                 "%s must survive save/reopen" % common_attr)

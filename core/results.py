@@ -22,6 +22,29 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class TransferOutcome:
+    """Outcome of one channel converter (CC / bump-normal / displacement / attrs).
+
+    ``ok`` False means the material cannot be considered converted (a critical
+    step failed).  ``issues`` holds non-critical degradation the user must see
+    (rendered as ``with_issues``), ``unsupported`` holds well-understood limits
+    of the current conversion (e.g. a shared multi-hop CC chain, an object-space
+    normal on a target without a space switch) which never silently pass.
+
+    ``bool(outcome)`` mirrors ``ok`` so existing ``if not converter.convert(...)``
+    call sites keep working.
+    """
+
+    ok: bool = True
+    issues: list = field(default_factory=list)
+    critical: list = field(default_factory=list)
+    unsupported: list = field(default_factory=list)
+
+    def __bool__(self):
+        return bool(self.ok)
+
+
+@dataclass
 class ConversionResult:
     material: str
     new_material: str = None
@@ -32,6 +55,10 @@ class ConversionResult:
     wired: int = 0
     total_sgs: int = 0
     issues: list = field(default_factory=list)
+    #: Per-shading-engine commit failures: ``{"sg": str, "reason": str}``.
+    sg_failures: list = field(default_factory=list)
+    #: True when a failed SG commit restored the pre-conversion wiring.
+    restored: bool = False
 
     @property
     def unwired(self):
@@ -93,6 +120,8 @@ class BuildResult:
     built: bool = False
     reason: str = ""
     issues: list = field(default_factory=list)
+    #: Concrete critical failures (e.g. prerequisite items) behind ``reason``.
+    failures: list = field(default_factory=list)
 
     @property
     def has_issues(self):

@@ -31,12 +31,36 @@ def test_scan_groups_and_detects_conflicts(scan_dir):
     assert "baseColor" in result["materials"][0]["channels"]
     assert len(result["unparsed"]) == 1
     assert len(result["conflicts"]) == 1
+    assert result["conflict_materials"] == [result["materials"][0]["name"]]
+
+
+def test_conflict_records_every_candidate(scan_dir):
+    """回归保护（B07）：冲突必须保留全部候选与保留项，不只记一条日志。"""
+    (scan_dir / "rock_Roughness.png").write_text("", encoding="utf-8")
+    (scan_dir / "rock_Glossiness.png").write_text("", encoding="utf-8")
+    (scan_dir / "rock_Gloss.png").write_text("", encoding="utf-8")
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["conflicts"]) == 1
+    conflict = result["conflicts"][0]
+    assert conflict["common_attr"] == "specularRoughness"
+    assert conflict["kept"] == conflict["existing"]
+    assert conflict["kept"] in conflict["candidates"]
+    assert len(conflict["candidates"]) == 3
+    assert len(conflict["dropped"]) == 2
+    assert all(path not in conflict["dropped"] for path in [conflict["kept"]])
+    # the kept file wins deterministically (sorted directory listing)
+    kept = result["materials"][0]["channels"]["specularRoughness"]["path"]
+    assert kept == conflict["kept"]
 
 
 def test_scan_invalid_directory():
     scanner = TextureScanner()
     result = scanner.scan("Z:/does/not/exist")
-    assert result == {"materials": [], "unparsed": [], "conflicts": []}
+    assert result == {
+        "materials": [], "unparsed": [], "conflicts": [], "conflict_materials": [],
+    }
 
 
 def test_find_alias_short_only_token_match():
