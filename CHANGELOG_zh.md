@@ -24,18 +24,18 @@
 - **统一通道结果**：`core/results.py` 新增 `TransferOutcome`（`ok`/`issues`/`critical`/`unsupported`），`TransferReport` 继承它；`ConversionResult` 新增 `sg_failures`/`restored`，`BuildResult` 新增 `failures`
 - **离线配置结构校验**：新增 `core/config_schema.py`（纯 Python）校验必需字段/类型、重复 `node_type`、段结构、`prerequisites`/`invert`、`is_normal`/`is_normal_value` 成对、`normal_space` 值域、`extra_nodes`、跨配置引用与 `builder_naming` 数组长度；`ConfigValidator.validate_all()` 先跑离线校验再进 Maya；`ConfigLoader` 按文件名排序加载、重复 `node_type` 保留首个并记 ERROR，`MaterialConfig` 对非对象段记 ERROR 后跳过
 - **批次级场景索引**：`BumpConverter.reset_index()` 管理 `file` / bump-normal 节点索引（生命周期 = 一次批次或一次独立转换，由 `MaterialConverter._in_batch` 控制），`_find_bn_node` / `_find_existing_embedded_file` 不再反复全场景 `cmds.ls()`；`TextureScanner` 初始化时预编译并排序 alias 表
-- **测试矩阵**：CI 增加 `windows-latest`（ubuntu + windows / Python 3.11 / PySide6），依赖改用 `requirements-dev.txt`；mayapy 套件启动打印 `support.describe_environment()`；新增 `tests/mayapy/test_perf_baseline.py` 记录 cmds 调用次数与耗时
+- **测试矩阵**：CI 保持 Ubuntu + Python 3.11 + PySide6（单平台，不做多平台矩阵），依赖改用 `requirements-dev.txt`；mayapy 套件启动打印 `support.describe_environment()`；新增 `tests/mayapy/test_perf_baseline.py` 记录 cmds 调用次数与耗时
 
 ### 测试
 - 纯套件新增：`test_displacement_converter.py`（置换 6 类失败）、`test_bump_legacy.py`（P2D 关键失败与复用判定矩阵）、`test_bump_converter.py`（object/tangent 空间传递）、`test_cc_topology.py`（direct/single_hop/unsupported）、`test_busy_guard.py`、`test_config_schema.py`（含损坏配置）、`test_main_entry.py`（4 种启动场景）；`test_converter.py` 新增提交/回滚、`test_conversion_results.py`/`test_feedback.py`/`test_material_builder.py`/`test_batch_builder.py`/`test_colorspace.py`/`test_texture_scanner.py`/`test_config_loader.py` 扩充对应断言。纯套件 **285 passed**
 - mayapy 新增/扩展：置换失败注入、Legacy P2D 失败/修补/手工同名、法线空间保留与 Arnold 上报、共享 layeredTexture 复制、多级链上报、场景保存重开后的接线断言、性能基线。mayapy 套件 **88 passed, 3 skipped**（Maya 2024 + mtoa/redshift4maya/vrayformaya/lookdevKit）
 
 ### 文档
-- `docs/AGENTS.md`：启动契约、CC 拓扑分流、事务提交、结果模型语义、法线空间 schema、颜色空间证据完整性、离线配置校验、操作状态、性能缓存生命周期、Windows CI
+- `docs/AGENTS.md`：启动契约、CC 拓扑分流、事务提交、结果模型语义、法线空间 schema、颜色空间证据完整性、离线配置校验、操作状态、性能缓存生命周期、CI 运行方式
 - `docs/CONVERSION_SPEC.md` / `_zh`：3.6 连接链保留改写为 direct/single_hop/unsupported 三态与复制策略
 - `docs/CONFIG_GUIDE.md` / `_zh`：`bumpNormal.json` schema 新增 `normal_space` 行
 - `README.md` / `docs/README_zh.md`：启动说明、法线空间与事务提交、Batch Builder 冲突列与跳过开关、Colorspace 证据完整性/复核
-- `tests/README.md`：CI 双平台、环境行、新增测试文件、手动 UI 验证清单
+- `tests/README.md`：CI 运行平台、环境行、新增测试文件、手动 UI 验证清单
 
 ## 2026-10-16
 

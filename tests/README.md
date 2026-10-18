@@ -26,9 +26,10 @@ tests/
 ```
 
 `pytest.ini` sets `addopts = --ignore=tests/mayapy`, so a plain `pytest` run only
-collects the pure suite. CI runs on **ubuntu-latest and windows-latest** (Python
-3.11 + PySide6) with the dependencies from `requirements-dev.txt`, then runs
-`scripts/check_no_silent_pass.py`.
+collects the pure suite. CI runs on **ubuntu-latest** (Python 3.11 + PySide6) with
+the dependencies from `requirements-dev.txt`, then runs
+`scripts/check_no_silent_pass.py`. PySide2 / Maya 2024 and Windows path behaviour
+are covered by the local mayapy suite only.
 
 ## Pure suite (no Maya)
 

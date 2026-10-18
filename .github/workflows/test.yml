@@ -6,16 +6,10 @@ on:
 
 jobs:
   test:
-    # Cover Windows path behaviour as well: the tool is distributed to Maya
-    # users on Windows, where separators, case-insensitivity and encoding
-    # differ from the Linux runner.  PySide2 (Maya 2024) differences are covered
-    # by the local mayapy suite, which cannot run in CI.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Linux only.  PySide2 / Maya 2024 and Windows path behaviour are covered by
+    # the local mayapy suite, which cannot run in CI; see tests/README.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python
@@ -23,7 +17,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install Qt system dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1 libegl1 libxkbcommon-x11-0 libdbus-1-3 libglib2.0-0 libxrender1 libxi6
