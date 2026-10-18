@@ -7,6 +7,7 @@
 - **Builder 丢弃前置条件失败**：`apply_prerequisites()` 现返回 `PrerequisiteOutcome(ok, failures)`（`__bool__` 兼容旧调用），`MaterialBuilder._build()` 在失败时把具体失败项写入 `last_build_issues` 后抛 `RuntimeError`，`BatchBuilder` 把它们记入 `BuildResult.failures`，不再产生 `built=True` 且无告警的结果
 - **Legacy Normal 的 P2D 失败未上报**：`_create_place2d` 失败现为关键失败（不再跳过 UV 接线后返回成功）；物化出的 `file` 节点打 `mcEmbeddedSource` 标记，复用前三路判定（标记匹配 + UV 链完整 / 标记匹配但可修补 / 无标记时要求名称+路径+UV 完整），同名同路径但无 UV 链的手工节点不再被复用
 - **部分 SG 接线不出现在横幅**：`show_result_banner()` 新增 `partial` 参数，`failed > partial > with_issues > success`；转换页传入 `summary["partial_wired"]`
+- **Alpha Is Luminance 判断刷屏并占用日志缓冲**：`_fix_alpha_luminance` 对每个映射属性各记一条 `No alpha source traced for <plug>` DEBUG，单个材质可达 ~30 条（同一目标插槽还会因多个通用属性重复追踪）。现按目标 plug 去重，逐属性提示改为每个材质一条汇总 DEBUG（`no alpha source on N checked plug(s)`），只在真正找到 alpha 源时才记 `Alpha source found` / `Enabled Alpha Is Luminance`（启用列表同样去重）
 
 ### 修复（场景一致性）
 - **置换先提交、surface 后提交**：`core/converter.py` 改为事务提交——先 `_snapshot_sg_wiring()` 快照每个 SG 的 surface/displacement 上游，再依次提交；任一失败即 `_restore_sg_wiring()` 回滚已改写连接，`result.restored` / `result.sg_failures` 记录恢复情况，`converted` 保持 False。快照读取失败记 `_UNKNOWN_WIRING`，回滚时不猜测（记 ERROR），未提交过的插槽不会被误断开

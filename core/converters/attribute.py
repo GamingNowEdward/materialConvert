@@ -88,11 +88,20 @@ class AttributeConverter:
 
         failed = []
         fixed = []
+        checked = 0
+        seen_plugs = set()
         for common_attr, maya_attr in target_config.attr_map.items():
             if common_attr in self._FIX_ALPHA_SKIP or not maya_attr:
                 continue
 
             plug = f"{target_mat}.{maya_attr}"
+            if plug in seen_plugs:
+                # Several common attrs can share one target attribute (color and
+                # its weight often both resolve to the same outAlpha plug): trace
+                # it once instead of repeating the whole upstream walk.
+                continue
+            seen_plugs.add(plug)
+
             try:
                 plug_exists = cmds.objExists(plug)
             except Exception as exc:
@@ -103,9 +112,13 @@ class AttributeConverter:
             if not plug_exists:
                 continue
 
+            checked += 1
             alpha_plug = self._trace_alpha_plug(plug)
             if not alpha_plug:
-                self.log.debug(f"No alpha source traced for {plug}", source=_SOURCE, nodes=(target_mat,))
+                # A material maps ~30 attributes; one line each would flood the
+                # log and the ring buffer. The outcome is summarized once per
+                # material below, and a *found* source is already logged by
+                # _trace_alpha_plug at DEBUG.
                 continue
 
             tex_node = alpha_plug.split(".")[0]
@@ -113,7 +126,8 @@ class AttributeConverter:
                 if (cmds.attributeQuery("alphaIsLuminance", node=tex_node, exists=True)
                         and not cmds.getAttr(f"{tex_node}.alphaIsLuminance")):
                     cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
-                    fixed.append(tex_node)
+                    if tex_node not in fixed:
+                        fixed.append(tex_node)
                     self.log.debug(f"Enabled Alpha Is Luminance on {tex_node}", source=_SOURCE, nodes=(tex_node,))
             except Exception as exc:
                 self.log.warn(f"Failed to enable alphaIsLuminance on {tex_node}: {exc}", source=_SOURCE, nodes=(tex_node,))
@@ -121,6 +135,12 @@ class AttributeConverter:
 
         if fixed:
             self.log.info(f"Enabled Alpha Is Luminance on {len(fixed)} texture node(s)", source=_SOURCE, nodes=tuple(fixed))
+        elif checked:
+            self.log.debug(
+                f"Alpha Is Luminance: no alpha source on {checked} checked plug(s)",
+                source=_SOURCE,
+                nodes=(target_mat,),
+            )
         return failed
 
     def _trace_alpha_plug(self, start, visited=None, depth=0):

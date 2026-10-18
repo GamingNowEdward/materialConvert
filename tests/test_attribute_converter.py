@@ -303,3 +303,70 @@ def test_trace_alpha_plug_follows_only_upstream(monkeypatch):
                         lambda attr, node=None, exists=True:
                         node in ("realFile", "otherFile"))
     assert conv._trace_alpha_plug("mat1.specularRoughness") == "realFile.outAlpha"
+
+
+# --------------------------------------------------------------------------- #
+# Alpha Is Luminance logging volume
+# --------------------------------------------------------------------------- #
+
+class _AlphaConfig:
+    def __init__(self, attr_map):
+        self.attr_map = attr_map
+
+
+def test_missing_alpha_source_is_summarized_once(monkeypatch):
+    """A material with ~30 mapped attributes must not log one line per attribute."""
+    log = Logger()
+    conv = _conv(log)
+    target = ConfigLoader().get_material_config("aiStandardSurface")
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "listConnections", lambda *a, **k: [])
+
+    failed = conv._fix_alpha_luminance("mat1", "arnold", target)
+
+    assert failed == []
+    records = log.poll(0)
+    assert not [r for r in records if "No alpha source traced" in r.message]
+    summaries = [r for r in records if "no alpha source" in r.message]
+    assert len(summaries) == 1
+    assert summaries[0].level == LogLevel.DEBUG
+
+
+def test_shared_target_attribute_is_traced_once(monkeypatch):
+    """Two common attrs mapping to one target plug must not walk it twice."""
+    log = Logger()
+    conv = _conv(log)
+    calls = []
+    monkeypatch.setattr(conv, "_trace_alpha_plug",
+                        lambda plug, *a, **k: calls.append(plug))
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+
+    conv._fix_alpha_luminance(
+        "mat1", "arnold",
+        _AlphaConfig({"a": "shared", "b": "shared", "c": "other"}),
+    )
+
+    assert calls == ["mat1.shared", "mat1.other"]
+
+
+def test_found_alpha_source_is_still_logged(monkeypatch):
+    """A real hit stays at DEBUG (trace hit + enable), and nothing says "no source"."""
+    log = Logger()
+    conv = _conv(log)
+    monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
+    monkeypatch.setattr(attribute_module.cmds, "listConnections",
+                        lambda *a, **k: ["tex1.outAlpha"])
+    monkeypatch.setattr(attribute_module.cmds, "attributeQuery", lambda *a, **k: True)
+    monkeypatch.setattr(attribute_module.cmds, "getAttr", lambda *a, **k: False)
+    set_calls = []
+    monkeypatch.setattr(attribute_module.cmds, "setAttr",
+                        lambda *a, **k: set_calls.append(a))
+
+    failed = conv._fix_alpha_luminance("mat1", "arnold", _AlphaConfig({"a": "shared"}))
+
+    assert failed == []
+    assert set_calls == [("tex1.alphaIsLuminance", True)]
+    messages = [r.message for r in log.poll(0)]
+    assert any("Alpha source found" in m for m in messages)
+    assert any("Enabled Alpha Is Luminance on tex1" in m for m in messages)
+    assert not any("no alpha source" in m for m in messages)
