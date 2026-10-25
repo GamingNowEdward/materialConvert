@@ -63,20 +63,6 @@ def test_scan_invalid_directory():
     }
 
 
-def test_find_alias_short_only_token_match():
-    scanner = TextureScanner()
-    assert scanner._find_alias("hero_metallic", "met") is None
-    assert scanner._find_alias("hero_met", "met") == (5, 8)
-
-
-def test_find_alias_long_skips_underscores_with_boundary():
-    scanner = TextureScanner()
-    assert scanner._find_alias("hero_met_allic_01", "metallic") is not None
-    assert scanner._find_alias("hero_metallic", "metallic") == (5, 13)
-    assert scanner._find_alias("hero_metallicx", "metallic") is None
-    assert scanner._find_alias("heroxmetallic", "metallic") is None
-
-
 def test_parse_metallic_vs_short_words():
     scanner = TextureScanner()
     parsed = scanner._parse("hero_metallic")
@@ -154,3 +140,158 @@ def test_scan_metallic_not_matched_by_short_words(scan_dir):
     assert len(materials) == 1
     assert "metallic" in materials[0]["channels"]
     assert len(result["unparsed"]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Set-wide common tokens (a suffix every file shares) and numeric suffixes
+# --------------------------------------------------------------------------- #
+
+_SET_NAMES = [
+    "FabricCottonMuslin004_SSS_2K_METALNESS",
+    "FabricCottonMuslin004_NRM16_2K_METALNESS",
+    "FabricCottonMuslin004_NRM_2K_METALNESS",
+    "FabricCottonMuslin004_MASK_2K_METALNESS",
+    "FabricCottonMuslin004_DISP16_2K_METALNESS",
+    "FabricCottonMuslin004_COL_2K_METALNESS",
+    "FabricCottonMuslin004_AO_2K_METALNESS",
+    "FabricCottonMuslin004_2K_METALNESS",
+    "FabricCottonMuslin004_ROUGHNESS_2K_METALNESS",
+    "FabricCottonMuslin004_TRANSLUCENCY_2K_METALNESS",
+    "FabricCottonMuslin004_Preview1",
+]
+
+
+def _write_set(scan_dir, names):
+    for name in names:
+        (scan_dir / (name + ".png")).write_text("", encoding="utf-8")
+
+
+def test_parse_numeric_suffix_channels():
+    scanner = TextureScanner()
+    assert scanner._parse("hero_nrm16")[1] == "normal_bump"
+    assert scanner._parse("hero_disp16")[1] == "displacementTexture"
+
+
+def test_common_suffix_is_not_the_channel(scan_dir):
+    """A token every file shares is a set suffix, not this file's channel."""
+    _write_set(scan_dir, _SET_NAMES)
+
+    log = Logger()
+    result = TextureScanner(logger=log).scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    material = result["materials"][0]
+    assert material["name"].lower().startswith("fabriccottonmuslin004")
+    channels = {name: data["channel"] for name, data in material["channels"].items()}
+    assert channels["baseColor"] == "BaseColor"
+    assert channels["specularRoughness"] == "Roughness"
+    assert channels["normal_bump"] == "Normal"
+    assert channels["displacementTexture"] == "Displacement"
+    assert channels["subsurfaceColor"] in ("TranslucencyColor", "ScatteringColor")
+
+    # SSS vs TRANSLUCENCY and NRM vs NRM16 both map to one common attribute
+    conflicted = {item["common_attr"] for item in result["conflicts"]}
+    assert conflicted == {"subsurfaceColor", "normal_bump"}
+
+    # files without a channel token of their own stay unparsed
+    unparsed = {Path(path).stem for path in result["unparsed"]}
+    assert unparsed == {
+        "FabricCottonMuslin004_AO_2K_METALNESS",
+        "FabricCottonMuslin004_2K_METALNESS",
+        "FabricCottonMuslin004_Preview1",
+    }
+
+    infos = [r.message for r in log.poll(0) if r.level == LogLevel.INFO]
+    assert any("Ignoring common alias token" in message and "metalness" in message
+               for message in infos)
+
+
+def test_single_channel_directory_still_parses(scan_dir):
+    """When ignoring the common token resolves nothing, fall back to plain parsing."""
+    _write_set(scan_dir, ["rockA_METALNESS", "rockB_METALNESS", "rockC_METALNESS"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 3
+    assert all("metallic" in material["channels"] for material in result["materials"])
+    assert result["unparsed"] == []
+
+
+def test_small_directory_keeps_plain_behaviour(scan_dir):
+    """Two files are too few for "shared by most files" to mean anything."""
+    _write_set(scan_dir, ["fabric_COL_2K_METALNESS", "fabric_ROUGHNESS_2K_METALNESS"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    # plain behaviour: the common-token filter is not applied, so the files stay
+    # separate materials and the METALNESS suffix still wins where it is longer
+    assert len(result["materials"]) == 2
+    channels = {name for material in result["materials"] for name in material["channels"]}
+    assert channels == {"metallic", "specularRoughness"}
+
+
+def test_asset_name_containing_an_alias_is_kept(scan_dir):
+    """The asset name is never treated as a common token."""
+    _write_set(scan_dir, [
+        "MetalnessPanel_BaseColor", "MetalnessPanel_Roughness", "MetalnessPanel_Normal",
+    ])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    material = result["materials"][0]
+    assert material["name"].lower() == "metalnesspanel"
+    assert set(material["channels"]) == {"baseColor", "specularRoughness", "normal_bump"}
+
+
+def test_plain_set_is_unaffected(scan_dir):
+    _write_set(scan_dir, ["wood_basecolor", "wood_roughness", "wood_normal"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    assert result["materials"][0]["name"].lower() == "wood"
+    assert set(result["materials"][0]["channels"]) == {
+        "baseColor", "specularRoughness", "normal_bump"}
+    assert result["conflicts"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Duplicate channels: the higher bit depth / resolution wins
+# --------------------------------------------------------------------------- #
+
+def test_higher_bit_depth_wins_a_duplicate_channel(scan_dir):
+    _write_set(scan_dir, ["rock_NRM16_2K", "rock_NRM_2K", "rock_basecolor"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    material = result["materials"][0]
+    kept = material["channels"]["normal_bump"]["path"]
+    assert Path(kept).stem == "rock_NRM16_2K"
+
+    conflict = result["conflicts"][0]
+    assert conflict["common_attr"] == "normal_bump"
+    assert Path(conflict["kept"]).stem == "rock_NRM16_2K"
+    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_NRM_2K"]
+
+
+def test_higher_resolution_wins_a_duplicate_channel(scan_dir):
+    # the resolution is glued to the channel token, so both files name one material
+    _write_set(scan_dir, ["rock_rough4k", "rock_rough", "rock_basecolor"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    kept = result["materials"][0]["channels"]["specularRoughness"]["path"]
+    assert Path(kept).stem == "rock_rough4k"
+    assert [Path(path).stem for path in result["conflicts"][0]["dropped"]] == ["rock_rough"]
+
+
+def test_equal_quality_keeps_the_first_name(scan_dir):
+    _write_set(scan_dir, ["rock_Roughness", "rock_Glossiness", "rock_basecolor"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    conflict = result["conflicts"][0]
+    assert Path(conflict["kept"]).stem == "rock_Glossiness"
+    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_Roughness"]
+    assert result["materials"][0]["channels"]["specularRoughness"]["path"] == conflict["kept"]

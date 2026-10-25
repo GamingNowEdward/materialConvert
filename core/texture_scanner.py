@@ -2,66 +2,10 @@ import json
 import os
 import re
 
+from core.filename_match import ChannelMatcher, normalize_stem, quality_key, shared_keywords
 from core.logger import get_logger
 
 _SOURCE = "TextureScanner"
-
-
-def normalize_stem(name):
-    """Lowercase a filename stem, turning dashes/spaces into underscores.
-
-    Shared with ``core.colorspace.NameDriver`` so filename keyword matching uses
-    the same token boundaries as the Batch Builder scanner.
-    """
-    return re.sub(r"[- ]", "_", name.lower())
-
-
-def find_alias(normalized, alias):
-    """Return ``(start, end)`` of *alias* in *normalized*, or None.
-
-    Priority:
-    1. Exact token match (safe for short aliases).
-    2. Substring match ignoring underscores, only for longer aliases, and only
-       when the alias is bounded by non-alphanumeric characters.
-    """
-    tokens = normalized.split("_")
-    if alias in tokens:
-        idx = tokens.index(alias)
-        start = sum(len(t) + 1 for t in tokens[:idx])
-        return start, start + len(alias)
-
-    if len(alias) < 4:
-        return None
-
-    n = len(normalized)
-    i = 0
-    while i < n:
-        if normalized[i] == "_":
-            i += 1
-            continue
-
-        start = i
-        j = i
-        k = 0
-        while j < n and k < len(alias):
-            if normalized[j] == "_":
-                j += 1
-                continue
-            if normalized[j] != alias[k]:
-                break
-            k += 1
-            j += 1
-
-        if k == len(alias):
-            before = normalized[start - 1] if start > 0 else ""
-            after = normalized[j] if j < n else ""
-
-            if (not before.isalnum()) and (not after.isalnum()):
-                return start, j
-
-        i += 1
-
-    return None
 
 
 class TextureScanner:
@@ -79,28 +23,15 @@ class TextureScanner:
             ext.lower() for ext in self.config.get("extensions", [])
         }
         self.channels = self.config.get("channels", {})
-        # Compiled once: a scan parses every file, so rebuilding and re-sorting
-        # the alias table per file used to dominate large directories.
-        self._candidates = self._compile_candidates()
+        # Filename matching lives in core.filename_match so the Colorspace name
+        # driver matches names by exactly the same rules.
+        self._matcher = ChannelMatcher(self.channels, logger=self.log)
         self.log.debug(
             f"TextureScanner initialized: {len(self.channels)} channel(s), "
             f"{len(self.extensions)} extension(s), "
-            f"{len(self._candidates)} alias(es)",
+            f"{len(self._matcher.aliases)} alias(es)",
             source=_SOURCE,
         )
-
-    def _compile_candidates(self):
-        candidates = []
-        for channel_name, channel_data in self.channels.items():
-            if not isinstance(channel_data, dict):
-                self.log.error(f"Texture channel '{channel_name}' is not an object; ignored",
-                               source=_SOURCE)
-                continue
-            for alias in channel_data.get("aliases", []):
-                alias_norm = alias.lower().replace("-", "").replace(" ", "")
-                candidates.append((channel_name, channel_data, alias_norm))
-        candidates.sort(key=lambda item: len(item[2]), reverse=True)
-        return candidates
 
     def _load_config(self, path):
         try:
@@ -119,35 +50,73 @@ class TextureScanner:
         name = re.sub(r"[\s_-]+", "_", name)
         return name.strip("_")
 
-    def _find_alias(self, normalized, alias):
-        """Return (start, end) in normalized if alias is found (see ``find_alias``)."""
-        return find_alias(normalized, alias)
+    def _noise_aliases(self, stems):
+        """Alias tokens shared by most files of the directory.
 
-    def _parse(self, stem):
+        Such a token is a property of the whole texture set (part of the material
+        name), not the marker of a single file's channel — e.g. every file of a
+        set ending in ``_METALNESS``.  Only alias tokens can be noise, so the
+        asset name itself is never stripped, and small directories return an
+        empty set because "shared by most files" is meaningless there.
+        """
+        return shared_keywords(stems, self._matcher.aliases)
+
+    def _mask_tokens(self, normalized, noise):
+        """Blank out the *noise* alias tokens, keeping offsets aligned with the stem.
+
+        Replacing a token with dots of the same length keeps the matcher offsets
+        valid for the original filename, and a dot is neither a word character
+        nor skipped by the matcher, so it also acts as a boundary.
+        Returns ``(masked, spans)``.
+        """
+        chars = list(normalized)
+        spans = []
+        offset = 0
+        for token in normalized.split("_"):
+            length = len(token)
+            if length and self._matcher.alias_of_token(token) in noise:
+                for index in range(offset, offset + length):
+                    chars[index] = "."
+                spans.append((offset, offset + length))
+            offset += length + 1
+        return "".join(chars), spans
+
+    @staticmethod
+    def _strip_spans(text, spans):
+        """Drop the given ``(start, end)`` ranges from *text*."""
+        if not spans:
+            return text
+        drop = [False] * len(text)
+        for start, end in spans:
+            for index in range(max(0, start), min(len(text), end)):
+                drop[index] = True
+        return "".join(char for index, char in enumerate(text) if not drop[index])
+
+    def _parse(self, stem, noise=()):
         normalized = self._normalize(stem)
+        noise_spans = []
+        if noise:
+            normalized, noise_spans = self._mask_tokens(normalized, noise)
 
-        for channel_name, channel_data, alias_norm in self._candidates:
-            found = self._find_alias(normalized, alias_norm)
-            if not found:
-                continue
-
-            start, end = found
-            base_name = self._clean_base_name(stem[:start] + stem[end:])
+        for match in self._matcher.matches_normalized(normalized, ignore_aliases=noise):
+            channel_data = self._matcher.channels.get(match.channel, {})
+            start, end = match.span
+            base_name = self._clean_base_name(
+                self._strip_spans(stem, [(start, end)] + noise_spans))
             if not base_name:
                 base_name = "Material"
 
             options = {}
             if channel_data.get("invert"):
                 options["invert"] = True
-            channel_type = channel_data.get("type", "")
-            if channel_type in ("normal", "bump"):
-                options["mode"] = channel_type
+            if match.channel_type in ("normal", "bump"):
+                options["mode"] = match.channel_type
 
-            common_attr = channel_data.get("common_attr")
+            common_attr = match.common_attr
             if not common_attr:
-                self.log.warn(f"Texture channel {channel_name} has no common_attr", source=_SOURCE)
+                self.log.warn(f"Texture channel {match.channel} has no common_attr", source=_SOURCE)
                 continue
-            return channel_name, common_attr, base_name, options
+            return match.channel, common_attr, base_name, options
 
         return None
 
@@ -169,6 +138,7 @@ class TextureScanner:
 
         self.log.debug(f"Scanning {len(files)} file(s) in {directory}", source=_SOURCE)
 
+        candidates = []
         for filename in files:
             full_path = os.path.join(directory, filename)
             try:
@@ -185,8 +155,29 @@ class TextureScanner:
                 self.log.debug(f"{filename}: extension {ext} ignored", source=_SOURCE)
                 continue
 
-            stem = os.path.splitext(filename)[0]
-            parsed = self._parse(stem)
+            candidates.append((filename, full_path, os.path.splitext(filename)[0]))
+
+        noise = self._noise_aliases([stem for _filename, _path, stem in candidates])
+        if noise:
+            self.log.info(
+                f"Ignoring common alias token(s) shared by the texture set: "
+                f"{', '.join(sorted(noise))}",
+                source=_SOURCE,
+            )
+
+        parsed_files = self._parse_candidates(candidates, noise)
+        if noise and not any(parsed is not None for parsed in parsed_files):
+            # Nothing resolved with the common tokens ignored, so they really were
+            # the channel markers (e.g. a directory holding only metallic maps):
+            # fall back to the plain behaviour.
+            self.log.info(
+                f"No channel resolved with {', '.join(sorted(noise))} ignored; "
+                f"scanning without the common-token filter",
+                source=_SOURCE,
+            )
+            parsed_files = self._parse_candidates(candidates, set())
+
+        for (filename, full_path, stem), parsed in zip(candidates, parsed_files):
             if not parsed:
                 self.log.debug(f"{filename}: no texture channel matched", source=_SOURCE)
                 unparsed.append(full_path)
@@ -207,13 +198,25 @@ class TextureScanner:
             )
 
             if common_attr in material["channels"]:
-                kept_path = material["channels"][common_attr]["path"]
-                self._record_conflict(conflicts, base_name, common_attr, kept_path, full_path)
-                self.log.warn(
-                    f"Texture conflict for {base_name}/{common_attr}: "
-                    f"{kept_path} vs {full_path}",
-                    source=_SOURCE,
-                )
+                kept = material["channels"][common_attr]
+                kept_path = kept["path"]
+                kept_stem = os.path.splitext(os.path.basename(kept_path))[0]
+                if quality_key(stem) > quality_key(kept_stem):
+                    # A higher bit depth / resolution wins, whatever the name order.
+                    self._record_conflict(conflicts, base_name, common_attr, full_path, kept_path)
+                    kept.update({"channel": channel_name, "path": full_path, "options": options})
+                    self.log.warn(
+                        f"Texture conflict for {base_name}/{common_attr}: keeping "
+                        f"{full_path} over {kept_path} (higher bit depth/resolution)",
+                        source=_SOURCE,
+                    )
+                else:
+                    self._record_conflict(conflicts, base_name, common_attr, kept_path, full_path)
+                    self.log.warn(
+                        f"Texture conflict for {base_name}/{common_attr}: "
+                        f"{kept_path} vs {full_path}",
+                        source=_SOURCE,
+                    )
                 continue
 
             material["channels"][common_attr] = {
@@ -235,24 +238,32 @@ class TextureScanner:
         )
         return result
 
+    def _parse_candidates(self, candidates, noise):
+        """Parse every candidate stem, ignoring the given common alias tokens."""
+        return [self._parse(stem, noise) for _filename, _path, stem in candidates]
+
     @staticmethod
-    def _record_conflict(conflicts, material_name, common_attr, kept_path, new_path):
+    def _record_conflict(conflicts, material_name, common_attr, kept_path, dropped_path):
         """Accumulate one channel conflict, keeping every candidate visible.
 
-        The first file encountered (files are sorted) is kept; the rest are
-        recorded so the UI can show them and the user can skip the material
-        instead of silently building with an arbitrary choice.
+        ``kept_path`` is the file the scan will use, ``dropped_path`` the one it
+        will not; the caller decides (the first file in name order wins unless a
+        later candidate has a higher bit depth or resolution).  ``dropped`` always
+        mirrors ``candidates`` minus ``kept``, so the UI shows the real outcome
+        instead of an arbitrary choice.
         """
         for item in conflicts:
             if item["material"] == material_name and item["common_attr"] == common_attr:
-                item["candidates"].append(new_path)
-                item["dropped"].append(new_path)
+                if dropped_path not in item["candidates"]:
+                    item["candidates"].append(dropped_path)
+                item["kept"] = kept_path
+                item["dropped"] = [path for path in item["candidates"] if path != kept_path]
                 return
         conflicts.append({
             "material": material_name,
             "common_attr": common_attr,
             "existing": kept_path,
             "kept": kept_path,
-            "candidates": [kept_path, new_path],
-            "dropped": [new_path],
+            "candidates": [kept_path, dropped_path],
+            "dropped": [dropped_path],
         })

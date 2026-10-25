@@ -17,8 +17,8 @@ from enum import Enum
 import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader, normalize_keyword
+from core.filename_match import ChannelMatcher, normalize_stem, shared_keywords
 from core.logger import get_logger
-from core.texture_scanner import find_alias, normalize_stem
 
 _SOURCE = "ColorSpaceCore"
 
@@ -103,6 +103,15 @@ class MatchResult:
     evidence_complete: bool = True
 
 
+def _role_for_channel_type(channel_type):
+    """Colorspace role of a texture channel, from ``texture_channels.json``.
+
+    Color channels carry colour data (srgb); every data channel (float / normal /
+    bump / displacement) is raw.
+    """
+    return "srgb" if channel_type == "color" else "raw"
+
+
 def _result_from_roles(roles, no_match_reason, ambiguous_reason):
     """Reduce a collected role list to a driver result.
 
@@ -121,10 +130,24 @@ class NameDriver:
     def __init__(self, config_loader=None, logger=None):
         self.config = config_loader or ConfigLoader()
         self.log = logger or get_logger()
-        self._filename_role_keywords = self.config.get_filename_role_keywords()
+        # Filename matching is shared with the Batch Builder scanner, so short
+        # aliases (col/sss/nrm/...) count too — only as complete tokens.
+        self._matcher = ChannelMatcher(self.config.get_texture_channels(), logger=self.log)
+        #: Every alias, for callers that need to detect the ones a whole texture
+        #: set shares (see ``core.filename_match.shared_keywords``).
+        self.aliases = self._matcher.aliases
 
-    def match(self, file_path):
-        """Match a file path to one or more colorspace roles from its basename."""
+    def match(self, file_path, ignore_aliases=()):
+        """Match a file path to one or more colorspace roles from its basename.
+
+        The matched texture channels are mapped to roles by their configured
+        ``type`` (color -> srgb, data -> raw) and deduplicated, so two channels of
+        the same role are one conclusion while different roles stay ambiguous.
+
+        ``ignore_aliases`` are skipped: an alias shared by every file of a set
+        (e.g. a ``_METALNESS`` suffix) is a property of the set, not evidence
+        about this file.
+        """
         if not file_path:
             return NameDriverResult(DriverStatus.NO_MATCH, [], "file path is empty",
                                     evidence_complete=False)
@@ -133,15 +156,12 @@ class NameDriver:
             return NameDriverResult(DriverStatus.NO_MATCH, [], "no filename",
                                     evidence_complete=False)
 
-        # Same token/underscore-aware matching as the Batch Builder scanner, so
-        # short keywords never match inside unrelated words.
         normalized = normalize_stem(filename)
         roles = []
-        for role, keywords in self._filename_role_keywords.items():
-            for kw in keywords:
-                if find_alias(normalized, kw):
-                    roles.append(role)
-                    break
+        for match in self._matcher.matches_normalized(normalized, ignore_aliases):
+            role = _role_for_channel_type(match.channel_type)
+            if role not in roles:
+                roles.append(role)
 
         status, roles, reason = _result_from_roles(
             roles,
@@ -389,7 +409,49 @@ class ColorSpaceMatcher:
     def scan(self):
         file_nodes = cmds.ls(type="file") or []
         self.reset()
-        return [self.match(node) for node in file_nodes]
+
+        paths = {node: self._read_path_quiet(node) for node in file_nodes}
+        shared = self._shared_name_keywords(paths)
+        for directory in sorted(shared):
+            self.log.info(
+                f"Ignoring common filename keyword(s) in {directory}: "
+                f"{', '.join(sorted(shared[directory]))}",
+                source=_SOURCE,
+            )
+
+        results = [
+            self.match(node, ignore_aliases=shared.get(os.path.dirname(paths[node]), ()))
+            for node in file_nodes
+        ]
+        if shared and not any(
+                result.name_driver_result.status == DriverStatus.MATCH for result in results):
+            # Nothing was classified from the file name once the set-wide keywords
+            # were ignored (e.g. a directory holding only metallic maps), so they
+            # really were the evidence: scan again without the filter.
+            self.log.info(
+                "No filename role resolved with the common keywords ignored; "
+                "scanning again without the common-keyword filter",
+                source=_SOURCE,
+            )
+            results = [self.match(node) for node in file_nodes]
+        return results
+
+    def _shared_name_keywords(self, paths):
+        """Per-directory filename keywords shared by most files of that set."""
+        stems_by_directory = {}
+        for path in paths.values():
+            if not path:
+                continue
+            directory = os.path.dirname(path)
+            stems_by_directory.setdefault(directory, []).append(
+                os.path.splitext(os.path.basename(path))[0])
+
+        shared = {}
+        for directory, stems in stems_by_directory.items():
+            common = shared_keywords(stems, self.name_driver.aliases)
+            if common:
+                shared[directory] = common
+        return shared
 
     def apply_matched(self, results, revalidate=False):
         """Apply prematch colorspaces for MATCHED ``MatchResult`` entries only.
@@ -486,13 +548,13 @@ class ColorSpaceMatcher:
 
         return {"applied": applied, "failed": failed, "skipped": skip_count}
 
-    def match(self, file_node):
+    def match(self, file_node, ignore_aliases=()):
         """Compute the match result for a single Maya file node. Read-only."""
         errors = []
         path = self._read_file_path(file_node, errors)
         actual = self._read_actual_colorspace(file_node, errors)
 
-        name_res = self.name_driver.match(path)
+        name_res = self.name_driver.match(path, ignore_aliases)
         channel_res = self.channel_driver.match(file_node)
 
         state, prematch, diagnostic = self._combine(name_res, channel_res)
@@ -519,6 +581,14 @@ class ColorSpaceMatcher:
         except Exception as exc:
             self.log.warn(f"Failed to read fileTextureName on {file_node}: {exc}", source=_SOURCE)
             errors.append(f"error reading file path: {exc}")
+            return ""
+
+    def _read_path_quiet(self, file_node):
+        """Read a file path for the pre-pass, without duplicating error reports."""
+        try:
+            return cmds.getAttr(f"{file_node}.fileTextureName") or ""
+        except Exception as exc:
+            self.log.debug(f"Failed to read fileTextureName on {file_node}: {exc}", source=_SOURCE)
             return ""
 
     def _read_actual_colorspace(self, file_node, errors):

@@ -37,6 +37,31 @@ def test_name_driver_empty_path():
     assert _name_driver().match("C:/tex/").status == DriverStatus.NO_MATCH
 
 
+def test_name_driver_ignores_requested_aliases():
+    """A set-wide alias is not evidence about one file."""
+    driver = _name_driver()
+    path = "C:/tex/FabricCottonMuslin004_COL_2K_METALNESS.png"
+
+    # both a color channel (col) and a data channel (metalness) match
+    assert driver.match(path).status == DriverStatus.AMBIGUOUS
+    assert driver.match(path).roles == ["raw", "srgb"]
+
+    res = driver.match(path, ignore_aliases={"metalness"})
+    assert res.status == DriverStatus.MATCH
+    assert res.roles == ["srgb"]
+
+
+def test_name_driver_matches_short_aliases_as_tokens():
+    driver = _name_driver()
+
+    assert driver.match("C:/tex/rock_COL_2K.png").roles == ["srgb"]
+    assert driver.match("C:/tex/rock_SSS_2K.png").roles == ["srgb"]
+    assert driver.match("C:/tex/rock_NRM16_2K.png").roles == ["raw"]
+    assert driver.match("C:/tex/rock_MASK_2K.png").roles == ["raw"]
+    # still token-bounded: a short alias must not match inside a word
+    assert driver.match("C:/tex/school.png").status == DriverStatus.NO_MATCH
+
+
 def test_name_driver_normalizes_separators_and_case():
     res = _name_driver().match(r"X:/Foo-Base_Color.PNG")
     assert res.status == DriverStatus.MATCH
@@ -528,3 +553,84 @@ def test_apply_matched_revalidation_applies_fresh_result(monkeypatch):
 
     assert outcome["stale"] == []
     assert outcome["applied"] == [("file1", "Utility - sRGB - Texture")]
+
+
+# --------------------------------------------------------------------------- #
+# Set-wide filename keywords (a suffix every file of the set shares)
+# --------------------------------------------------------------------------- #
+
+_SET_DIR = "C:/tex/FabricCottonMuslin004/"
+_SET_PATHS = {
+    "file_col": _SET_DIR + "FabricCottonMuslin004_COL_2K_METALNESS.png",
+    "file_disp": _SET_DIR + "FabricCottonMuslin004_DISP16_2K_METALNESS.png",
+    "file_mask": _SET_DIR + "FabricCottonMuslin004_MASK_2K_METALNESS.png",
+    "file_nrm": _SET_DIR + "FabricCottonMuslin004_NRM16_2K_METALNESS.png",
+    "file_rough": _SET_DIR + "FabricCottonMuslin004_ROUGHNESS_2K_METALNESS.png",
+    "file_sss": _SET_DIR + "FabricCottonMuslin004_SSS_2K_METALNESS.png",
+}
+_SET_CONNECTIONS = {
+    "file_col": ["aiStd1.baseColor"],
+    "file_sss": ["aiStd1.subsurfaceColor"],
+    "file_rough": ["aiStd1.specularRoughness"],
+    "file_nrm": ["aiStd1.normalCamera"],
+    "file_disp": ["aiStd1.displacement"],
+    "file_mask": ["aiStd1.opacity"],
+}
+
+
+def _scan_matcher(monkeypatch, paths, connections):
+    matcher = _matcher(monkeypatch, paths=paths, connections=connections)
+    monkeypatch.setattr(cs.cmds, "ls", lambda **kwargs: list(paths))
+    return matcher
+
+
+def test_scan_ignores_set_wide_filename_keywords(monkeypatch):
+    """`_METALNESS` on every file of a set is not evidence about one file."""
+    matcher = _scan_matcher(monkeypatch, _SET_PATHS, _SET_CONNECTIONS)
+
+    results = {result.file_node: result for result in matcher.scan()}
+
+    assert all(result.state == MatchState.MATCHED for result in results.values())
+
+    # the two color channels are now decided by the filename and the channel
+    # evidence, which agree
+    for node in ("file_col", "file_sss"):
+        assert results[node].name_driver_result.status == DriverStatus.MATCH
+        assert results[node].name_driver_result.roles == ["srgb"]
+        assert results[node].prematch_colorspace == "Utility - sRGB - Texture"
+
+    for node in ("file_disp", "file_mask", "file_nrm", "file_rough"):
+        assert results[node].prematch_colorspace == "Utility - Raw"
+
+
+def test_scan_falls_back_when_only_common_keywords_remain(monkeypatch):
+    """Ignoring the common keyword would resolve nothing, so it is used after all."""
+    paths = {
+        "file_a": "C:/tex/rockA_METALNESS.png",
+        "file_b": "C:/tex/rockB_METALNESS.png",
+        "file_c": "C:/tex/rockC_METALNESS.png",
+    }
+    matcher = _scan_matcher(monkeypatch, paths, {})
+
+    results = {result.file_node: result for result in matcher.scan()}
+
+    assert all(result.state == MatchState.MATCHED for result in results.values())
+    assert all(result.name_driver_result.status == DriverStatus.MATCH
+               for result in results.values())
+    assert all(result.prematch_colorspace == "Utility - Raw"
+               for result in results.values())
+
+
+def test_scan_keeps_name_evidence_for_unrelated_sets(monkeypatch):
+    """Only the directory's own shared keywords are ignored."""
+    paths = {
+        "file_wood": "C:/tex/wood/wood_basecolor.png",
+        "file_metal": "C:/tex/wood/wood_metalness.png",
+    }
+    matcher = _scan_matcher(monkeypatch, paths, {})
+
+    results = {result.file_node: result for result in matcher.scan()}
+
+    # two files is too few for a "shared" keyword, so both stay name-matched
+    assert results["file_wood"].prematch_colorspace == "Utility - sRGB - Texture"
+    assert results["file_metal"].prematch_colorspace == "Utility - Raw"

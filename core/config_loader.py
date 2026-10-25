@@ -415,21 +415,13 @@ class ConfigLoader:
             return
         self._texture_channels = self._read_json(path)
 
-    def get_filename_role_keywords(self):
-        """Build the filename keyword -> colorspace role mapping from texture_channels.json.
+    def get_texture_channels(self):
+        """The ``channels`` block of ``texture_channels.json`` (single source).
 
-        Channels with type "color" map to srgb; the rest (float/normal/bump/displacement)
-        map to raw. Short aliases (length < 5) are filtered out to avoid substring
-        false positives (e.g. "col" matching "school").
+        Consumed by ``core.filename_match.ChannelMatcher`` so the Batch Builder
+        scanner and the Colorspace name driver match file names identically.
         """
-        roles = {"srgb": [], "raw": []}
-        for channel_data in self._texture_channels.get("channels", {}).values():
-            role = "srgb" if channel_data.get("type") == "color" else "raw"
-            for alias in channel_data.get("aliases", []):
-                kw = normalize_keyword(alias)
-                if len(kw) >= 5 and kw not in roles[role]:
-                    roles[role].append(kw)
-        return roles
+        return dict(self._texture_channels.get("channels", {}))
 
     def get_color_space_config(self):
         return dict(self._color_space_config)

@@ -63,7 +63,7 @@
     },
     "Opacity": {
       "aliases": ["opacity", "opacitymap", "alpha", "alphamap", "transparency",
-                    "transparencymap", "opac", "cutout", "cutoutmap"],
+                    "transparencymap", "opac", "cutout", "cutoutmap", "mask"],
       "common_attr": "opacity",
       "type": "float"
     },

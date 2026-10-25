@@ -132,23 +132,14 @@ def test_cc_configs_and_identify():
     assert cc_configs["vray"].gamma == ""
 
 
-def test_filename_role_keywords():
+def test_texture_channels_accessor():
+    """The raw channel definitions feed the shared filename matcher."""
     loader = ConfigLoader()
-    roles = loader.get_filename_role_keywords()
-    assert "basecolor" in roles["srgb"]
-    assert "albedo" in roles["srgb"]
-    assert "color" in roles["srgb"]
-    assert "metallic" in roles["raw"]
-    assert "roughness" in roles["raw"]
-    assert "normal" in roles["raw"]
-    assert "displacement" in roles["raw"]
-    # short aliases (len < 5) are filtered out to avoid substring false hits
-    short = {"col", "dif", "base", "diff", "spec", "refl", "refr", "glos",
-             "bmp", "nrm", "sss", "emit", "disp", "opac", "glow", "nmap", "fuzz"}
-    for word in short:
-        assert word not in roles["srgb"], f"{word} leaked into srgb"
-        assert word not in roles["raw"], f"{word} leaked into raw"
-    assert set(roles["srgb"]).isdisjoint(roles["raw"])
+    channels = loader.get_texture_channels()
+
+    assert channels["BaseColor"]["type"] == "color"
+    assert channels["Metallic"]["type"] == "float"
+    assert "basecolor" in channels["BaseColor"]["aliases"]
 
 
 def test_expanded_attribute_keywords():

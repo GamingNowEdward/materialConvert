@@ -12,6 +12,12 @@ from core.results import summarize_build_results
 
 _SOURCE = "BatchBuilderTab"
 
+#: Row backgrounds by status.  ``CONFLICT (kept)`` is informational (that file is
+#: the one used), a dropped duplicate and an unrecognised file need attention.
+_KEPT_CONFLICT_BG = "#4a3d1f"
+_DROPPED_CONFLICT_BG = "#5a2d2d"
+_UNPARSED_BG = "#333a44"
+
 
 class BatchBuilderTab:
 
@@ -132,6 +138,15 @@ class BatchBuilderTab:
         self.table.setColumnWidth(2, 420)
         table_layout.addWidget(self.table)
 
+        self.table_legend = QtWidgets.QLabel(
+            "CONFLICT (kept): the file used for a duplicated channel. "
+            "CONFLICT: duplicate dropped in favour of the kept file. "
+            "UNPARSED: no channel keyword found in the file name."
+        )
+        self.table_legend.setWordWrap(True)
+        self.table_legend.setObjectName("debugStatus")
+        table_layout.addWidget(self.table_legend)
+
         layout.addWidget(table_group, stretch=3)
 
         mtb_group = QtWidgets.QGroupBox("Materials to Build")
@@ -192,7 +207,7 @@ class BatchBuilderTab:
                 status_item = QtWidgets.QTableWidgetItem(status)
                 self.table.setItem(row, 3, status_item)
                 if (material["name"], common_attr) in conflicting:
-                    self._paint_row(row, "#5a2d2d")
+                    self._paint_row(row, _KEPT_CONFLICT_BG)
 
         # Every rejected candidate gets its own row so the conflict is visible
         # instead of only living in the log.
@@ -211,7 +226,7 @@ class BatchBuilderTab:
                     self._channel_label(item["material"], item["common_attr"])))
                 self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(path))
                 self.table.setItem(row, 3, QtWidgets.QTableWidgetItem("CONFLICT"))
-                self._paint_row(row, "#5a2d2d")
+                self._paint_row(row, _DROPPED_CONFLICT_BG)
 
         for path in self.scan_result["unparsed"]:
             row = self.table.rowCount()
@@ -224,11 +239,13 @@ class BatchBuilderTab:
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(path))
             self.table.setItem(row, 3, QtWidgets.QTableWidgetItem("UNPARSED"))
 
-            self._paint_row(row, "#5a2d2d")
+            self._paint_row(row, _UNPARSED_BG)
 
         self.table.setSortingEnabled(True)
 
     def _paint_row(self, row, color):
+        if color is None:
+            return
         for col in range(4):
             item = self.table.item(row, col)
             if item:

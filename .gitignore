@@ -8,8 +8,6 @@ __pycache__/
 *.swp
 *.swo
 .DS_Store
-.mimocode/
 .pytest_cache/
 pytest-cache-files-*/
 opencode/
-.workbuddy/

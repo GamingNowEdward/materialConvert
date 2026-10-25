@@ -68,10 +68,11 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 ![Batch Builder tab](docs/images/batchBuilder_tab.webp)
 
-- Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`)
+- Scan a directory and auto-parse PBR texture sets by filename (`config/texture_channels.json`); a channel token shared by most files of a set (e.g. a `_METALNESS` suffix on every file) is treated as a set-wide suffix rather than the channel, and a numeric suffix glued to the token (`nrm16`, `disp16`) still matches
 - Group textures into materials and preview which materials will be created (`Materials to Build`)
 - Show parsed channels, unparsed files **and every texture conflict** in one table with a sortable Status column (`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`); the first file in sorted order is kept and every rejected candidate stays visible
 - Optional `Skip Materials With Conflicts` toggle (off by default) so an unresolved channel conflict never silently builds with an arbitrary file
+- Duplicate channel: the file with the **higher bit depth / resolution** wins (`NRM16` over `NRM`, `nrm4k` over `nrm`), ties keep the first file in name order; the table marks the kept file `CONFLICT (kept)` (amber), each dropped duplicate `CONFLICT` (red) and unrecognised files `UNPARSED` (grey), with a legend below the table
 - Batch build all / selected materials to any supported renderer
 - Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp, **Roughness channel only**) or simple direct connection
 - Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
@@ -84,7 +85,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Dedicated **Colorspace** tab — the single UI entry point for all file-node color-space operations (Node Tools no longer exposes any color-space UI)
 - **File Node List**: scans all scene `file` nodes into a sortable table (File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic); the Diagnostic column carries the match state (e.g. `CONFLICT: ...`) and sorts by severity, not alphabetically
 - **Refresh**: evaluates automatic matching for every file node **without modifying the scene**
-- **Automatic Matching** driven by two drivers: **Name Driver** (filename keywords from `config/texture_channels.json`) and **Channel Driver** (BFS-tracing all downstream connections against `commonAttributeRoles` + `config/material/*.json` expanded keywords); final states `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`
+- **Automatic Matching** driven by two drivers: **Name Driver** (filename keywords from `config/texture_channels.json`) and **Channel Driver** (BFS-tracing all downstream connections against `commonAttributeRoles` + `config/material/*.json` expanded keywords); final states `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`. A filename keyword shared by most files of the same directory (e.g. a `_METALNESS` suffix on a whole set) is treated as a set-wide suffix and not used as evidence for one file, so the channel evidence can decide
 - **Apply Selected** / **Apply All Matched**: apply only `MATCHED` results to `file.colorSpace` (single undo chunk); `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` are never auto-applied
 - **Manual Colorspace Assignment**: pick from the actual Maya input spaces and apply to selected rows only — never alters matcher rules or config
 - Selecting a row syncs the Maya selection to the corresponding file node(s); utility button sets `ignoreColorSpaceFileRules` on all file nodes
@@ -149,6 +150,7 @@ materialConvert/
 │   │   ├── cc.py                    # Color correction conversion
 │   │   └── displacement.py          # Displacement conversion
 │   ├── config_loader.py             # JSON config parser
+│   ├── filename_match.py            # Shared filename -> texture-channel matching rules
 │   ├── config_schema.py             # Offline JSON structure validation (pure Python)
 │   ├── module_reload.py             # Path-based purge of this project's modules on reload
 │   ├── node_utils.py                # Maya node utility functions
