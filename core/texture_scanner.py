@@ -3,7 +3,8 @@ import os
 import re
 
 from core.filename_match import (ChannelMatcher, normalize_stem, quality_key,
-                                 shared_keywords, short_suffix_letters)
+                                 shared_keywords, short_suffix_letters,
+                                 token_matches)
 from core.logger import get_logger
 
 _SOURCE = "TextureScanner"
@@ -11,7 +12,8 @@ _SOURCE = "TextureScanner"
 
 class TextureScanner:
 
-    def __init__(self, config_path=None, logger=None):
+    def __init__(self, config_path=None, logger=None, extra_aliases=None,
+                 extra_ignores=None):
         if config_path is None:
             config_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
@@ -23,11 +25,17 @@ class TextureScanner:
         self.extensions = {
             ext.lower() for ext in self.config.get("extensions", [])
         }
-        self.channels = self.config.get("channels", {})
+        self.channels = self._with_extra_aliases(
+            self.config.get("channels", {}), extra_aliases)
         #: File names carrying one of these tokens are artwork/previews, not
         #: textures: they are skipped entirely instead of reported as unparsed.
         self.ignore_keywords = {
             str(kw).lower() for kw in self.config.get("ignore_keywords", [])
+        }
+        #: Session tokens that must never be read as a channel marker (the
+        #: manual counterpart of the set-wide common-token detection).
+        self.extra_ignore_aliases = {
+            normalize_stem(str(token)) for token in (extra_ignores or [])
         }
         # Filename matching lives in core.filename_match so the Colorspace name
         # driver matches names by exactly the same rules.
@@ -52,12 +60,27 @@ class TextureScanner:
             raise
 
     @staticmethod
+    def _with_extra_aliases(channels, extra_aliases):
+        """Channel definitions with the session aliases applied.
+
+        ``extra_aliases`` (from the UI) *replaces* a channel's configured alias
+        list, matching ``ConfigLoader.get_texture_channels`` semantics.
+        """
+        if not extra_aliases:
+            return channels
+        merged = {name: dict(data) for name, data in channels.items()}
+        for name, aliases in extra_aliases.items():
+            if name in merged:
+                merged[name]["aliases"] = list(aliases)
+        return merged
+
+    @staticmethod
     def _normalize(name):
         return normalize_stem(name)
 
     @staticmethod
     def _clean_base_name(name):
-        name = re.sub(r"[\s_-]+", "_", name)
+        name = re.sub(r"[\s_\-()]+", "_", name)
         return name.strip("_")
 
     def _noise_aliases(self, stems):
@@ -84,12 +107,23 @@ class TextureScanner:
         offset = 0
         for token in normalized.split("_"):
             length = len(token)
-            if length and self._matcher.alias_of_token(token) in noise:
+            if length and self._is_noise_token(token, noise):
                 for index in range(offset, offset + length):
                     chars[index] = "."
                 spans.append((offset, offset + length))
             offset += length + 1
         return "".join(chars), spans
+
+    def _is_noise_token(self, token, noise):
+        """Whether *token* is a set-wide alias or a manual ``Ignore`` entry.
+
+        A manual entry need not be a configured alias (``g`` for Arroway's
+        ``g025``), so it also matches as a bare token or with a glued number.
+        """
+        if self._matcher.alias_of_token(token) in noise:
+            return True
+        return any(token_matches(token, ignore)
+                   for ignore in self.extra_ignore_aliases)
 
     @staticmethod
     def _strip_spans(text, spans):
@@ -108,16 +142,23 @@ class TextureScanner:
         if noise:
             normalized, noise_spans = self._mask_tokens(normalized, noise)
 
-        for match in self._matcher.matches_normalized(
-                normalized, ignore_aliases=noise,
-                enable_short_suffixes=enable_short_suffixes):
-            channel_data = self._matcher.channels.get(match.channel, {})
-            start, end = match.span
-            base_name = self._clean_base_name(
-                self._strip_spans(stem, [(start, end)] + noise_spans))
-            if not base_name:
-                base_name = "Material"
+        matches = self._matcher.matches_normalized(
+            normalized, ignore_aliases=noise,
+            enable_short_suffixes=enable_short_suffixes)
+        if not matches:
+            return None
 
+        # Every matched channel marker is stripped from the material name, not
+        # just the first: a file like ``concrete_53_s050_g025`` carries both a
+        # specular and a gloss token, and leaving one behind would split it off
+        # into a material of its own.
+        spans = [match.span for match in matches] + noise_spans
+        base_name = self._clean_base_name(self._strip_spans(stem, spans))
+        if not base_name:
+            base_name = "Material"
+
+        for match in matches:
+            channel_data = self._matcher.channels.get(match.channel, {})
             options = {}
             if channel_data.get("invert"):
                 options["invert"] = True
@@ -199,7 +240,7 @@ class TextureScanner:
             candidates.append((filename, full_path, stem))
 
         stems = [stem for _filename, _path, stem in candidates]
-        noise = self._noise_aliases(stems)
+        noise = self._noise_aliases(stems) | self.extra_ignore_aliases
         if noise:
             self.log.info(
                 f"Ignoring common alias token(s) shared by the texture set: "

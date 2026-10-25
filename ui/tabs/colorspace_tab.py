@@ -186,6 +186,8 @@ class ColorspaceTab:
             self.manual_combo.setCurrentText(current)
 
     def _refresh(self):
+        # Pick up session-only channel overrides set in the Batch Builder tab.
+        self.matcher.reload_name_driver()
         try:
             results = self.matcher.scan()
         except Exception as exc:

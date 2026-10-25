@@ -142,6 +142,33 @@ def test_texture_channels_accessor():
     assert "basecolor" in channels["BaseColor"]["aliases"]
 
 
+def test_session_overrides_replace_aliases_and_add_ignores():
+    loader = ConfigLoader()
+
+    loader.set_session_overrides({"BaseColor": ["skin"]}, ["metalness"])
+
+    channels = loader.get_texture_channels()
+    assert channels["BaseColor"]["aliases"] == ["skin"]
+    # untouched channels keep their configured aliases
+    assert "roughness" in channels["Roughness"]["aliases"]
+    assert loader.get_session_ignores() == ["metalness"]
+    # ignored tokens are not the artwork ignore_keywords
+    assert "metalness" not in loader.get_ignore_keywords()
+    # a fresh loader (i.e. the config file) is unaffected
+    assert "basecolor" in ConfigLoader().get_texture_channels()["BaseColor"]["aliases"]
+
+
+def test_session_overrides_skip_empty_values_and_unknown_channels():
+    loader = ConfigLoader()
+
+    loader.set_session_overrides({"BaseColor": [], "Nope": ["x"]}, None)
+
+    # empty values are dropped; an unknown name never reaches the channel table
+    assert loader.get_session_aliases() == {"Nope": ["x"]}
+    assert "Nope" not in loader.get_texture_channels()
+    assert "basecolor" in loader.get_texture_channels()["BaseColor"]["aliases"]
+
+
 def test_expanded_attribute_keywords():
     loader = ConfigLoader()
     expanded = loader.get_expanded_attribute_keywords()

@@ -418,6 +418,17 @@ class ColorSpaceMatcher:
         self.resolver.reset()
         self.channel_driver.reset()
 
+    def reload_name_driver(self):
+        """Rebuild the name driver from the current ``ConfigLoader`` state.
+
+        Session-only channel overrides can change the aliases after the matcher
+        was built, so a scan must be able to pick them up without rebuilding the
+        whole matcher (which would drop the resolver's OCIO cache).  The shared
+        ``ConfigLoader`` instance is kept.
+        """
+        self.name_driver = NameDriver(
+            config_loader=self.name_driver.config, logger=self.log)
+
     def available_spaces(self):
         return self.resolver.available_spaces()
 
@@ -434,10 +445,12 @@ class ColorSpaceMatcher:
                 source=_SOURCE,
             )
         short = self._short_suffix_directories(paths)
+        session_ignores = set(self.name_driver.config.get_session_ignores())
 
         results = [
             self.match(node,
-                       ignore_aliases=shared.get(os.path.dirname(paths[node]), ()),
+                       ignore_aliases=(set(shared.get(os.path.dirname(paths[node]), ()))
+                                       | session_ignores),
                        enable_short_suffixes=short.get(os.path.dirname(paths[node]), False))
             for node in file_nodes
         ]
@@ -452,8 +465,9 @@ class ColorSpaceMatcher:
                 source=_SOURCE,
             )
             results = [
-                self.match(node, enable_short_suffixes=short.get(
-                    os.path.dirname(paths[node]), False))
+                self.match(node, ignore_aliases=session_ignores,
+                           enable_short_suffixes=short.get(
+                               os.path.dirname(paths[node]), False))
                 for node in file_nodes
             ]
         return results

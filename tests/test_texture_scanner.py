@@ -226,11 +226,12 @@ def test_small_directory_keeps_plain_behaviour(scan_dir):
 
     result = TextureScanner().scan(str(scan_dir))
 
-    # plain behaviour: the common-token filter is not applied, so the files stay
-    # separate materials and the METALNESS suffix still wins where it is longer
-    assert len(result["materials"]) == 2
-    channels = {name for material in result["materials"] for name in material["channels"]}
-    assert channels == {"metallic", "specularRoughness"}
+    # plain behaviour: the common-token filter is not applied, so METALNESS stays
+    # a channel marker; every marker is stripped, so both files share one material
+    assert len(result["materials"]) == 1
+    material = result["materials"][0]
+    assert material["name"] == "fabric_2K"
+    assert set(material["channels"]) == {"metallic", "specularRoughness"}
 
 
 def test_asset_name_containing_an_alias_is_kept(scan_dir):
@@ -414,3 +415,77 @@ def test_scan_recursive_short_suffix_is_per_directory(scan_dir):
 
     assert sorted(m["name"] for m in result["materials"]) == ["y"]
     assert [Path(path).stem for path in result["unparsed"]] == ["x_d"]
+
+
+# --------------------------------------------------------------------------- #
+# Session-only overrides passed in by the UI
+# --------------------------------------------------------------------------- #
+
+def test_scan_extra_aliases_replace_a_channel(scan_dir):
+    _write_set(scan_dir, ["rock_skin", "rock_roughness"])
+
+    default = TextureScanner().scan(str(scan_dir))
+    assert [Path(path).stem for path in default["unparsed"]] == ["rock_skin"]
+
+    scanner = TextureScanner(extra_aliases={"BaseColor": ["skin"]})
+    result = scanner.scan(str(scan_dir))
+
+    assert result["unparsed"] == []
+    material = result["materials"][0]
+    assert material["channels"]["baseColor"]["channel"] == "BaseColor"
+
+
+def test_scan_extra_ignores_are_not_read_as_a_channel(scan_dir):
+    """A manually ignored token is never a channel marker, nor part of the name.
+
+    Two files are below the set-wide common-token threshold, so only the manual
+    ``extra_ignores`` stops ``_METALNESS`` from hijacking the channel.
+    """
+    _write_set(scan_dir, ["rock_col_METALNESS", "rock_roughness_METALNESS"])
+
+    scanner = TextureScanner(extra_ignores=["METALNESS"])
+    result = scanner.scan(str(scan_dir))
+
+    assert result["unparsed"] == []
+    material = result["materials"][0]
+    assert material["name"] == "rock"
+    assert set(material["channels"]) == {"baseColor", "specularRoughness"}
+
+
+def test_combined_suffix_variants_share_one_material(scan_dir):
+    """``s050-g025`` carries two markers; both must leave the material name."""
+    _write_set(scan_dir, ["concrete_53_d100", "concrete_53_b010",
+                          "concrete_53_s050-g025"])
+
+    scanner = TextureScanner(extra_aliases={
+        "BaseColor": ["d"], "Bump": ["b"], "Glossiness": ["s", "g"]})
+    result = scanner.scan(str(scan_dir))
+
+    assert [m["name"] for m in result["materials"]] == ["concrete_53"]
+    assert set(result["materials"][0]["channels"]) == {
+        "baseColor", "normal_bump", "specularRoughness"}
+
+
+def test_ignore_matches_a_glued_number(scan_dir):
+    """A manual Ignore entry matches the token with its strength number too."""
+    _write_set(scan_dir, ["concrete_53_d100", "concrete_53_s050-g025"])
+
+    scanner = TextureScanner(
+        extra_aliases={"BaseColor": ["d"], "Glossiness": ["s"]},
+        extra_ignores=["g"])
+    result = scanner.scan(str(scan_dir))
+
+    assert [m["name"] for m in result["materials"]] == ["concrete_53"]
+    assert set(result["materials"][0]["channels"]) == {"baseColor", "specularRoughness"}
+
+
+def test_parenthesised_marker_is_a_token(scan_dir):
+    """``(g000)`` normalizes to a token, so ``g`` can match it."""
+    _write_set(scan_dir, ["concrete_05_d100", "concrete_05_s100-(g000)"])
+
+    scanner = TextureScanner(extra_aliases={
+        "BaseColor": ["d"], "Glossiness": ["s", "g"]})
+    result = scanner.scan(str(scan_dir))
+
+    assert [m["name"] for m in result["materials"]] == ["concrete_05"]
+    assert set(result["materials"][0]["channels"]) == {"baseColor", "specularRoughness"}

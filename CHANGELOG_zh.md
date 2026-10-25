@@ -6,10 +6,12 @@
 - **单字母通道后缀**：`texture_channels.json` 新增全局 `short_suffixes` 映射（`d`→BaseColor、`b`→Bump、`n`→Normal、`p`→Displacement、`s`→Reflection、`g`→Glossiness、`r`→Roughness）。白名单字母**仅认末 token**（纯字母或"字母+数字"，如 `d`/`b005`/`r100`），且**该目录出现 ≥2 种不同字母**才启用（`core.filename_match.short_suffix_letters`）——所以 hash 名里孤立的 `_g`、`g1.png` 都不会被当成通道。表是全局的，**不做任何按目录特判**：`r` 一律视为 Roughness（因此 Arroway 的 `_r`（实为 reflection）会被读成 Roughness，这是已知且接受的取舍）
 - **忽略关键词**（`texture_channels.json: ignore_keywords`）：文件名含这些 token（`preview`/`thumb`/`demo`/`render`/`swatch`/`gross`/`hires`/`clay` 等）的文件直接跳过，不再进 unparsed。**故意不含 `page`**——它是某些库的材质名（`xxx_page_b.jpg`）
 - **Batch Builder 递归扫描**：`TextureScanner.scan(directory, recursive=True)` 遍历所有子目录，每个目录**独立**扫描（共有关键词与单字母判定都是逐目录的）再合并结果；Batch Builder 标签页新增 "Include Subfolders" 勾选框
+- **Batch Builder 的会话级自定义通道名**：默认折叠的 "Custom Channel Names" 面板预填**所有通道、值为空**，并按通道 `type` 分成**三列并排编辑**（Color / Scalar / Geometry）。通道名**大小写不敏感**；填了的行**替换**该通道的别名；空行沿用 `texture_channels.json`；`Ignore = tok1, tok2` 行把这些 token 标记为**永不当作通道标记**（整套共有 token 检测的手动版——当某后缀出现文件太少、自动检测不触发时很有用）。**不落盘**：点击 Scan 时应用并重建 scanner。同一份覆盖经共享 `ConfigLoader` 传到 Colorspace（`ColorSpaceMatcher.reload_name_driver()`），两个标签页判定始终一致
 
 ### 修复
 - **`NameDriver` 把扩展名一起参与匹配**：colorspace 的 name driver 把 `rock_col.jpg` 整体归一化，导致**末尾 ≤3 字母别名**（`_col`/`_dif`/`_nrm`/`_sss`/`_bmp`/`_rgh`）永远匹配不上（子串兜底要求 ≥4 字符）。现改为匹配 stem，Batch Builder 扫描器与 Colorspace name driver 结果重新一致（在 3.7 万文件库上实测：仅 `_dif` 结尾就有 205 例漏判）
 - **通道冲突只按文件名顺序解决**：两个文件映射到同一通用属性时先名字者胜——于是 `Gloss` 胜 `Roughness`、`bump` 胜 `normal`。现通道带 `priority`（`texture_channels.json`），比较键为 `(位深/分辨率, priority)`，所以 **Roughness 胜 Glossiness**、**Normal 胜 Bump**，与名字顺序无关；仍平手时保留名字序第一个。`_record_conflict()` 也会把替换后的候选加入 `candidates`，保证 `kept` 始终在其中
+- **一个文件带两个通道标记时被拆成独立材质**：`_parse()` 只剔除**第一个**命中标记，于是 Arroway 的 `concrete-53_s050-g025.jpg`（specular + gloss）变成 `concrete_53_g025`，而 `concrete-53_d100.jpg` 是 `concrete_53`——一套贴图被拆成两个材质。现在**所有**命中标记都剔除，两者都归到 `concrete_53`。括号也作分隔符（`concrete-05_s100-(g000).jpg` → `g000` 是独立 token，可被 `g` 命中），且手动 `Ignore` 词也支持"字母+粘连数字"（`Ignore = g` 吃掉 `g025`/`g000`）
 
 ## 2026-10-25
 

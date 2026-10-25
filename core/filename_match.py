@@ -36,12 +36,13 @@ _SHORT_TOKEN_RE = re.compile(r"([a-z])(\d+k?)?")
 
 
 def normalize_stem(name):
-    """Lowercase a filename stem, turning dashes/spaces into underscores.
+    """Lowercase a filename stem, turning separators into underscores.
 
-    The token boundaries produced here are the ones every consumer matches
-    against, so short aliases never match inside unrelated words.
+    Dashes, spaces and parentheses all become ``_``, so ``(g000)`` and
+    ``s050-g025`` split into the same tokens every consumer matches against and
+    short aliases never match inside unrelated words.
     """
-    return re.sub(r"[- ]", "_", name.lower())
+    return re.sub(r"[- ()]", "_", name.lower())
 
 
 @lru_cache(maxsize=None)
@@ -121,6 +122,22 @@ def quality_key(stem):
     return depth, resolution
 
 
+def token_matches(token, keyword):
+    """Whether a normalized *token* is *keyword* or *keyword* plus a glued number.
+
+    ``nrm`` matches ``nrm`` and ``nrm16``; a bare letter matches ``g`` and
+    ``g025``.  Used by :func:`shared_keywords` and by the scanner's manual
+    ignore list, so both apply the same "letter + strength" rule.
+    """
+    if token == keyword:
+        return True
+    if not keyword:
+        return False
+    suffix = token[len(keyword):]
+    return (token.startswith(keyword)
+            and _GLUED_SUFFIX_RE.fullmatch(suffix) is not None)
+
+
 def shared_keywords(stems, keywords, ratio=_COMMON_TOKEN_RATIO,
                     min_files=_COMMON_TOKEN_MIN_FILES):
     """Keywords shared by most of *stems*: set-wide suffixes, not file evidence.
@@ -139,9 +156,7 @@ def shared_keywords(stems, keywords, ratio=_COMMON_TOKEN_RATIO,
     for stem in stems:
         for token in set(normalize_stem(stem).split("_")):
             for keyword in keywords:
-                if token == keyword or (
-                        token.startswith(keyword)
-                        and _GLUED_SUFFIX_RE.fullmatch(token[len(keyword):])):
+                if token_matches(token, keyword):
                     counts[keyword] = counts.get(keyword, 0) + 1
 
     threshold = max(min_files, math.ceil(ratio * total))

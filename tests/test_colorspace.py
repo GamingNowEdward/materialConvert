@@ -52,6 +52,20 @@ def test_name_driver_short_suffix_only_when_enabled():
     assert res.roles == ["srgb"]
 
 
+def test_reload_name_driver_picks_up_session_overrides():
+    from core.config_loader import ConfigLoader
+
+    loader = ConfigLoader()
+    matcher = ColorSpaceMatcher(config_loader=loader, logger=Logger())
+
+    assert matcher.name_driver.match(r"C:/tex/rock_skin.jpg").status == DriverStatus.NO_MATCH
+
+    loader.set_session_overrides({"BaseColor": ["skin"]}, None)
+    matcher.reload_name_driver()
+
+    assert matcher.name_driver.match(r"C:/tex/rock_skin.jpg").roles == ["srgb"]
+
+
 def test_name_driver_empty_path():
     assert _name_driver().match("").status == DriverStatus.NO_MATCH
     assert _name_driver().match("C:/tex/").status == DriverStatus.NO_MATCH

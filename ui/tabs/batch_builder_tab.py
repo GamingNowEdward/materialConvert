@@ -18,6 +18,17 @@ _KEPT_CONFLICT_BG = "#4a3d1f"
 _DROPPED_CONFLICT_BG = "#5a2d2d"
 _UNPARSED_BG = "#333a44"
 
+#: Channel groups for the side-by-side custom-name editors, keyed by the
+#: ``type`` in ``texture_channels.json``.  ``Other`` catches future types.
+_GROUP_LABELS = {
+    "color": "Color",
+    "float": "Scalar",
+    "normal": "Geometry",
+    "bump": "Geometry",
+    "displacement": "Geometry",
+}
+_GROUP_ORDER = ["Color", "Scalar", "Geometry", "Other"]
+
 
 class BatchBuilderTab:
 
@@ -34,6 +45,11 @@ class BatchBuilderTab:
         }
         self.directory_input = None
         self.cb_recursive = None
+        self.btn_custom = None
+        self.custom_box = None
+        self.custom_ignore = None
+        self.custom_edits = {}
+        self.custom_status = None
         self.target_combo = None
         self.cb_full_chain = None
         self.cb_qss = None
@@ -103,6 +119,7 @@ class BatchBuilderTab:
         opt_layout.addWidget(self.cb_skip_conflicts)
 
         layout.addWidget(opt_group)
+        layout.addWidget(self._build_custom_overrides_group())
 
         btn_row = QtWidgets.QHBoxLayout()
         btn_build_all = QtWidgets.QPushButton("Build All")
@@ -117,9 +134,10 @@ class BatchBuilderTab:
         layout.addLayout(btn_row)
         self._busy_widgets = [
             btn_scan, btn_browse, self.directory_input, self.cb_recursive,
-            self.target_combo, self.cb_full_chain, self.cb_qss,
-            self.cb_skip_conflicts, btn_build_all, btn_build_selected,
-        ]
+            self.btn_custom, self.custom_ignore, self.target_combo,
+            self.cb_full_chain, self.cb_qss, self.cb_skip_conflicts,
+            btn_build_all, btn_build_selected,
+        ] + list(self.custom_edits.values())
 
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setVisible(False)
@@ -171,6 +189,160 @@ class BatchBuilderTab:
             source=_SOURCE, label="batch builder",
         )
 
+    # ------------------------------------------------------------------ #
+    # Session-only channel-name overrides (collapsed by default)
+    # ------------------------------------------------------------------ #
+
+    def _build_custom_overrides_group(self):
+        self.btn_custom = QtWidgets.QToolButton()
+        self.btn_custom.setText("Custom Channel Names")
+        self.btn_custom.setCheckable(True)
+        self.btn_custom.setChecked(False)
+        self.btn_custom.setArrowType(QtCore.Qt.RightArrow)
+        self.btn_custom.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_custom.toggled.connect(self._toggle_custom)
+
+        self.custom_status = QtWidgets.QLabel("")
+        self.custom_status.setObjectName("debugStatus")
+
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(self.btn_custom)
+        header.addStretch()
+        header.addWidget(self.custom_status)
+
+        self.custom_ignore = QtWidgets.QLineEdit(self._default_ignore_text())
+
+        self.custom_edits = {}
+        columns = QtWidgets.QHBoxLayout()
+        columns.setSpacing(16)
+        for label, channels in self._channel_groups():
+            box = QtWidgets.QGroupBox(label)
+            box_layout = QtWidgets.QVBoxLayout(box)
+            box_layout.setContentsMargins(8, 8, 8, 8)
+            edit = QtWidgets.QPlainTextEdit()
+            edit.setPlainText(self._default_group_text(channels))
+            edit.setMinimumWidth(220)
+            box_layout.addWidget(edit)
+            columns.addWidget(box, 1)
+            self.custom_edits[label] = edit
+
+        btn_clear = QtWidgets.QPushButton("Clear")
+        btn_clear.clicked.connect(self._clear_custom)
+        clear_row = QtWidgets.QHBoxLayout()
+        clear_row.addStretch()
+        clear_row.addWidget(btn_clear)
+
+        body_layout = QtWidgets.QVBoxLayout()
+        body_layout.setContentsMargins(12, 0, 12, 6)
+        body_layout.addWidget(QtWidgets.QLabel(
+            "# One rule per line:  Channel = alias1, alias2   (empty = json config)"))
+        body_layout.addWidget(self.custom_ignore)
+        body_layout.addLayout(columns)
+        body_layout.addLayout(clear_row)
+        self.custom_box = QtWidgets.QWidget()
+        self.custom_box.setLayout(body_layout)
+        self.custom_box.setVisible(False)
+
+        group = QtWidgets.QWidget()
+        group_layout = QtWidgets.QVBoxLayout(group)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(4)
+        group_layout.addLayout(header)
+        group_layout.addWidget(self.custom_box)
+        self._update_custom_status({}, [], [])
+        return group
+
+    @staticmethod
+    def _normalize_alias(token):
+        """Match ChannelMatcher's alias normalization (lowercase, no - or space)."""
+        return token.strip().lower().replace("-", "").replace(" ", "")
+
+    def _channel_groups(self):
+        """Channels grouped for the three side-by-side editors."""
+        groups = {}
+        for name, data in self.config.get_texture_channels().items():
+            label = _GROUP_LABELS.get(data.get("type"), "Other")
+            groups.setdefault(label, []).append(name)
+        return [(label, groups[label]) for label in _GROUP_ORDER if label in groups]
+
+    @staticmethod
+    def _default_ignore_text():
+        return "Ignore = "
+
+    @staticmethod
+    def _default_group_text(channels):
+        return "\n".join(f"{name} = " for name in channels)
+
+    def _toggle_custom(self, expanded):
+        self.custom_box.setVisible(expanded)
+        self.btn_custom.setArrowType(
+            QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow)
+
+    def _parse_custom_text(self):
+        """Parse the editor into ``(aliases, ignores, unknown)``.
+
+        ``#`` starts a comment (whole line or trailing); ``Ignore`` collects
+        tokens to drop; any other key is a channel name (matched
+        case-insensitively) and only non-empty values override the configured
+        aliases.
+        """
+        aliases = {}
+        ignores = []
+        unknown = []
+        by_lower = {name.lower(): name
+                    for name in self.config.get_texture_channels()}
+        lines = [self.custom_ignore.text()]
+        for edit in self.custom_edits.values():
+            lines.extend(edit.toPlainText().splitlines())
+        for raw in lines:
+            line = raw.split("#", 1)[0].strip()
+            if not line or "=" not in line:
+                continue
+            key, _sep, value = line.partition("=")
+            key = key.strip()
+            tokens = [self._normalize_alias(t)
+                      for t in value.split(",") if t.strip()]
+            tokens = [t for t in tokens if t]
+            if key.lower() == "ignore":
+                ignores.extend(tokens)
+                continue
+            channel = by_lower.get(key.lower())
+            if channel is None:
+                unknown.append(key)
+            elif tokens:
+                aliases[channel] = tokens
+        return aliases, ignores, unknown
+
+    def _apply_custom_overrides(self):
+        """Push the editor's overrides into the config and rebuild the scanner."""
+        aliases, ignores, unknown = self._parse_custom_text()
+        self.config.set_session_overrides(aliases, ignores)
+        self.scanner = TextureScanner(
+            logger=self.log,
+            extra_aliases=self.config.get_session_aliases(),
+            extra_ignores=self.config.get_session_ignores(),
+        )
+        self._update_custom_status(aliases, ignores, unknown)
+
+    def _update_custom_status(self, aliases, ignores, unknown):
+        summary = (f"{len(aliases)} override(s): {', '.join(sorted(aliases))}"
+                   if aliases else "all channels follow texture_channels.json")
+        parts = [summary]
+        if ignores:
+            parts.append(f"{len(set(ignores))} Ignore: "
+                         f"{', '.join(sorted(set(ignores)))}")
+        text = "  ·  ".join(parts)
+        if unknown:
+            text += f"   unknown channel: {', '.join(sorted(set(unknown)))}"
+        self.custom_status.setText(text)
+
+    def _clear_custom(self):
+        self.custom_ignore.setText(self._default_ignore_text())
+        for label, channels in self._channel_groups():
+            self.custom_edits[label].setPlainText(self._default_group_text(channels))
+        self.config.set_session_overrides({}, [])
+        self._update_custom_status({}, [], [])
+
     def _browse_directory(self):
         directory = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Texture Directory")
         if directory:
@@ -183,6 +355,7 @@ class BatchBuilderTab:
             self.log.warn("Please select a valid directory first.", source=_SOURCE)
             return
 
+        self._apply_custom_overrides()
         recursive = self.cb_recursive.isChecked()
         self.scan_result = self.scanner.scan(directory, recursive=recursive)
         self._populate_table()

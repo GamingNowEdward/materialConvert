@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 
@@ -230,6 +231,10 @@ class ConfigLoader:
         self._color_weight_pairs = []
         self._color_space_config = {}
         self._texture_channels = {}
+        #: Session-only overrides from the UI (never persisted): channel aliases
+        #: that replace the configured ones, and extra file-name tokens to drop.
+        self._session_aliases = {}
+        self._session_ignores = []
         self._load_all()
 
     def _load_all(self):
@@ -420,8 +425,36 @@ class ConfigLoader:
 
         Consumed by ``core.filename_match.ChannelMatcher`` so the Batch Builder
         scanner and the Colorspace name driver match file names identically.
+        Session-only overrides (see :meth:`set_session_overrides`) replace the
+        alias list of the channels they name.
         """
-        return dict(self._texture_channels.get("channels", {}))
+        channels = copy.deepcopy(self._texture_channels.get("channels", {}))
+        for name, aliases in self._session_aliases.items():
+            if name in channels:
+                channels[name]["aliases"] = list(aliases)
+        return channels
+
+    def set_session_overrides(self, aliases=None, ignores=None):
+        """Set session-only channel overrides (never written to disk).
+
+        ``aliases`` maps a channel name to the alias list that replaces the
+        configured one (empty values are dropped); ``ignores`` are extra tokens
+        that must never be read as a channel marker (the manual counterpart of
+        the set-wide common-token detection).  Consumers must rebuild their
+        matcher afterwards (``TextureScanner`` /
+        ``ColorSpaceMatcher.reload_name_driver``).
+        """
+        self._session_aliases = {
+            name: list(values)
+            for name, values in (aliases or {}).items() if values
+        }
+        self._session_ignores = [str(token).lower() for token in (ignores or [])]
+
+    def get_session_aliases(self):
+        return {name: list(values) for name, values in self._session_aliases.items()}
+
+    def get_session_ignores(self):
+        return list(self._session_ignores)
 
     def get_short_suffixes(self):
         """Single-letter channel markers (``d`` -> ``BaseColor``).

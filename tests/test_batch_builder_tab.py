@@ -89,3 +89,47 @@ def test_table_legend_explains_the_statuses(qapp):
 
     assert "CONFLICT (kept)" in legend
     assert "UNPARSED" in legend
+
+
+def test_custom_editor_parses_overrides_and_ignores(qapp):
+    tab = _tab(qapp)
+    tab.custom_ignore.setText("Ignore = METALNESS, metalness   # trailing comment")
+    tab.custom_edits["Color"].setPlainText("BaseColor =\nNope = x\n")
+    tab.custom_edits["Scalar"].setPlainText("# comment\nRoughness = gloss_inv, rgh2\n")
+
+    aliases, ignores, unknown = tab._parse_custom_text()
+
+    assert aliases == {"Roughness": ["gloss_inv", "rgh2"]}
+    assert ignores == ["metalness", "metalness"]
+    assert unknown == ["Nope"]
+
+
+def test_custom_editor_channel_names_are_case_insensitive(qapp):
+    tab = _tab(qapp)
+    tab.custom_edits["Color"].setPlainText("basecolor = skin\n")
+
+    aliases, _ignores, unknown = tab._parse_custom_text()
+
+    assert aliases == {"BaseColor": ["skin"]}
+    assert unknown == []
+
+
+def test_custom_editor_groups_channels_by_type(qapp):
+    tab = _tab(qapp)
+
+    assert set(tab.custom_edits) == {"Color", "Scalar", "Geometry"}
+    assert "BaseColor = " in tab.custom_edits["Color"].toPlainText()
+    assert "Roughness = " in tab.custom_edits["Scalar"].toPlainText()
+    assert "Normal = " in tab.custom_edits["Geometry"].toPlainText()
+
+
+def test_clear_custom_restores_the_default_skeleton(qapp):
+    tab = _tab(qapp)
+    tab.custom_ignore.setText("Ignore = metalness")
+    tab.custom_edits["Scalar"].setPlainText("Roughness = x")
+    tab._clear_custom()
+
+    assert tab.custom_ignore.text() == "Ignore = "
+    assert "Roughness = " in tab.custom_edits["Scalar"].toPlainText()
+    assert "BaseColor = " in tab.custom_edits["Color"].toPlainText()
+    assert tab.config.get_session_aliases() == {}
