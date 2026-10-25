@@ -2,7 +2,7 @@ import pytest
 
 import core.colorspace as cs
 from core.logger import Logger
-from ui import QtWidgets
+from ui import QtCore, QtWidgets
 from ui.tabs.colorspace_tab import ColorspaceTab
 
 
@@ -11,7 +11,22 @@ def qapp():
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication([])
-    return app
+    # Qt must own every test widget: PySide6 segfaults at interpreter exit when
+    # the Python GC deletes a top-level widget directly ("shared QObject was
+    # deleted directly").  Parenting each UI to one holder makes C++ the owner,
+    # and the holder is then deleted here in a single, ordered step.
+    app._test_holder = QtWidgets.QWidget()
+    yield app
+    app._test_holder.deleteLater()
+    app.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+    app.processEvents()
+
+
+def _build(qapp, tab):
+    """Build the tab UI, parented to the module holder so Qt owns it (see qapp)."""
+    widget = tab.build_ui()
+    widget.setParent(qapp._test_holder)
+    return widget
 
 
 def _mock_maya(monkeypatch, set_attr_calls, paths=None, nodes=("file1",),
@@ -43,7 +58,7 @@ def _mock_maya(monkeypatch, set_attr_calls, paths=None, nodes=("file1",),
 
 def test_colorspace_tab_builds(qapp):
     tab = ColorspaceTab(logger=Logger())
-    widget = tab.build_ui()
+    widget = _build(qapp, tab)
     assert widget is not None
 
 
@@ -52,7 +67,7 @@ def test_refresh_pops_table_without_set_attr(qapp, monkeypatch):
     _mock_maya(monkeypatch, set_attr_calls, paths={"file1": "C:/t_baseColor.png"})
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     assert tab.table.rowCount() == 1
@@ -82,7 +97,7 @@ def test_apply_selected_only_matched(qapp, monkeypatch):
     )
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     tab.table.selectRow(_row_for_node(tab, "file1"))
@@ -106,7 +121,7 @@ def test_apply_all_matched_only_matched(qapp, monkeypatch):
     )
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     tab._apply_all_matched()
@@ -118,7 +133,7 @@ def test_manual_assignment_applies_to_selected(qapp, monkeypatch):
     _mock_maya(monkeypatch, set_attr_calls, paths={"file1": "C:/t_baseColor.png"})
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     tab.table.selectRow(0)
@@ -134,7 +149,7 @@ def test_apply_manual_requires_selection(qapp, monkeypatch):
     _mock_maya(monkeypatch, set_attr_calls, paths={"file1": "C:/t_baseColor.png"})
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     tab._apply_manual()
@@ -148,7 +163,7 @@ def test_row_selection_syncs_maya(qapp, monkeypatch):
     monkeypatch.setattr(cs.cmds, "select", lambda *a, **k: select_calls.append(a))
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     tab.table.selectRow(0)
@@ -165,7 +180,7 @@ def test_refresh_does_not_sync_selection(qapp, monkeypatch):
     monkeypatch.setattr(cs.cmds, "select", lambda *a, **k: select_calls.append(a))
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._refresh()
 
     # populating the table must not touch the Maya selection
@@ -180,7 +195,7 @@ def test_ignore_color_space_rules_sets_all_files(qapp, monkeypatch):
     monkeypatch.setattr(cs.cmds, "select", lambda *a, **k: select_calls.append(a))
 
     tab = ColorspaceTab(logger=Logger())
-    tab.build_ui()
+    _build(qapp, tab)
     tab._ignore_color_space_rules()
 
     assert [c[0] for c in set_attr_calls] == [
@@ -200,7 +215,7 @@ def test_node_tools_has_no_colorspace_ui(qapp):
     ):
         assert not hasattr(tab, attr), f"{attr} should be removed from NodeToolsTab"
 
-    widget = tab.build_ui()
+    widget = _build(qapp, tab)
     labels = [btn.text() for btn in widget.findChildren(QtWidgets.QPushButton)]
     for forbidden in ("Color Space", "Auto Match", "ignoreColorSpaceFileRules"):
         assert not any(forbidden in label for label in labels), (

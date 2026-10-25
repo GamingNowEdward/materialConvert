@@ -14,7 +14,15 @@ def qapp():
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication([])
-    return app
+    # Qt must own every test widget: PySide6 segfaults at interpreter exit when
+    # the Python GC deletes a top-level widget directly ("shared QObject was
+    # deleted directly").  Parenting each UI to one holder makes C++ the owner,
+    # and the holder is then deleted here in a single, ordered step.
+    app._test_holder = QtWidgets.QWidget()
+    yield app
+    app._test_holder.deleteLater()
+    app.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+    app.processEvents()
 
 
 def _tab(qapp):
@@ -22,6 +30,7 @@ def _tab(qapp):
     tab = BatchBuilderTab(ctx, logger=Logger())
     # keep the Qt widget alive for the duration of the test
     tab._widget = tab.build_ui()
+    tab._widget.setParent(qapp._test_holder)
     return tab
 
 
