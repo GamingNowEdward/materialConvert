@@ -123,11 +123,65 @@ class CCConversionLive(support.MayaTestCase):
                 # source material attribute must be re-pointed at its own CC
                 src_up = support.upstream_plug("%s.%s" % (mat, attr))
                 self.assertEqual(src_up, "%s.%s" % (cc, cc_cfg.output))
+
+                # the target material channel must be wired as well, not
+                # just the source chain restored.
+                tgt_up = support.upstream_plug(
+                    "%s.%s" % (result.new_material, tgt.get_maya_attr("baseColor")))
+                self.assertIsNotNone(tgt_up, "target baseColor not connected")
+                checked += 1
+        self.assertGreater(checked, 0)
+
+    def _cc_has_out_alpha(self, renderer):
+        """Whether the renderer's CC node exposes ``outAlpha`` (float output)."""
+        cc_cfg = self.loader.get_color_correction_config(renderer)
+        if not cc_cfg or not cc_cfg.node_type:
+            return False
+        node = cmds.shadingNode(cc_cfg.node_type, asUtility=True)
+        try:
+            return cmds.attributeQuery("outAlpha", node=node, exists=True)
+        finally:
+            cmds.delete(node)
+
+    def test_cc_out_alpha_drives_scalar_channel(self):
+        """A CC driving a float channel must connect through outAlpha."""
+        checked = 0
+        for src, tgt in self._pairs():
+            if src.renderer == tgt.renderer:
+                continue
+            # The scenario only exists when both CC nodes expose a float output.
+            if not self._cc_has_out_alpha(src.renderer):
+                continue
+            if not self._cc_has_out_alpha(tgt.renderer):
+                continue
+            src_attr = src.get_maya_attr("metallic")
+            tgt_attr = tgt.get_maya_attr("metallic")
+            if not src_attr or not tgt_attr:
+                continue
+            with self.subTest(src=src.node_type, tgt=tgt.node_type):
+                cmds.file(new=True, force=True)
+                cc_cfg = self.loader.get_color_correction_config(src.renderer)
+                mat = support.create_material(src.node_type, "ccAlpha_src")
+                tex = cmds.shadingNode("file", asTexture=True, name="ccAlpha_tex")
+                cc = cmds.shadingNode(cc_cfg.node_type, asUtility=True, name="ccAlpha_cc")
+                cmds.connectAttr(tex + ".outColor", "%s.%s" % (cc, cc_cfg.input), force=True)
+                # outColor (float3) cannot drive a float attribute: outAlpha is
+                # the only viable slot, exactly as in the reported bug.
+                cmds.connectAttr("%s.outAlpha" % cc, "%s.%s" % (mat, src_attr), force=True)
+
+                from core.converter import MaterialConverter
+                result = MaterialConverter(config=self.loader).convert(mat, tgt.node_type)
+                self.assertTrue(result.converted, result.reason)
+
+                up = support.upstream_plug("%s.%s" % (result.new_material, tgt_attr))
+                self.assertIsNotNone(up, "target metallic not connected")
+                self.assertTrue(up.endswith(".outAlpha"),
+                                "scalar channel must be driven by outAlpha, got %r" % up)
                 checked += 1
         self.assertGreater(checked, 0)
 
     # ------------------------------------------------------------------ #
-    # Shared intermediate node between the source CC and the material (B06)
+    # Shared intermediate node between the source CC and the material
     # ------------------------------------------------------------------ #
 
     def _layer_snapshot(self, node):
@@ -146,7 +200,7 @@ class CCConversionLive(support.MayaTestCase):
         }
 
     def test_shared_layered_chain_is_copied_not_rewritten(self):
-        """B06：源 CC 经 layeredTexture 驱动材质时，源网络必须零改写。"""
+        """Source CC driving the material through a layeredTexture: source graph untouched."""
         checked = 0
         for src, tgt in self._pairs():
             if src.renderer == tgt.renderer:
@@ -198,7 +252,7 @@ class CCConversionLive(support.MayaTestCase):
         self.assertGreater(checked, 0)
 
     def test_multi_hop_chain_is_reported_and_source_kept(self):
-        """B06：两级中间链不支持时必须显式上报，且源网络不变。"""
+        """A two-level intermediate chain must be reported explicitly, source untouched."""
         checked = 0
         for src, tgt in self._pairs():
             if src.renderer == tgt.renderer:

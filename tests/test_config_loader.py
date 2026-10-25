@@ -126,9 +126,9 @@ def test_cc_configs_and_identify():
         assert cc.hue_range == hue_range
         assert cc.hue_center == center
         assert loader.identify_cc_renderer(node_type) == renderer
-    # maya 显式 gamma="" 保持空，不被 common 覆盖
+    # maya declares gamma="" explicitly: it stays empty, not overwritten by common
     assert cc_configs["maya"].gamma == ""
-    # vray 显式 gamma="" 同样保留（common 合并只补缺失字段）
+    # vray likewise keeps its explicit gamma="" (common merging only fills gaps)
     assert cc_configs["vray"].gamma == ""
 
 
@@ -142,7 +142,7 @@ def test_filename_role_keywords():
     assert "roughness" in roles["raw"]
     assert "normal" in roles["raw"]
     assert "displacement" in roles["raw"]
-    # 短别名（len < 5）被过滤，避免子串误触
+    # short aliases (len < 5) are filtered out to avoid substring false hits
     short = {"col", "dif", "base", "diff", "spec", "refl", "refr", "glos",
              "bmp", "nrm", "sss", "emit", "disp", "opac", "glow", "nmap", "fuzz"}
     for word in short:
@@ -352,7 +352,7 @@ def test_bn_extra_nodes_missing_node_type(tmp_path, monkeypatch):
     assert "" not in loader.get_all_bn_types()
 
 def test_normal_space_mapping_round_trips():
-    """B05：normal_space 提供空间 -> 开关值的显式映射（配置驱动）。"""
+    """normal_space provides an explicit space -> switch-value mapping (config-driven)."""
     from core.config_loader import ConfigLoader
 
     loader = ConfigLoader()

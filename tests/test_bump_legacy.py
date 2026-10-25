@@ -1,4 +1,4 @@
-"""Unit tests for legacy-normal file materialization (review finding B04).
+"""Unit tests for legacy-normal file materialization.
 
 Covers the two gaps: a missing place2dTexture must fail the conversion, and a
 materialized ``file`` node may only be reused when its UV chain is complete and

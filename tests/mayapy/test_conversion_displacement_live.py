@@ -75,7 +75,7 @@ class DisplacementLive(support.MayaTestCase):
         self.assertGreater(checked, 0)
 
     # ------------------------------------------------------------------ #
-    # Failure propagation (review finding B01)
+    # Failure propagation
     # ------------------------------------------------------------------ #
 
     def _real_displacement_pair(self):

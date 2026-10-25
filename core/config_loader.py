@@ -8,6 +8,14 @@ def normalize_keyword(kw):
     """Normalize keyword: lowercase and strip underscores/dashes, used for matching colorspace attribute names."""
     return kw.lower().replace("_", "").replace("-", "")
 
+
+#: Keys inside a material section that describe the section rather than mapping a
+#: common attribute to a Maya attribute.  They must not leak into ``attr_map``,
+#: where they would only trigger pointless existence queries.
+_NON_ATTR_SECTION_KEYS = frozenset(
+    {"node_type", "file_source", "lyr_src", "output", "prerequisites"}
+)
+
 class NodeMapping:
     def __init__(self, data, renderer, defaults=None):
         merged = dict(defaults) if defaults else {}
@@ -130,16 +138,28 @@ class MaterialConfig:
         self.uiPanel_display_name = mat_data.get("uiPanel_display_name", self.node_type)
         self.renderer = mat_data.get("renderer", "unknown")
         self.plugin = mat_data.get("plugin", "")
+        #: Material output attribute used to enumerate shading engines.  Maya's
+        #: generic ``outColor`` is the default; a renderer may override it via
+        #: ``material.output`` in its JSON.
+        self.material_output = mat_data.get("output", "outColor") or "outColor"
 
         self.attr_map = {}
         self.prerequisites = {}
         self.attr_prerequisites = {}
+        self.builder_prerequisites = {}
         self.invert = {}
 
         prereq_section = mat_data.get("prerequisites", {})
         if prereq_section:
             if isinstance(prereq_section, dict):
                 self.prerequisites = dict(prereq_section)
+
+        # Builder-only, per-channel prerequisites (e.g. V-Ray ``ssOn`` when the
+        # subsurface channel is built).  Kept separate from ``prerequisites`` so
+        # the converter path is not affected.
+        builder_prereq_section = mat_data.get("builder_prerequisites", {})
+        if isinstance(builder_prereq_section, dict):
+            self.builder_prerequisites = dict(builder_prereq_section)
 
         invert_section = mat_data.get("invert", {})
         if isinstance(invert_section, dict):
@@ -162,7 +182,7 @@ class MaterialConfig:
                     section_prereqs = dict(section_data["prerequisites"])
 
             for common_attr, maya_attr in section_data.items():
-                if common_attr == "prerequisites":
+                if common_attr in _NON_ATTR_SECTION_KEYS:
                     continue
                 if isinstance(maya_attr, str):
                     self.attr_map[common_attr] = maya_attr
@@ -189,6 +209,9 @@ class MaterialConfig:
 
     def get_attr_prerequisites(self, common_attr):
         return self.attr_prerequisites.get(common_attr)
+
+    def get_builder_prerequisites(self):
+        return dict(self.builder_prerequisites)
 
     def get_inverts(self):
         return dict(self.invert)

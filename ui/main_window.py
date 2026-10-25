@@ -44,7 +44,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Every tab that runs a scene-modifying operation reports its busy state
         # here, so a second submission from another tab is impossible while one
         # operation is already running on the main thread.
-        for _tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab):
+        for _tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab,
+                     self.colorspace_tab, self.node_tools_tab, self.log_tab):
             _tab.on_busy_change = self._set_busy
 
         self.setObjectName(self.WINDOW_NAME)
@@ -65,7 +66,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._busy = active
         widgets = []
-        for tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab):
+        for tab in (self.converter_tab, self.builder_tab, self.batch_builder_tab,
+                    self.colorspace_tab, self.node_tools_tab, self.log_tab):
             widgets.extend(getattr(tab, "_busy_widgets", []))
         set_enabled(widgets, not active)
         if active:
@@ -104,8 +106,40 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_tab.set_active(active)
 
 
+#: Attribute name used to stash the live window on the QApplication instance so
+#: it survives a module reload (``globals()`` is reset when main.py re-execs).
+_APP_WINDOW_ATTR = "_materialConvertWindow"
+
+
+def _existing_window(logger=None):
+    """Return the live converter window from a previous run, or None.
+
+    Looks at the QApplication instance first (survives a module reload) and
+    falls back to this module's global.  ``shiboken.isValid`` filters out a
+    wrapper whose C++ object was already deleted, so no NameError/exception is
+    used as control flow.
+    """
+    log = logger or get_logger()
+    candidates = []
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        candidates.append(getattr(app, _APP_WINDOW_ATTR, None))
+    candidates.append(globals().get("_main_window"))
+
+    for window in candidates:
+        if window is None:
+            continue
+        try:
+            if shiboken is not None and not shiboken.isValid(window):
+                continue
+        except Exception as exc:
+            log.debug(f"Failed to validate previous window: {exc}", source="MainWindow")
+            continue
+        return window
+    return None
+
+
 def show():
-    global _main_window
     logger = get_logger()
 
     if shiboken is not None:
@@ -123,14 +157,16 @@ def show():
         except Exception as exc:
             logger.warn(f"Failed to locate Maya main window during cleanup: {exc}", source="MainWindow")
 
-    try:
-        _main_window.close()
-        _main_window.deleteLater()
-    except Exception as exc:
-        logger.debug(f"No previous converter window to close: {exc}", source="MainWindow")
+    previous = _existing_window(logger)
+    if previous is not None:
+        try:
+            previous.close()
+            previous.deleteLater()
+        except Exception as exc:
+            logger.debug(f"Failed to close previous converter window: {exc}", source="MainWindow")
 
     try:
-        _main_window = MainWindow()
+        window = MainWindow()
     except Exception as exc:
         try:
             logger.error(f"Failed to start Material Converter: {exc}", source="MainWindow")
@@ -145,5 +181,13 @@ def show():
                 report_terminal(f"Failed to report dialog error: {log_exc2!r}")
         raise
 
-    _main_window.show()
-    return _main_window
+    globals()["_main_window"] = window
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        try:
+            setattr(app, _APP_WINDOW_ATTR, window)
+        except Exception as exc:
+            logger.debug(f"Failed to stash window on QApplication: {exc}", source="MainWindow")
+
+    window.show()
+    return window

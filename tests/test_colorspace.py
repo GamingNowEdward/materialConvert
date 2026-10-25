@@ -398,7 +398,7 @@ def test_apply_matched_reports_failures(monkeypatch):
     assert len(outcome["failed"]) == 1
     assert any(r.level == LogLevel.WARN for r in log.poll(0))
 # --------------------------------------------------------------------------- #
-# Evidence completeness / stale revalidation (review finding O04)
+# Evidence completeness / stale revalidation
 # --------------------------------------------------------------------------- #
 
 def test_name_driver_requires_token_boundaries():

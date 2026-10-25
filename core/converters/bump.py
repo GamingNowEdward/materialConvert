@@ -196,12 +196,17 @@ class BumpConverter:
             bn_node = self._find_bn_node(source_mat)
             if bn_node is None:
                 self.log.debug(f"No bump/normal node found on {source_mat}", source=_SOURCE, nodes=(source_mat,))
-            for key, seg in standalone_segments:
+            else:
+                # A shared node type (bump2d / RedshiftBumpMap) reports its real
+                # mode itself via ``is_normal``; collect it once and file it under
+                # that key instead of walking it once per segment.
+                key, seg = standalone_segments[0]
                 data, seg_ok = self._collect_node(bn_node, seg, key)
                 if not seg_ok:
                     ok = False
                 if data:
-                    result[key] = data
+                    actual_key = "normal" if data.get("is_normal") else "bump"
+                    result[actual_key] = data
 
         self.log.debug(
             f"Bump/Normal collection result for {source_mat}: {sorted(result.keys())}",
@@ -270,7 +275,7 @@ class BumpConverter:
             return self._collect_embedded_path_node(bn_node, bn_cfg)
 
         is_normal, normal_space = self._detect_bn_modes(
-            bn_node, node_actual_type, bn_renderer, mode, mapping=bn_cfg)
+            bn_node, node_actual_type, bn_renderer, mode)
         scale_val = self._read_bn_attrs(bn_node, bn_cfg, "scale")
         input_plug = self._read_bn_attrs(bn_node, bn_cfg, "input", is_connection=True)
 
@@ -652,19 +657,16 @@ class BumpConverter:
         self.log.debug(f"No bump/normal node found for {material}", source=_SOURCE, nodes=(material,))
         return None
 
-    def _detect_bn_modes(self, bn_node, node_actual_type, bn_renderer, default_mode, mapping=None):
+    def _detect_bn_modes(self, bn_node, node_actual_type, bn_renderer, default_mode):
         """``(is_normal, space)`` for a bump/normal node.
 
         ``space`` is ``"tangent"`` / ``"object"`` when the renderer encodes the
         normal space on the mode switch, otherwise None (unknown/not applicable).
+
+        Nodes with an embedded texture path are handled earlier by
+        ``_collect_node`` (``_collect_embedded_path_node``), so no ``path``
+        branch lives here.
         """
-        if mapping is not None and mapping.path:
-            self.log.debug(
-                f"{node_actual_type} uses an embedded texture path; treated as normal",
-                source=_SOURCE,
-                nodes=(bn_node,),
-            )
-            return True, "tangent"
         if bn_renderer is None:
             self.log.warn(
                 f"Unknown bump/normal node type {node_actual_type}; defaulting mode to "

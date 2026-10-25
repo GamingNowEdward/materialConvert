@@ -50,32 +50,50 @@ def _normalize_nodes(nodes):
     Nested iterables are intentionally not flattened; they are stringified.
     Plug strings are intentionally not split here.  Callers must pass actual
     Maya node names (see ``node_utils.node_name_from_plug`` for plug inputs).
+
+    At most :data:`MAX_NODES` names are kept; the rest are summarised as
+    ``"...(+N more)"`` so a "whole selection" snapshot cannot pin hundreds of MB
+    in the ring buffer.
     """
     if nodes is None:
         return ()
     if isinstance(nodes, str):
         items = (nodes,)
+    elif (isinstance(nodes, tuple) and len(nodes) <= MAX_NODES
+          and all(isinstance(item, str) and item and item == item.strip()
+                  for item in nodes)):
+        # Already normalized by the caller; avoid copying it twice on the hot
+        # logging path.
+        return nodes
     else:
         try:
             items = tuple(nodes)
-        except TypeError:
+        except TypeError:  # noqa: silent-fallback non-iterable coerced to one item
             items = (nodes,)
 
     result = []
     seen = set()
+    overflow = 0
     for item in items:
         if item is None:
             continue
         name = str(item).strip()
-        if not name:
+        if not name or name in seen:
             continue
-        if name not in seen:
-            seen.add(name)
-            result.append(name)
+        if len(result) >= MAX_NODES:
+            overflow += 1
+            continue
+        seen.add(name)
+        result.append(name)
+    if overflow:
+        result.append(_MAX_NODES_SUFFIX.format(overflow))
     return tuple(result)
 
 
 DEFAULT_MAX_RECORDS = 20000
+#: Upper bound on node identifiers kept per log record (see ``_normalize_nodes``).
+MAX_NODES = 50
+_MAX_NODES_SUFFIX = "...(+{} more)"
 _CRITICAL_LEVELS = {LogLevel.ERROR, LogLevel.WARN}
 
 
@@ -91,6 +109,9 @@ class Logger:
         self._evicted_seqs = deque(maxlen=self._max_records)
         self._evicted_total = 0
         self._drain_evicted_cursor = 0
+        #: Everything before this index is known to be critical, so the
+        #: non-critical scan in ``_evict_for`` never re-walks it.
+        self._scan_cursor = 0
         self._lock = threading.RLock()
 
     def log(self, level: str, message: str, source: str = "", nodes=(), **context):
@@ -262,18 +283,27 @@ class Logger:
     def _evict_for(self, level):
         """Make room for *level* and return the evicted record's seq."""
         if level in _CRITICAL_LEVELS:
-            for idx in range(len(self._records)):
-                record = self._records[idx]
+            # Scan for the oldest non-critical record, resuming where the last
+            # scan stopped: everything before the cursor is known critical, so a
+            # buffer full of ERROR/WARN records no longer costs O(n) per write
+            cursor = min(self._scan_cursor, len(self._records))
+            while cursor < len(self._records):
+                record = self._records[cursor]
                 if record.level not in _CRITICAL_LEVELS:
-                    del self._records[idx]
+                    del self._records[cursor]
+                    self._scan_cursor = cursor
                     self._dropped += 1
                     return record.seq
+                cursor += 1
+            self._scan_cursor = cursor
             record = self._records.popleft()
+            self._scan_cursor = max(0, self._scan_cursor - 1)
             self._dropped += 1
             self._dropped_critical += 1
             return record.seq
 
         record = self._records.popleft()
+        self._scan_cursor = max(0, self._scan_cursor - 1)
         self._dropped += 1
         if record.level in _CRITICAL_LEVELS:
             self._dropped_critical += 1

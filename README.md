@@ -58,10 +58,11 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 
 - One-click build complete PBR materials from texture paths
 - Supports Color / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission channels
-- SSS channel support (colorCorrect + layeredTexture + ramp)
+- SSS channel support (colorCorrect + layeredTexture)
 - Displacement node chain support
 - Material type dropdown driven by `config/material/*.json` — new materials appear automatically
 - Optional "Add To Quick Select Set" toggle
+- Optional "Use Full Builder Pipeline" toggle (on by default): the **Roughness channel only** goes through the full chain (colorCorrect + layeredTexture + ramp); Metallic / Opacity always connect directly
 
 ### Batch Builder
 
@@ -72,7 +73,7 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Show parsed channels, unparsed files **and every texture conflict** in one table with a sortable Status column (`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`); the first file in sorted order is kept and every rejected candidate stays visible
 - Optional `Skip Materials With Conflicts` toggle (off by default) so an unresolved channel conflict never silently builds with an arbitrary file
 - Batch build all / selected materials to any supported renderer
-- Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp) or simple direct connection
+- Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp, **Roughness channel only**) or simple direct connection
 - Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
 
 

@@ -173,7 +173,7 @@ def test_build_all_closes_undo_chunk_on_progress_failure(monkeypatch):
 
 
 def test_build_all_reports_prerequisite_failures(monkeypatch):
-    """回归保护（B03）：失败结果必须携带具体前置条件失败项。"""
+    """Regression guard: a failure result must carry the concrete prerequisite failures."""
     bb = _make_batch(monkeypatch)
 
     def failing_build(*args, **kwargs):

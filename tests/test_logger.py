@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from core.logger import DEFAULT_MAX_RECORDS, Logger, LogLevel, get_logger, LogRecord
+from core.logger import DEFAULT_MAX_RECORDS, MAX_NODES, Logger, LogLevel, get_logger, LogRecord
 
 
 def test_levels_and_poll_cursor():
@@ -392,3 +392,33 @@ def test_connect_quiet_still_logs_error_with_nodes(monkeypatch):
     assert len(records) == 1
     assert records[0].level == LogLevel.ERROR
     assert records[0].nodes == ("p2d1", "file1")
+
+
+def test_nodes_snapshot_is_capped_with_summary():
+    """An oversized nodes snapshot must be truncated so the ring buffer stays bounded."""
+    log = Logger()
+    log.debug("many", nodes=tuple(f"n{i}" for i in range(MAX_NODES + 25)))
+    record = log.poll(0)[0]
+    assert len(record.nodes) == MAX_NODES + 1
+    assert record.nodes[0] == "n0"
+    assert record.nodes[-1] == "...(+25 more)"
+
+
+def test_small_normalized_tuple_is_reused_without_copy():
+    log = Logger()
+    nodes = ("a", "b", "c")
+    log.debug("x", nodes=nodes)
+    assert log.poll(0)[0].nodes == nodes
+
+
+def test_eviction_drops_noncritical_before_critical():
+    """An all-critical buffer still evicts non-critical records first, keeping order."""
+    log = Logger(max_records=4)
+    for i in range(4):
+        log.error(f"e{i}")
+    log.debug("d1")
+    assert [r.level for r in log.poll(0)] == [LogLevel.ERROR] * 3 + [LogLevel.DEBUG]
+
+    log.error("e4")
+    records = log.poll(0)
+    assert [r.message for r in records] == ["e1", "e2", "e3", "e4"]

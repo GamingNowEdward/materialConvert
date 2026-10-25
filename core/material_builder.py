@@ -2,7 +2,7 @@ import maya.cmds as cmds
 
 from core.builder_context import BuilderContext
 from core.logger import get_logger
-from core.prerequisites import apply_prerequisites
+from core.prerequisites import apply_prerequisites, apply_prerequisite_dict
 import core.node_utils as node_utils
 
 _SOURCE = "MaterialBuilder"
@@ -45,6 +45,10 @@ class MaterialBuilder:
 
     def _build(self, node_type, base_name, input_paths, use_qss=True, use_full_chain=True,
                channel_options=None):
+        # Reset first: any step below can raise (missing config, plugin load),
+        # and a stale list would then report the previous material's issues as
+        # this material's failure detail.
+        self.last_build_issues = []
         mat_config = self.config.get_material_config(node_type)
         if not mat_config:
             raise RuntimeError(f"Missing material config: {node_type}")
@@ -67,7 +71,6 @@ class MaterialBuilder:
                 self.log.error(f"Failed to load plugin {mat_config.plugin}: {exc}", source=_SOURCE)
                 raise
 
-        self.last_build_issues = []
         self.ctx._current_build_nodes = []
         m_node = self.ctx.create_node(node_type, 'material', base_name, as_type='shader')
         sg_node = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name=f"{m_node}SG")
@@ -123,11 +126,16 @@ class MaterialBuilder:
                                     'rough', input_paths, use_full_chain,
                                     channel_options.get('specularRoughness', {}).get('invert', False)):
             built_channels.append('specularRoughness')
+        # Only specularRoughness takes part in the full chain.  metallic and
+        # opacity are plain channel passthroughs (opacity is even a color
+        # attribute on several renderers), so routing them through the ramp would
+        # only insert a meaningless remap node: they are connected directly on
+        # purpose, independent of the Full chain toggle.
         if self._build_scalar_chain(m_node, base_name, make_tex, mat_config, 'metallic', 'metallic',
-                                    input_paths):
+                                    input_paths, False):
             built_channels.append('metallic')
         if self._build_scalar_chain(m_node, base_name, make_tex, mat_config, 'opacity', 'opacity',
-                                    input_paths):
+                                    input_paths, False):
             built_channels.append('opacity')
 
         for common_attr, name_key in (('emissionColor', 'emission'),
@@ -198,8 +206,21 @@ class MaterialBuilder:
             self.ctx.connect(tex, "outColor", m_node, attr_name)
             self.log.debug(f"Built direct color chain for {common_attr}: {tex}.outColor -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
 
-        if common_attr == 'subsurfaceColor' and cmds.attributeQuery('ssOn', node=m_node, exists=True):
-            cmds.setAttr(f"{m_node}.ssOn", 1)
+        if common_attr == 'subsurfaceColor':
+            # V-Ray needs its subsurface switch enabled; declared per material in
+            # config (``builder_prerequisites``) instead of hardcoding ``ssOn``
+            # in Python.
+            prereq = mat_config.get_builder_prerequisites().get(common_attr)
+            if prereq:
+                outcome = apply_prerequisite_dict(m_node, prereq, logger=self.log)
+                if not outcome.ok:
+                    detail = "; ".join(outcome.failures) or "unknown cause"
+                    self.last_build_issues.append(
+                        f"{common_attr}: prerequisite failed ({detail})")
+                    self.log.warn(
+                        f"Failed to apply builder prerequisite for {common_attr} on {m_node}: {detail}",
+                        source=_SOURCE, nodes=(m_node,),
+                    )
 
         weight_common = self._resolve_weight_attr(common_attr)
         if weight_common:
@@ -226,7 +247,7 @@ class MaterialBuilder:
         return True
 
     def _build_scalar_chain(self, m_node, base_name, make_tex, mat_config, common_attr,
-                            name_key, input_paths, use_full_chain=False, invert=False):
+                            name_key, input_paths, use_full_chain, invert=False):
         if common_attr not in input_paths:
             return False
         attr_name = mat_config.get_maya_attr(common_attr)
@@ -238,9 +259,17 @@ class MaterialBuilder:
 
         if use_full_chain:
             ramp = self.ctx.create_node('ramp', 'ramp', base_name, name_key, 'texture')
+            for failure in self._configure_ramp(ramp):
+                self.last_build_issues.append(f"{common_attr}: ramp {failure}")
             self.ctx.connect(tex, "outAlpha", ramp, "vCoord")
-            self.ctx.connect(ramp, "outAlpha", m_node, attr_name)
-            self.log.debug(f"Built scalar chain for {common_attr}: {tex}.outAlpha -> {ramp} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, ramp, m_node))
+            # ``smart_connect`` falls back to the ramp's float3 ``outColor`` when
+            # the target attribute is not a float, keeping the chain valid for
+            # any scalar mapping.
+            if node_utils.smart_connect(f"{ramp}.outAlpha", f"{m_node}.{attr_name}", logger=self.log):
+                self.log.debug(f"Built scalar chain for {common_attr}: {tex}.outAlpha -> {ramp} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, ramp, m_node))
+            else:
+                self.last_build_issues.append(f"{common_attr}: texture not connected")
+                self.log.warn(f"Failed to connect scalar {common_attr} {ramp} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, ramp, m_node))
         else:
             if node_utils.smart_connect(f"{tex}.outAlpha", f"{m_node}.{attr_name}", logger=self.log):
                 self.log.debug(f"Connected scalar {common_attr}: {tex}.outAlpha -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
@@ -250,6 +279,52 @@ class MaterialBuilder:
 
         self.log.info(f"Built scalar channel {common_attr} -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
         return True
+
+    def _configure_ramp(self, ramp):
+        """Write the color stops a fresh ``ramp`` node needs to respond to ``vCoord``.
+
+        Maya creates a ramp with a single color entry, so its output is constant:
+        a texture driving ``vCoord`` would have no effect.  The stops come
+        from ``builder_naming.json`` (``ramp_stops``) so they stay configurable.
+
+        Returns a list of failure descriptions (empty when fully configured) so
+        the caller can record them in the build result instead of reporting a
+        success whose ramp output does not match the configuration.
+        """
+        failures = []
+        stops = self.ctx.get_naming().get("ramp_stops") or []
+        parsed = []
+        for entry in stops:
+            try:
+                position, color = entry
+                color = tuple(float(c) for c in color)
+                if len(color) != 3:
+                    raise ValueError("color must have exactly 3 components")
+                parsed.append((float(position), color))
+            except Exception as exc:
+                failures.append(f"invalid ramp stop {entry!r} ({exc})")
+                self.log.warn(f"Ignoring invalid ramp stop {entry!r}: {exc}", source=_SOURCE, nodes=(ramp,))
+
+        if not parsed:
+            parsed = [(0.0, (0.0, 0.0, 0.0)), (1.0, (1.0, 1.0, 1.0))]
+            failures.append(
+                "no valid 'ramp_stops' in builder_naming.json; used a black->white default")
+            self.log.warn(
+                "No valid 'ramp_stops' in builder_naming.json; using a black->white default",
+                source=_SOURCE, nodes=(ramp,),
+            )
+
+        for index, (position, color) in enumerate(parsed):
+            try:
+                cmds.setAttr(f"{ramp}.colorEntryList[{index}].position", position)
+                cmds.setAttr(f"{ramp}.colorEntryList[{index}].color", *color, type="double3")
+            except Exception as exc:
+                failures.append(f"could not write ramp stop {index} ({exc})")
+                self.log.warn(f"Failed to write ramp stop {index} on {ramp}: {exc}", source=_SOURCE, nodes=(ramp,))
+
+        if not failures:
+            self.log.debug(f"Configured ramp {ramp} with {len(parsed)} color stop(s)", source=_SOURCE, nodes=(ramp,))
+        return failures
 
     def _build_bump_normal(self, m_node, renderer, base_name, make_tex, mat_config,
                            channel_options, input_paths):

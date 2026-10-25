@@ -2,6 +2,8 @@ from ui import QtWidgets
 from core.config_validator import ConfigValidator
 from core.logger import get_logger
 from ui.log_panel import LogViewer
+from ui.operation_state import OperationGuard
+from ui.widgets import set_enabled
 
 _SOURCE = "LogTab"
 
@@ -13,6 +15,16 @@ class LogTab:
         self.validate_btn = None
         self.status_label = None
         self.viewer = None
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -49,6 +61,8 @@ class LogTab:
         self.status_label.setObjectName("debugStatus")
         validation_layout.addWidget(self.status_label)
 
+        self._busy_widgets = [self.validate_btn]
+
         layout.addWidget(validation_group, stretch=0)
 
         self.viewer = LogViewer(self.log)
@@ -61,7 +75,12 @@ class LogTab:
             self.viewer.set_active(active)
 
     def _run_validation(self):
-        self.validate_btn.setEnabled(False)
+        # Guarded: validate_all() creates/removes temporary nodes and loads
+        # plugins, so it must not run while another tab's batch is in progress,
+        # nor be re-entered from within itself.
+        if not self.guard.try_begin():
+            return
+        set_enabled([self.validate_btn], False)
         self.log.info("Running JSON config validation in Maya...", source=_SOURCE)
         try:
             validator = ConfigValidator(logger=self.log)
@@ -87,4 +106,7 @@ class LogTab:
             if self.viewer:
                 self.viewer.apply_preset("validation")
         finally:
-            self.validate_btn.setEnabled(True)
+            # set_enabled tolerates an already-destroyed button, so closing the
+            # window mid-validation no longer raises RuntimeError.
+            set_enabled([self.validate_btn], True)
+            self.guard.end()

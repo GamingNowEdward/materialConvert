@@ -11,10 +11,6 @@ from core.results import ConversionResult, summarize_results
 
 _SOURCE = "MaterialConverter"
 
-#: Sentinel for "the previous SG connection could not be read".  Distinct from
-#: ``None`` (= there was nothing connected) so a rollback never guesses.
-_UNKNOWN_WIRING = object()
-
 
 class MaterialConverter:
 
@@ -22,6 +18,7 @@ class MaterialConverter:
         self.logger = logger or get_logger()
         self.config = config or ConfigLoader()
         self._in_batch = False
+        self._convert_depth = 0
         self.cc_converter = CCConverter(self.config, node_utils, logger=self.logger)
         self.attr_converter = AttributeConverter(self.config, node_utils, self.cc_converter, logger=self.logger)
         self.bump_converter = BumpConverter(self.config, node_utils, logger=self.logger)
@@ -36,6 +33,22 @@ class MaterialConverter:
         never presents it as a plain success while the scene still renders the
         old material.
         """
+        if self._convert_depth:
+            # A conversion triggered from inside another one (e.g. from a
+            # progress callback) shares the bump/normal index, which may then be
+            # stale; make the misuse visible instead of silently reusing it
+            self.logger.warn(
+                "Nested conversion detected while another conversion is running; "
+                "the bump/normal index is shared and may be stale",
+                source=_SOURCE, nodes=(source_mat,),
+            )
+        self._convert_depth += 1
+        try:
+            return self._convert_impl(source_mat, target_node_type)
+        finally:
+            self._convert_depth -= 1
+
+    def _convert_impl(self, source_mat, target_node_type):
         self.cc_converter.reset()
         if not self._in_batch:
             # A standalone conversion starts a new scene-query scope; during a
@@ -83,7 +96,7 @@ class MaterialConverter:
             # Enumerate every shading engine once, BEFORE creating anything: a
             # failure here means the result cannot be wired, so abort instead of
             # silently reporting success (displacement also needs the SG list).
-            sgs, sgs_ok = self._find_shading_engines(source_mat)
+            sgs, sgs_ok = self._find_shading_engines(source_mat, source_config.material_output)
             if not sgs_ok:
                 self.logger.error(
                     f"Failed to enumerate shading engines for {source_mat}; conversion aborted",
@@ -172,43 +185,79 @@ class MaterialConverter:
                 return result
 
             return self._commit_shading_engines(
-                result, source_mat, new_mat, sgs, disp_plan)
+                result, source_mat, new_mat, sgs, disp_plan,
+                output_attr=target_config.material_output)
 
-    def _commit_shading_engines(self, result, source_mat, new_mat, sgs, disp_plan=None):
+    def _commit_shading_engines(self, result, source_mat, new_mat, sgs, disp_plan=None,
+                                output_attr="outColor"):
         """Wire the new material into every SG as one transaction.
 
-        The previous surface/displacement wiring is snapshotted first.  If any
-        connection fails, every SG touched so far is restored and the material
-        is reported as failed: a half-converted scene where one SG renders the
-        new material and another still renders the old one must never be
-        presented as success.
+        The previous surface/displacement wiring is snapshotted first.  If the
+        snapshot is incomplete the commit is aborted **before** anything is
+        rewired, because a failure could then not be rolled back and the scene
+        could be left half-wired.  If a connection fails after that, every SG
+        touched so far is restored and the material is reported as failed: a
+        half-converted scene where one SG renders the new material and another
+        still renders the old one must never be presented as success.
         """
-        snapshot = self._snapshot_sg_wiring(sgs)
+        snapshot, unreadable = self._snapshot_sg_wiring(sgs)
+        if unreadable:
+            # Nothing has been rewired yet; abort so the transaction can never
+            # leave a partially rewired scene behind.
+            result.sg_failures = [
+                {"sg": sg, "reason": f"could not read {sg}.{attr} for the wiring snapshot: {exc}"}
+                for sg, attr, exc in unreadable
+            ]
+            result.wired = 0
+            result.reason = "failed to snapshot shading engine wiring"
+            self.logger.error(
+                f"Aborting conversion of {source_mat}: the shading engine wiring could not be "
+                f"snapshotted, so a failed commit could not be rolled back; nothing was rewired: "
+                f"{'; '.join(item['reason'] for item in result.sg_failures)}",
+                nodes=(source_mat, new_mat, *[sg for sg, _attr, _exc in unreadable]),
+            )
+            return result
+
         failures = []
         wired_nodes = []
+        disp_applied_sgs = []
 
         for sg in sgs:
             try:
-                cmds.connectAttr(f"{new_mat}.outColor", f"{sg}.surfaceShader", force=True)
+                cmds.connectAttr(f"{new_mat}.{output_attr}", f"{sg}.surfaceShader", force=True)
                 wired_nodes.append(sg)
-                self.logger.info(f"Reconnected shading engine: {new_mat}.outColor -> {sg}.surfaceShader", nodes=(new_mat, sg))
+                self.logger.info(f"Reconnected shading engine: {new_mat}.{output_attr} -> {sg}.surfaceShader", nodes=(new_mat, sg))
             except Exception as exc:
-                reason = f"failed to connect {new_mat}.outColor -> {sg}.surfaceShader: {exc}"
+                reason = f"failed to connect {new_mat}.{output_attr} -> {sg}.surfaceShader: {exc}"
                 self.logger.error(reason, nodes=(new_mat, sg))
                 failures.append({"sg": sg, "reason": reason})
 
         if disp_plan is not None and not failures:
-            failures.extend(self.disp_converter.apply(disp_plan))
+            disp_failures = self.disp_converter.apply(disp_plan)
+            failures.extend(disp_failures)
+            if disp_failures:
+                failed_disp_sgs = {item["sg"] for item in disp_failures}
+                # Displacement SGs that were committed before one failed must be
+                # restored too; the failed ones were never changed.
+                disp_applied_sgs = [entry["sg"] for entry in getattr(disp_plan, "entries", [])
+                                    if entry["sg"] not in failed_disp_sgs]
 
         if failures:
-            restored = self._restore_sg_wiring(snapshot)
+            # Only restore SGs this commit actually rewrote: an SG whose connect
+            # never succeeded was never changed, so "restoring" it can only fail
+            # spuriously (e.g. on a locked plug) and wrongly report
+            # ``restored=False``.
+            touched = set(wired_nodes) | set(disp_applied_sgs)
+            restored = self._restore_sg_wiring(snapshot, touched)
             result.restored = restored
             result.sg_failures = failures
+            result.wired_before_rollback = len(wired_nodes)
             result.wired = 0
             result.reason = "shading engine commit failed"
             self.logger.error(
                 f"Shading engine commit failed for {new_mat}; "
-                f"{'all' if restored else 'not all'} SG connection(s) restored: "
+                f"{len(wired_nodes)} of {result.total_sgs} SG(s) had been wired and "
+                f"{'were' if restored else 'were NOT fully'} restored: "
                 f"{'; '.join(item['reason'] for item in failures)}",
                 nodes=(source_mat, new_mat, *[item["sg"] for item in failures]),
             )
@@ -236,11 +285,13 @@ class MaterialConverter:
     def _snapshot_sg_wiring(self, sgs):
         """Record the current surface/displacement upstream of every SG.
 
-        A failed query is stored as ``_UNKNOWN_WIRING`` rather than ``None``:
-        "there was nothing connected" and "I could not read the connection" must
-        not be confused when restoring.
+        Returns ``(snapshot, unreadable)``.  ``unreadable`` lists
+        ``(sg, attr, exc)`` for every slot whose read failed: such a snapshot
+        must not be used, because a later commit failure could not be rolled
+        back, so the caller aborts before touching the scene.
         """
         snapshot = {}
+        unreadable = []
         for sg in sgs:
             entry = {}
             for key, attr in (("surface", "surfaceShader"), ("displacement", "displacementShader")):
@@ -250,19 +301,32 @@ class MaterialConverter:
                     entry[key] = conns[0] if conns else None
                 except Exception as exc:
                     self.logger.warn(
-                        f"Failed to snapshot {sg}.{attr}: {exc}; "
-                        f"it cannot be restored if the commit fails",
+                        f"Failed to snapshot {sg}.{attr}: {exc}",
                         nodes=(sg,),
                     )
-                    entry[key] = _UNKNOWN_WIRING
+                    entry[key] = None
+                    unreadable.append((sg, attr, exc))
             snapshot[sg] = entry
-        return snapshot
+        return snapshot, unreadable
 
-    def _restore_sg_wiring(self, snapshot):
-        """Restore snapshotted SG wiring; returns True when everything was restored."""
+    def _restore_sg_wiring(self, snapshot, touched=None):
+        """Restore snapshotted SG wiring; returns True when everything was restored.
+
+        Only SGs this commit actually rewrote are restored (``touched``): an SG
+        whose connect never succeeded was never changed, so attempting to
+        "restore" it can only fail spuriously and wrongly report
+        ``restored=False``.  ``touched=None`` restores every snapshot entry
+        (the historical behaviour).
+
+        The snapshot is always complete here: an unreadable snapshot aborts the
+        commit before it is called (see ``_snapshot_sg_wiring``).
+        """
+        touched = set(snapshot) if touched is None else set(touched)
         restored_all = True
         restored_nodes = []
         for sg, entry in snapshot.items():
+            if sg not in touched:
+                continue
             for key, attr in (("surface", "surfaceShader"), ("displacement", "displacementShader")):
                 original = entry.get(key)
                 try:
@@ -270,17 +334,13 @@ class MaterialConverter:
                         # Only drop a connection we actually created; when the
                         # commit never reached this SG there is nothing to undo.
                         conns = cmds.listConnections(
-                            f"{sg}.{attr}", source=True, destination=False) or []
+                            f"{sg}.{attr}", source=True, destination=False, plugs=True) or []
                         if not conns:
                             continue
-                        cmds.disconnectAttr(f"{sg}.{attr}")
-                    elif original is _UNKNOWN_WIRING:
-                        restored_all = False
-                        self.logger.error(
-                            f"Cannot restore {sg}.{attr}: the original wiring was not readable",
-                            nodes=(sg,),
-                        )
-                        continue
+                        # disconnectAttr needs (source, destination): the upstream
+                        # plugs are the sources.
+                        for plug in conns:
+                            cmds.disconnectAttr(plug, f"{sg}.{attr}")
                     else:
                         cmds.connectAttr(original, f"{sg}.{attr}", force=True)
                     restored_nodes.append(sg)
@@ -296,15 +356,17 @@ class MaterialConverter:
             )
         return restored_all
 
-    def _find_shading_engines(self, source_mat):
+    def _find_shading_engines(self, source_mat, output_attr="outColor"):
         """Shading engines fed by *source_mat* as ``(list, ok)``.
 
-        ``ok`` is False when the query itself fails, so the caller can abort
-        rather than treat a failed enumeration as "no shading engine" (which
-        would silently report a floating material as a success).
+        ``output_attr`` is the material's output attribute (config-driven, Maya
+        default ``outColor``).  ``ok`` is False when the query itself
+        fails, so the caller can abort rather than treat a failed enumeration as
+        "no shading engine" (which would silently report a floating material as
+        a success).
         """
         try:
-            return (cmds.listConnections(f"{source_mat}.outColor", type="shadingEngine") or [], True)
+            return (cmds.listConnections(f"{source_mat}.{output_attr}", type="shadingEngine") or [], True)
         except Exception as exc:
             self.logger.warn(f"Failed to query shading engines for {source_mat}: {exc}", nodes=(source_mat,))
             return ([], False)
@@ -461,5 +523,15 @@ class MaterialConverter:
             )
         if summary["failed"]:
             self.logger.warn(f"{summary['failed']} material(s) failed during batch conversion", source=_SOURCE)
+        rolled_back = [r for r in results if r.wired_before_rollback]
+        if rolled_back:
+            # Partial wiring is rolled back by design, but the count of SGs that
+            # *had* been wired is the diagnostic a plain "failed" hides.
+            self.logger.warn(
+                f"{len(rolled_back)} material(s) had shading engine(s) wired and then "
+                f"rolled back after a later SG failed: "
+                f"{', '.join(f'{r.material} ({r.wired_before_rollback}/{r.total_sgs})' for r in rolled_back)}",
+                source=_SOURCE,
+            )
 
         return results

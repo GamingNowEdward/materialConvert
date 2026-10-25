@@ -77,8 +77,8 @@ These universal attributes are **not** processed in the main transfer loop — t
 ### 1.3 Value Transfer Rules
 
 - **Texture connections**: Migrated via `_smart_connect()` — tries direct connection first, falls back to `outColor` then `outAlpha` for type incompatibility
-- **Alpha Is Luminance**: After attribute transfer, scans target material connections using the **actual attribute names** from the target config and **recursively traces upstream** (through intermediate nodes like CC/ramp/layeredTexture/bump); if an `outAlpha` output is found in the chain, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift; `opacity` channel is exempt to avoid enabling luminance on genuine alpha maps)
-- **Numeric values**: Copied directly (float/int); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
+- **Alpha Is Luminance**: After attribute transfer, scans target material connections using the **actual attribute names** from the target config and **recursively traces upstream** (through intermediate nodes like CC/ramp/layeredTexture/bump); if an `outAlpha` output is found in the chain, automatically enables `alphaIsLuminance` on the source texture node (skipped for Redshift; `opacity` channel is exempt to avoid enabling luminance on genuine alpha maps). A **non-opacity** channel hit records an `issue`, since enabling it changes the texture's semantics and must stay visible
+- **Numeric values**: Copied directly (float/int); **non-finite** values (NaN / Inf) are refused and recorded as an `issue` (Maya accepts NaN silently, producing render artefacts); if the target attribute is `float3`/`double3` (e.g., Arnold `opacity`/`subsurfaceRadius`, V-Ray `opacityMap`, Redshift `ms_radius`), the value is broadcast to all three channels `(v, v, v)`
 - **Color values**: Copied directly (tuple/list, length >= 3); if target attribute is float, falls back to first channel value
 - **Source inversion**: If the source config declares a common attribute under `material.invert`, it is inverted as `1 - x` — scalars in place; texture/CC connections get a Maya `reverse` node inserted on the edge into the target plug (source network untouched)
 - **Failure classification**: **Critical** channel failures (prerequisites / CC chains / bump-normal / displacement) fail the whole material and abort the conversion (`reason` + `converted=False`); **non-critical** failures (single attribute / emission / alphaIsLuminance / reverse) go into `ConversionResult.issues` (`converted` stays True, summarized as `with_issues`)
@@ -237,7 +237,7 @@ attribute, and the **source network is never rewritten**:
 
 | Topology | Structure | Handling |
 |---|---|---|
-| `direct` | `file → CC → material` | New CC connects straight to the target attribute; the source CC's other non-material downstream nodes follow the new CC and the source material is re-pointed at its own CC |
+| `direct` | `file → CC → material` | The new CC is **always wired to the target attribute on its own** (never left to the CC's existing downstream list); the source CC's other non-material downstream nodes follow the new CC and the source material is re-pointed at its own CC. When the source chain drives a scalar channel through `outAlpha`, the new CC uses the same output slot first and falls back through `smart_connect` |
 | `single_hop` | `file → CC → layeredTexture/ramp → material` | The intermediate node is **copied** (one level only); the new CC feeds the copy and the copy feeds the target attribute. The source node and its parameters stay untouched |
 | `unsupported` | two or more intermediate levels, or the CC input slot cannot be located | No target CC is created and no source connection is rewritten; reported as an explicit limitation in the result `issues` |
 
@@ -249,9 +249,12 @@ file → originalCC → layeredTexture → source material      (unchanged)
 file → newCC → layeredTexture_conv → target material
 ```
 
-Without an intermediate node (CC directly on the material), the new CC connects
-to the target attribute directly, and the source material is re-pointed at its own
-CC when the source CC has other non-material downstream nodes.
+Without an intermediate node (CC directly on the material), the new CC is
+**always wired to the target attribute on its own** (never left to the source
+CC's existing downstream list); any other non-material downstream node of the
+source CC follows the new CC, and the source material is re-pointed at its own
+CC. When the source chain drives a scalar channel through `outAlpha`, the new CC
+uses the same output slot first and falls back through `smart_connect`.
 
 > Older versions re-pointed the source attribute straight back at the original CC
 > (bypassing the layeredTexture), which silently dropped the source material's
@@ -367,9 +370,14 @@ UI supports batch conversion of multiple materials:
 `ConversionResult` (`created` / `converted` / `wired` / `total_sgs` /
 `skipped` / `reason`). A conversion whose shading-engine reconnection failed
 for **every** SG is reported as failed (not a silent success), because the
-scene would still render the old material. A conversion wired to only **some**
-of its SGs still counts as converted but is flagged as `partial_wired`, and
-the batch summary warns about it. Conversion run by `convert_all(...,
+scene would still render the old material. When the SG wiring **snapshot is
+incomplete** (any slot failed to read) the conversion aborts **before** rewiring:
+`reason` becomes `failed to snapshot shading engine wiring`, the unreadable slots
+are listed in `sg_failures`, and the scene is left untouched (the result counts as
+`unwired`: created but never wired). Because the commit is transactional (any
+failure rolls back), `wired` is only `0` or `total_sgs`; `partial_wired` is a
+reserved capability and currently unreachable, while the pre-rollback count is
+reported through `wired_before_rollback`. Conversion run by `convert_all(...,
 on_progress=...)` reports per-material progress to the UI, which repaints the
 progress bar during the batch instead of after it completes.
 

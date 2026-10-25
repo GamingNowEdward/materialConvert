@@ -29,8 +29,10 @@ def is_project_module(mod, root):
         return False
     if not isinstance(root, str) or not root:
         return False
-    module_path = os.path.normcase(os.path.abspath(path))
-    root_path = os.path.normcase(os.path.abspath(root))
+    # realpath resolves symlinks so a linked sys.path entry and the module's real
+    # path are still recognised as the same project.
+    module_path = os.path.normcase(os.path.realpath(path))
+    root_path = os.path.normcase(os.path.realpath(root))
     return module_path == root_path or module_path.startswith(root_path + os.sep)
 
 

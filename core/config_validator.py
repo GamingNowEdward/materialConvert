@@ -75,7 +75,7 @@ class ConfigValidator:
             try:
                 cmds.loadPlugin(plugin)
                 loaded = True
-            except Exception as exc:
+            except Exception as exc:  # noqa: silent-fallback reported via _add(SKIP)
                 self._plugin_cache[plugin] = "skip"
                 self._add(Level.SKIP, scope,
                           f"plugin '{plugin}' failed to load ({exc}), skipped")
@@ -94,7 +94,7 @@ class ConfigValidator:
                 node = self.cmds.shadingNode(node_type, asTexture=True, name=name)
             else:
                 node = self.cmds.shadingNode(node_type, asUtility=True, name=name)
-        except Exception as e:
+        except Exception as e:  # noqa: silent-fallback reported via _add(ERROR)
             self._add(Level.ERROR, scope,
                       f"node_type '{node_type}' could not be created: {e}")
             return None

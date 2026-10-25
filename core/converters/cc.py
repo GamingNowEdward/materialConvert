@@ -76,16 +76,18 @@ class CCConverter:
 
         params, input_plug = self.utils.collect_cc_chain_params(h_node, cc_config, logger=self.log)
 
-        cc_out_dests = []
-        try:
-            cc_out_dests = cmds.listConnections(f"{h_node}.{cc_config.output}",
-                                                plugs=True, source=False) or []
-        except Exception as exc:
-            self.log.warn(
-                f"Failed to list CC destinations on {h_node}.{cc_config.output}: {exc}",
-                source=_SOURCE,
-                nodes=(h_node,),
-            )
+        output_plug = conn.get("plug")
+        # The material attribute may be driven by a non-default CC output slot
+        # (e.g. ``outAlpha`` for a scalar channel).  Remember it so the target
+        # chain is wired to the same slot instead of always using the configured
+        # one, which cannot connect to a float attribute.
+        source_output_attr = None
+        if output_plug:
+            holder, _, attr = output_plug.partition(".")
+            if holder == h_node and attr:
+                source_output_attr = attr
+
+        cc_out_dests = self._list_cc_destinations(h_node, cc_config.output, source_output_attr)
 
         cc_cache[attr_name] = {
             "cc_node": h_node,
@@ -93,8 +95,37 @@ class CCConverter:
             "cc_out_dests": cc_out_dests,
             "params": params,
             "input_plug": input_plug,
-            "output_plug": conn.get("plug"),
+            "output_plug": output_plug,
+            "source_output_attr": source_output_attr,
         }
+
+    def _list_cc_destinations(self, h_node, output_attr, source_output_attr):
+        """Downstream plugs of the CC.
+
+        Covers both the configured output attribute and the slot the material
+        actually read: they can differ (``outColor`` vs ``outAlpha``), and the
+        real downstream lives on the latter for scalar channels.
+        """
+        attrs = []
+        for attr in (output_attr, source_output_attr):
+            if attr and attr not in attrs:
+                attrs.append(attr)
+
+        dests = []
+        for attr in attrs:
+            try:
+                found = cmds.listConnections(f"{h_node}.{attr}", plugs=True, source=False) or []
+            except Exception as exc:
+                self.log.warn(
+                    f"Failed to list CC destinations on {h_node}.{attr}: {exc}",
+                    source=_SOURCE,
+                    nodes=(h_node,),
+                )
+                continue
+            for plug in found:
+                if plug not in dests:
+                    dests.append(plug)
+        return dests
 
     def transfer(self, cc_entry, target_plug, target_renderer):
         """Convert one CC chain without mutating the source network.
@@ -185,27 +216,43 @@ class CCConverter:
         if cc_out_dests:
             self._restore_shared_source_chain(cc_entry)
             for dest in cc_out_dests:
-                try:
-                    cmds.connectAttr(f"{cc_node}.{cc_config.output}", dest, force=True)
+                if dest == target_plug:
+                    # The material channel is wired explicitly below; never let
+                    # the external downstream list decide it.
+                    continue
+                if self._connect_output(cc_node, dest, cc_config, cc_entry, outcome):
                     self.log.debug(f"Connected CC {cc_node} -> {dest}", source=_SOURCE, nodes=(cc_node, dest))
-                except Exception as exc:
-                    outcome.ok = False
-                    outcome.critical.append(f"failed to connect CC {cc_node} -> {dest}: {exc}")
-                    self.log.warn(f"Failed to connect CC {cc_node} -> {dest}: {exc}", source=_SOURCE, nodes=(cc_node, dest))
-        else:
-            try:
-                cmds.connectAttr(f"{cc_node}.{cc_config.output}", target_plug, force=True)
-                self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
-            except Exception as exc:
-                outcome.ok = False
-                outcome.critical.append(f"failed to connect CC {cc_node} -> {target_plug}: {exc}")
-                self.log.warn(f"Failed to connect CC {cc_node} -> {target_plug}: {exc}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
+
+        # The target material channel is always wired on its own: it belongs to
+        # the newly created material and is never part of the source CC's
+        # downstream list, so no other branch can reach it.
+        if self._connect_output(cc_node, target_plug, cc_config, cc_entry, outcome):
+            self.log.debug(f"Connected CC {cc_node} -> {target_plug}", source=_SOURCE, nodes=(cc_node, self.utils.node_name_from_plug(target_plug)))
 
         if outcome.ok:
             self.log.info(f"Color correction converted: {cc_node}", source=_SOURCE, nodes=(cc_node,))
         else:
             self.log.warn(f"Color correction conversion incomplete: {cc_node}", source=_SOURCE, nodes=(cc_node,))
         return outcome
+
+    def _connect_output(self, cc_node, dest_plug, cc_config, cc_entry, outcome):
+        """Connect the new CC output to *dest_plug*.
+
+        Prefers the output slot the source chain actually used (e.g. ``outAlpha``
+        for a scalar channel) and falls back through :func:`smart_connect`
+        (``outColor`` -> ``outAlpha``), so a CC driving a float attribute no
+        longer fails on the float3 ``outColor``.
+        """
+        source_attr = cc_entry.get("source_output_attr")
+        src_plug = f"{cc_node}.{source_attr}" if source_attr else f"{cc_node}.{cc_config.output}"
+        if self.utils.smart_connect(src_plug, dest_plug, logger=self.log):
+            return True
+        message = f"failed to connect CC {cc_node} -> {dest_plug}"
+        outcome.ok = False
+        outcome.critical.append(message)
+        self.log.warn(message, source=_SOURCE,
+                      nodes=(cc_node, self.utils.node_name_from_plug(dest_plug)))
+        return False
 
     def _plan_topology(self, cc_entry):
         """``(topology, plan)`` for the chain between the source CC and its consumer.
@@ -321,7 +368,9 @@ class CCConverter:
             else:
                 continue
             try:
-                cmds.disconnectAttr(dest_plug, src_plug)
+                # disconnectAttr takes (source, destination): the plug that
+                # belongs to the copy is the *destination*.
+                cmds.disconnectAttr(src_plug, dest_plug)
                 self.log.debug(f"Detached copied node input {dest_plug} <- {src_plug}",
                                source=_SOURCE, nodes=(node,))
             except Exception as exc:
@@ -374,7 +423,12 @@ class CCConverter:
 
         cc_out_nodes = {d.split(".")[0] for d in cc_entry.get("cc_out_dests", [])}
         try:
-            dest_plugs = cmds.listConnections(output_plug, plugs=True, destination=True) or []
+            # ``output_plug`` is the source CC's output slot, so only its
+            # destinations are relevant; ``source=False`` states that intent
+            # explicitly (the slot has no upstream, so this changes nothing
+            # today but removes a latent trap).
+            dest_plugs = cmds.listConnections(output_plug, plugs=True,
+                                              destination=True, source=False) or []
         except Exception as exc:
             self.log.warn(f"Failed to list destinations for {output_plug}: {exc}", source=_SOURCE, nodes=(self.utils.node_name_from_plug(output_plug),))
             return

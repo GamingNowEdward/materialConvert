@@ -1,4 +1,4 @@
-"""Offline configuration schema tests (review finding O02)."""
+"""Offline configuration schema tests."""
 
 import json
 

@@ -44,6 +44,12 @@ class DisplacementConverter:
                 target_renderer, sgs=None):
         """Convert displacement for every shading engine fed by *source_mat*.
 
+        Convenience entry point for tests / single-SG callers.  It does **not**
+        participate in the shading-engine transaction (no snapshot/rollback);
+        the production path uses :meth:`prepare` + :meth:`apply` through
+        ``MaterialConverter`` so displacement commits with the surface as one
+        transaction.
+
         Displacement lives on the shading engine, so a material bound to several
         SGs must be converted per SG.  SGs that share the same source
         displacement (same texture plug + scale) reuse a single target

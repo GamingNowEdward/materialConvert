@@ -296,7 +296,7 @@ def smart_connect(src_plug, dst_plug, logger=None):
         cmds.connectAttr(f"{src_node}.outAlpha", dst_plug, force=True)
         log.info(f"Connected via outAlpha fallback: {src_node}.outAlpha -> {dst_plug}", source=_SOURCE, nodes=(src_node, node_name_from_plug(dst_plug)))
         return True
-    except Exception as exc:
+    except Exception as exc:  # noqa: silent-fallback collected then logged by the final warn
         errors.append(f"{src_node}.outAlpha: {exc}")
 
     log.warn(f"smart_connect failed: {src_plug} -> {dst_plug}: {' | '.join(errors)}", source=_SOURCE, nodes=(node_name_from_plug(src_plug), node_name_from_plug(dst_plug)))

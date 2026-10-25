@@ -40,9 +40,9 @@ def _load_json(path, issues):
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)
-    except FileNotFoundError:
+    except FileNotFoundError:  # noqa: silent-fallback reported as a ConfigIssue
         issues.append(ConfigIssue(filename, "", "ERROR", "file is missing"))
-    except Exception as exc:
+    except Exception as exc:  # noqa: silent-fallback reported as a ConfigIssue
         issues.append(ConfigIssue(filename, "", "ERROR", f"invalid JSON: {exc}"))
     return None
 

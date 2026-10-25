@@ -10,7 +10,7 @@ def set_enabled(widgets, enabled):
     for widget in widgets:
         try:
             widget.setEnabled(bool(enabled))
-        except RuntimeError:
+        except RuntimeError:  # noqa: silent-fallback widget already destroyed
             # Widget was deleted (window closed mid-run): nothing to restore.
             continue
 

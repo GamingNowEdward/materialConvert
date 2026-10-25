@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-10-25
+
+### Fixed (silent correctness, P0)
+- **Builder full chain produced a dead ramp**: `_build_scalar_chain` created a bare `ramp` node without any `colorEntryList`, so its output was constant and a texture driving `vCoord` had no effect — while the build still reported success. `MaterialBuilder._configure_ramp()` now writes the configured stops (`builder_naming.json` → `ramp_stops`, default black→white), and the ramp→material connection uses `smart_connect` so a non-float target falls back to the ramp's `outColor`
+- **CC direct + non-material downstream left the target channel unwired**: `cc.py` only connected `target_plug` in the `else` branch, so a CC that also drove a non-material node (layeredTexture/…) produced a material whose channel was empty while reporting `converted=True`. The target channel is now always wired explicitly, and `_external_cc_destinations` excludes it
+- **The Full chain toggle was unclear about which channels it covers**: `_build_scalar_chain`'s `use_full_chain` is now required (a future omission fails at the call site) and applies to `specularRoughness` only — `metallic` and `opacity` are explicit direct passthroughs (`False`), since routing them through the ramp would only insert a meaningless remap node (opacity is even a color attribute on several renderers)
+- **A failed ramp configuration is now part of the build result**: `_configure_ramp()` returns the failures (invalid or missing `ramp_stops`, failed stop writes) and `_build_scalar_chain` records them in `last_build_issues`, so the build is reported as `with_issues` (batch WARN + warning banner) instead of a silent success whose ramp output does not match the configuration
+
+### Fixed (result semantics and transaction)
+- **`summary["unwired"]` was always 0**: `summarize_results` classified wiring failures as plain failures before reaching the `unwired` branch, and `unwired` did not require an actual commit failure. `unwired` now means `total_sgs > 0 and wired == 0 and bool(sg_failures)` and is classified first
+- **Rollback reported a false alarm**: `_restore_sg_wiring` restored every snapshot entry, so an SG that was never rewritten (its connect had failed) could fail to "restore" on a locked plug and set `restored=False`. Only SGs the commit actually touched are restored now
+- **Partial-wiring diagnostics were discarded**: `ConversionResult.wired_before_rollback` records how many SGs were wired before the rollback; the batch log and the converter tab report it. `docs/AGENTS.md` now states that partial wiring is rolled back by design (rule 11) and `partially_wired` is a reserved model capability
+- **`disconnectAttr` misuse**: `_restore_sg_wiring` passed one argument (Maya raises), and `_disconnect_upstream` passed `(dest, src)` in reverse order. Both use the documented `(source, destination)` order now; the fakes in `tests/test_converter.py` / `tests/test_cc_topology.py` were corrected to the real API signatures
+- **CC driving a scalar channel always failed**: `cc.py` always connected the configured output (`outColor`, float3). It now prefers the output slot the source chain actually used (`outAlpha`) and falls back through `smart_connect`; `_cache` records that slot
+- **`last_build_issues` leaked across materials**: reset moved to the first line of `_build()` (before any `raise`)
+- **An incomplete SG snapshot no longer risks a half-wired scene**: `_snapshot_sg_wiring()` returns `(snapshot, unreadable)` and `_commit_shading_engines` aborts **before** rewiring when any slot could not be read (`reason = "failed to snapshot shading engine wiring"`, the unreadable slots are listed in `sg_failures`, the scene is left untouched and the result counts as `unwired`). The now-unreachable `_UNKNOWN_WIRING` sentinel and its restore branch were removed
+
+### Fixed (reporting, config, UI, startup)
+- **`NaN` was written silently**: non-finite floats are refused and reported as an `issue`
+- **`TransferReport.ok` was always True**: `transfer_all` sets `ok = not critical`
+- **Alpha Is Luminance on non-opacity channels was invisible**: enabling it now records an `issue`
+- **Dead config keys removed**: `texture_channels.json:use_alpha` and `colorSpace.json:default` were never consumed; both were deleted rather than left as fake knobs
+- **`ssOn` hardcoded**: moved to `VRayMtl.json` `material.builder_prerequisites`, consumed by the builder via `apply_prerequisite_dict()`
+- **`MatchResult.stale` removed; `evidence_complete` now shown**: the Colorspace diagnostic column appends `[channel evidence incomplete]`
+- **`del exc` swallowed banner failures**: `show_warning_banner` / `show_result_banner` fall back to `report_terminal` (stderr) so the failure is observable
+- **Log tab validation was unguarded**: it uses `set_enabled` (no `RuntimeError` on a destroyed button) and the busy state is now window-wide across all 6 tabs
+- **`nodes=` snapshots were unbounded**: `_normalize_nodes` short-circuits already-normalized tuples and caps at `MAX_NODES` (50) with a `...(+N more)` marker
+- **`_evict_for` degraded to O(n²)**: a scan cursor avoids re-walking known-critical records
+- **Startup hint buried by a traceback**: `main.py` no longer imports `ui.main_window` when the project root cannot be resolved
+- **Symlinked roots not recognised**: module ownership checks use `os.path.realpath`
+- **Displacement / config / bump cleanups**: `DisplacementConverter.convert()` documented as a non-transactional convenience entry point; `attr_map` no longer absorbs `displacement` section meta keys; `_collect` collects a shared bump/normal node once; the unreachable `_detect_bn_modes` path branch was removed; nested conversions log a WARN; the material output attribute is configurable (`material.output`, default `outColor`); `_restore_shared_source_chain` limits its query to destinations; `_TRACE_SKIP_NODES` matches texture source nodes by type; `_record_conflict` drops the ambiguous `new` field; `_StateItem.__lt__` and the state lookup are defensive; the Colorspace table is capped at `MAX_TABLE_ROWS`; `colorSpace.json:commonAttributeRoles` no longer duplicates renderer attribute names
+
+### Changed (guard script)
+- `scripts/check_no_silent_pass.py` is now an **AST structural check**: every `except` handler must log, raise, call `report_terminal`, or carry an explicit `# noqa: silent-fallback <reason>` marker; `print` / `cmds.warning` are detected via AST
+
+### Tests
+- Pure suite: **305 passed** (was 289). New coverage: CC topology, ramp / full chain, ramp-config failures, commit semantics, snapshot abort, node cap, eviction, banner fallback
+- mayapy suite: **91 passed, 3 skipped** (was 88). New: target-side CC assertion, outAlpha scalar channel, ramp responds to `vCoord`, full chain applies to roughness only
+
+### Known limitations and follow-ups
+- **Full chain scope**: the `Full chain` toggle applies to `specularRoughness` only; `metallic` / `opacity` are always direct passthroughs (by design)
+- **CC driving a scalar channel**: if the *target* renderer's CC node has no `outAlpha` (e.g. `RedshiftColorCorrection`), the channel cannot be represented and the conversion still fails critically
+- **`partially_wired`** is a reserved model capability: because a failed SG commit rolls back (rule 11), `wired` is only `0` or `total_sgs`; the pre-rollback count is reported through `wired_before_rollback`
+- **Symlinked project roots** (`os.path.realpath` handling) were not exercised here (creating a symlink needs privileges on Windows)
+- **GUI-only paths** (cross-tab re-entrancy, window teardown, very large Colorspace tables) are covered by code-path analysis plus unit tests, not by an end-to-end GUI run
+- **`nodes=` memory figures** were measured with `tracemalloc` (pure Python), not from a live Maya scene
+
 ## 2026-10-18
 
 ### Fixed (trustworthy success reporting)

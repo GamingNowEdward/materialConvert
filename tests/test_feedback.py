@@ -247,8 +247,27 @@ def test_show_result_banner_is_best_effort(monkeypatch):
     assert feedback.show_result_banner(1, 0) is False
 
 
+def test_show_result_banner_failure_falls_back_to_terminal(monkeypatch, capsys):
+    """A failed banner must stay observable (falls back to stderr), never silent."""
+    def broken(**kwargs):
+        raise RuntimeError("view broken")
+
+    monkeypatch.setattr(cmds, "inViewMessage", broken)
+    assert feedback.show_result_banner(1, 0) is False
+    assert "result banner failed" in capsys.readouterr().err
+
+
+def test_show_warning_banner_failure_falls_back_to_terminal(monkeypatch, capsys):
+    def broken(**kwargs):
+        raise RuntimeError("view broken")
+
+    monkeypatch.setattr(cmds, "inViewMessage", broken)
+    assert feedback.show_warning_banner("hi") is False
+    assert "warning banner failed" in capsys.readouterr().err
+
+
 def test_show_result_banner_partial_wiring(monkeypatch):
-    """回归保护（B09）：仅部分 SG 接线成功时不能显示普通成功。"""
+    """Regression guard: a partially wired conversion must not show a plain success."""
     views = []
     monkeypatch.setattr(cmds, "inViewMessage", lambda **k: views.append(k.get("amg", "")))
 

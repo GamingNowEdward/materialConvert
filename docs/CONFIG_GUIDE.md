@@ -82,6 +82,8 @@ Create a new JSON file under `config/material/`. **The file name is not used for
 | `short_name` | Recommended | Naming suffix for converted materials: `{source_material}_{short_name}` (defaults to `"converted"`). Existing conventions: `aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | Recommended | Renderer plugin module name (e.g. `mtoa` / `redshift4maya` / `vrayformaya`). Used only by Debug validation: checks plugin load state; if not installed, the whole renderer group is SKIPped instead of misreported as spelling errors |
 | `prerequisites` | Optional | Material-level prerequisites, see below |
+| `builder_prerequisites` | Optional | **Builder-only** per-channel prerequisite switches (e.g. V-Ray's `ssOn`), shaped `{common_attr: {attribute, value}}`; the Convert path is unaffected |
+| `output` | Optional | Material output attribute name, defaults to `outColor`. Used to enumerate shading engines and commit the wiring; `outColor` is a generic Maya attribute, so declaring it is rarely needed |
 | `invert` | Optional | Material-level source-attribute inversion declaration, see below |
 
 ### Attribute Mapping Sections
@@ -457,6 +459,8 @@ Finally you may reload the tool in Maya and do a round-trip conversion test (mat
 - New material JSON files **appear automatically in the Material Builder / Batch Builder dropdowns** — no registration needed
 - However, the Builder only supports implemented channel strategies: `color` / `float` / `roughness` / `normal_bump` / `displacement`. New plain attributes still require extending Python chain-building functions; JSON alone is not enough
 - Weight attributes for color channels derive from `color_weight_pairs` in `common.json` — no extra configuration needed
+- The `Use Full Builder Pipeline` toggle on both Builder panels applies to **`specularRoughness` only** (colorCorrect + layeredTexture + ramp); `metallic` / `opacity` are always direct. The full-chain ramp stops come from `ramp_stops` in `config/builder_naming.json` (default black→white)
+- Builder-only per-channel switches go in `material.builder_prerequisites` (e.g. V-Ray `ssOn`) — never hardcode them in Python
 
 ### colorSpace Auto-expansion
 

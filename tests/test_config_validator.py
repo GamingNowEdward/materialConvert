@@ -43,13 +43,13 @@ def make_fake_cmds(plugin_loaded=False, plugin_error=None,
 
 
 def test_plugin_failure_skips_without_errors():
-    """未安装渲染器必须整组 SKIP，绝不产生 ERROR/WARN。"""
+    """A missing renderer plugin must skip the whole group, never ERROR/WARN."""
     fake = make_fake_cmds(plugin_error=RuntimeError("plugin not installed"))
     validator = ConfigValidator(cmds_module=fake, logger=Logger())
     results, summary = validator.validate_all()
     assert summary["error"] == 0
     assert summary["warn"] == 0
-    # 三个插件（mtoa / redshift4maya / vrayformaya）各产生至少一条 SKIP
+    # each of the three plugins (mtoa / redshift4maya / vrayformaya) emits at least one SKIP
     assert summary["skip"] >= 3
     assert all(r.level != LogLevel.ERROR and r.level != LogLevel.WARN for r in results)
 

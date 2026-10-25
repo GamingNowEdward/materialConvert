@@ -1,17 +1,12 @@
 {
-    "default": "raw",
-
     "commonAttributeRoles": {
         "srgb": [
             "baseColor", "specularColor", "transmissionColor", "subsurfaceColor",
-            "coatColor", "fuzzColor", "emissionColor",
-            "diffuseColor", "sheenColor", "illumColor"
+            "coatColor", "fuzzColor", "emissionColor"
         ],
         "raw": [
             "metallic", "roughness", "specularRoughness", "normal_bump",
-            "displacementTexture", "opacity",
-            "metalness", "normalCamera", "bumpMap", "displacement",
-            "diffuseRoughness", "geometryOpacity", "opacityMap"
+            "displacementTexture", "opacity"
         ]
     },
 

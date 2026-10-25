@@ -79,7 +79,7 @@ class BatchBuilderTab:
         self._populate_target_list()
         opt_layout.addWidget(self.target_combo, 1)
 
-        self.cb_full_chain = QtWidgets.QCheckBox("Use Full Builder Pipeline (CC/Layered)")
+        self.cb_full_chain = QtWidgets.QCheckBox("Use Full Builder Pipeline")
         self.cb_full_chain.setChecked(True)
         opt_layout.addWidget(self.cb_full_chain)
 

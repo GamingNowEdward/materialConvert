@@ -223,6 +223,17 @@ class ConverterTab:
                     source=_SOURCE,
                     nodes=tuple(r.new_material or r.material for r in failed_results),
                 )
+            rolled_back = [r for r in failed_results if r.wired_before_rollback]
+            if rolled_back:
+                # Surface the "k of N SGs had been wired before the rollback"
+                # diagnostic instead of collapsing it into a plain failure.
+                self.log.warn(
+                    f"{len(rolled_back)} material(s) had shading engine(s) wired and "
+                    f"then rolled back after a later SG failed: "
+                    f"{', '.join(f'{r.material} ({r.wired_before_rollback}/{r.total_sgs})' for r in rolled_back)}",
+                    source=_SOURCE,
+                    nodes=tuple(r.new_material or r.material for r in rolled_back),
+                )
             show_result_banner(
                 summary["failed"], summary["with_issues"],
                 ok_message=f"{summary['converted']} material(s) converted",

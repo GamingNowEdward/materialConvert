@@ -59,11 +59,20 @@ class ConversionResult:
     sg_failures: list = field(default_factory=list)
     #: True when a failed SG commit restored the pre-conversion wiring.
     restored: bool = False
+    #: Number of shading engines that were wired before the commit failed and
+    #: had to be rolled back.  Keeps the "k of N were connected" diagnostic that
+    #: the failure path would otherwise discard.
+    wired_before_rollback: int = 0
 
     @property
     def unwired(self):
-        """Created/converted but none of the source's shading engines took it."""
-        return self.total_sgs > 0 and self.wired == 0
+        """Created but none of the source's shading engines took it.
+
+        Requires an actual commit failure (``sg_failures``): a material that
+        failed earlier in the pipeline is a plain failure, not an "unwired" one,
+        so the two diagnostics stay distinguishable.
+        """
+        return self.total_sgs > 0 and self.wired == 0 and bool(self.sg_failures)
 
     @property
     def partially_wired(self):
@@ -90,11 +99,14 @@ def summarize_results(results):
     for result in results:
         if result.skipped:
             summary["skipped"] += 1
-        elif not (result.created and result.converted):
-            summary["failed"] += 1
         elif result.unwired:
+            # Classified before the generic failure check: a material that was
+            # created and committed to nothing is a distinct, more actionable
+            # failure than "conversion failed midway".
             summary["failed"] += 1
             summary["unwired"] += 1
+        elif not (result.created and result.converted):
+            summary["failed"] += 1
         else:
             summary["converted"] += 1
             if result.partially_wired:

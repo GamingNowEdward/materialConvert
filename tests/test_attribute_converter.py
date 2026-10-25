@@ -322,9 +322,10 @@ def test_missing_alpha_source_is_summarized_once(monkeypatch):
     monkeypatch.setattr(attribute_module.cmds, "objExists", lambda plug: True)
     monkeypatch.setattr(attribute_module.cmds, "listConnections", lambda *a, **k: [])
 
-    failed = conv._fix_alpha_luminance("mat1", "arnold", target)
+    failed, notes = conv._fix_alpha_luminance("mat1", "arnold", target)
 
     assert failed == []
+    assert notes == []
     records = log.poll(0)
     assert not [r for r in records if "No alpha source traced" in r.message]
     summaries = [r for r in records if "no alpha source" in r.message]
@@ -345,7 +346,6 @@ def test_shared_target_attribute_is_traced_once(monkeypatch):
         "mat1", "arnold",
         _AlphaConfig({"a": "shared", "b": "shared", "c": "other"}),
     )
-
     assert calls == ["mat1.shared", "mat1.other"]
 
 
@@ -362,10 +362,13 @@ def test_found_alpha_source_is_still_logged(monkeypatch):
     monkeypatch.setattr(attribute_module.cmds, "setAttr",
                         lambda *a, **k: set_calls.append(a))
 
-    failed = conv._fix_alpha_luminance("mat1", "arnold", _AlphaConfig({"a": "shared"}))
+    failed, notes = conv._fix_alpha_luminance("mat1", "arnold", _AlphaConfig({"a": "shared"}))
 
     assert failed == []
     assert set_calls == [("tex1.alphaIsLuminance", True)]
+    # Enabling it on a non-opacity channel is now reported.
+    assert len(notes) == 1
+    assert "non-opacity channel" in notes[0]
     messages = [r.message for r in log.poll(0)]
     assert any("Alpha source found" in m for m in messages)
     assert any("Enabled Alpha Is Luminance on tex1" in m for m in messages)

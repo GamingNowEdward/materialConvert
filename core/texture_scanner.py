@@ -247,13 +247,11 @@ class TextureScanner:
             if item["material"] == material_name and item["common_attr"] == common_attr:
                 item["candidates"].append(new_path)
                 item["dropped"].append(new_path)
-                item["new"] = new_path
                 return
         conflicts.append({
             "material": material_name,
             "common_attr": common_attr,
             "existing": kept_path,
-            "new": new_path,
             "kept": kept_path,
             "candidates": [kept_path, new_path],
             "dropped": [new_path],

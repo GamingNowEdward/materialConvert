@@ -9,16 +9,16 @@ from core.logger import LogLevel, Logger
 
 
 def test_core_builder_context_imports_without_ui():
-    """守护：core.builder_context 可在无 UI/PySide 环境下独立 import。
+    """Guard: core.builder_context must import without a UI/PySide environment.
 
-    删除 ui 相关模块与 core.builder_context 自身缓存后重新导入，必须成功，
-    且不得触发任何 ui 模块加载。
+    After dropping the ui modules and core.builder_context's own cache, the
+    re-import must succeed and must not load any ui module.
     """
     for name in list(sys.modules):
         if name == "ui" or name.startswith("ui.") or name == "core.builder_context":
             del sys.modules[name]
 
-    import core.builder_context  # noqa: F401  不应抛异常
+    import core.builder_context  # noqa: F401  must not raise
 
     assert not any(name == "ui" or name.startswith("ui.") for name in sys.modules)
 

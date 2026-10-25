@@ -1,6 +1,6 @@
 """Unit tests for the displacement converter's failure propagation.
 
-These encode review finding B01: a displacement texture/scale/create failure
+These encode the failure semantics: a displacement texture/scale/create failure
 must never be reported as a successful conversion, and "no source displacement"
 must stay distinguishable from "source data could not be read".
 """

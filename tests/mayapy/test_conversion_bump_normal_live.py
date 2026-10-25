@@ -108,7 +108,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
                 self.assertEqual(cmds.nodeType(upstream.split(".")[0]), "aiNormalMap")
 
     def test_object_space_normal_is_preserved_on_vray_target(self):
-        """回归保护（B05）：Redshift object-space 法线转到 V-Ray 仍是 object space。"""
+        """Regression guard: Redshift object-space normal stays object-space on V-Ray."""
         if not support.is_plugin_loaded("redshift4maya"):
             self.skipTest("redshift4maya not available")
         if not support.is_plugin_loaded("vrayformaya"):
@@ -133,7 +133,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
         self.assertEqual(cmds.getAttr("%s.%s" % (result.new_material, mapping.is_normal)), 2)
 
     def test_object_space_normal_is_reported_for_arnold_target(self):
-        """回归保护（B05）：目标无法表达 object space 时必须显式上报。"""
+        """Regression guard: a target that cannot express object space must report it."""
         if not support.is_plugin_loaded("redshift4maya"):
             self.skipTest("redshift4maya not available")
         if not support.is_plugin_loaded("mtoa"):
@@ -363,7 +363,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
         self.assertTrue([n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")])
 
     def test_legacy_p2d_creation_failure_fails_conversion(self):
-        """回归保护（B04）：P2D 创建失败是关键失败，不得返回成功。"""
+        """Regression guard: a failed P2D creation is critical, never a success."""
         self._require_legacy_renderers()
         from core.converter import MaterialConverter
         from core.converters.bump import BumpConverter
@@ -385,7 +385,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
             [n for n in (cmds.ls(type="file") or []) if n.startswith("tex_")], [])
 
     def test_legacy_partial_uv_failure_is_repaired_on_retry(self):
-        """回归保护（B04）：失败产物在重试时被修补复用，而不是重复新建。"""
+        """Regression guard: a failed artefact is repaired on retry, not recreated."""
         self._require_legacy_renderers()
         from core.converter import MaterialConverter
 
@@ -419,7 +419,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
             "repaired file node still has no UV source")
 
     def test_legacy_manual_file_with_same_name_is_not_reused(self):
-        """回归保护（B04）：同名同路径但无 UV 链的手工 file 不得被复用。"""
+        """Regression guard: a manual file with the same name/path but no UV chain is not reused."""
         self._require_legacy_renderers()
         from core.converter import MaterialConverter
 
@@ -439,7 +439,7 @@ class BumpNormalConversionLive(support.MayaTestCase):
         self.assertIsNotNone(support.upstream_plug("%s.uvCoord" % file_node))
 
     def test_legacy_reused_file_is_tagged_with_its_source(self):
-        """B04：物化产物带来源标记，复用不依赖名称猜测。"""
+        """A materialized artefact carries an origin tag, so reuse never guesses by name."""
         self._require_legacy_renderers()
         from core.converter import MaterialConverter
 

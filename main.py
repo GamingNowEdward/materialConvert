@@ -48,8 +48,10 @@ def _owned_by_root(module, root):
     path = getattr(module, "__file__", None)
     if not isinstance(path, str) or not path:
         return False
-    module_path = os.path.normcase(os.path.abspath(path))
-    root_path = os.path.normcase(os.path.abspath(root))
+    # realpath resolves symlinks so a linked sys.path entry and the module's real
+    # path are still recognised as the same project.
+    module_path = os.path.normcase(os.path.realpath(path))
+    root_path = os.path.normcase(os.path.realpath(root))
     return module_path == root_path or module_path.startswith(root_path + os.sep)
 
 
@@ -83,7 +85,12 @@ if _ROOT:
     from core.module_reload import purge_project_modules
     purge_project_modules(root=_ROOT)
 
-from ui.main_window import show
+if _ROOT:
+    from ui.main_window import show
+else:
+    # Without the project on sys.path the import would raise
+    # ModuleNotFoundError and bury the friendly hint above; skip it entirely.
+    show = None
 
-if __name__ == "__main__":
+if __name__ == "__main__" and show is not None:
     show()

@@ -1,5 +1,52 @@
 # 更新日志
 
+## 2026-10-25
+
+### 修复（静默正确性，P0）
+- **Builder 完整链的 ramp 是死的**：`_build_scalar_chain` 建出裸 `ramp` 却没有 `colorEntryList`，输出恒定、贴图驱动 `vCoord` 无效，却仍报成功。现由 `MaterialBuilder._configure_ramp()` 写入配置的停靠点（`builder_naming.json` → `ramp_stops`，缺省黑→白），且 ramp→材质改用 `smart_connect`，目标非 float 时回退到 ramp 的 `outColor`
+- **CC 直连 + 非材质下游时目标通道未接线**：`cc.py` 只在 `else` 分支连 `target_plug`，于是"CC 同时驱动非材质节点"的场景产出的材质通道为空却报 `converted=True`。现目标通道**始终**单独接线，`_external_cc_destinations` 将其排除
+- **Full chain 开关覆盖哪些通道不明确**：`_build_scalar_chain` 的 `use_full_chain` 改为**必填**（将来漏传会在调用点报错），且**只作用于 `specularRoughness`**——`metallic` / `opacity` 显式传 `False` 保持直连，因为经 ramp 只是插入一个无意义的恒等重映射节点（opacity 在多个渲染器上还是 color 属性）
+- **ramp 配置失败现在进入构建结果**：`_configure_ramp()` 返回失败清单（`ramp_stops` 无效/缺失、停靠点写入失败），`_build_scalar_chain` 将其记入 `last_build_issues`，构建结果计为 `with_issues`（批次 WARN + 警告横幅），不再出现"报成功但 ramp 输出不符配置"的静默失真
+
+### 修复（结果语义与事务）
+- **`summary["unwired"]` 恒为 0**：`summarize_results` 先把接线失败归入普通失败，永远到不了 `unwired` 分支，且 `unwired` 未要求真的提交失败。现 `unwired = total_sgs > 0 and wired == 0 and bool(sg_failures)` 并**优先**判定
+- **回滚误报**：`_restore_sg_wiring` 会恢复快照里的**每一个** SG，导致"从未被改写（其接线本就失败）"的 SG 在锁定插槽上恢复失败、误置 `restored=False`。现只恢复本次提交**实际改写**过的 SG
+- **部分接线诊断被丢弃**：`ConversionResult.wired_before_rollback` 记录回滚前已接线的 SG 数，批次日志与转换页会报告它；`docs/AGENTS.md` 明确"部分接线按铁律 11 回滚、`partially_wired` 为保留能力"
+- **`disconnectAttr` 误用**：`_restore_sg_wiring` 只传一个参数（Maya 会抛错），`_disconnect_upstream` 传反了 `(dest, src)`。现统一为 `(source, destination)`；`tests/test_converter.py` / `tests/test_cc_topology.py` 的 fake 签名同步改为真实 API
+- **CC 驱动标量通道必然失败**：`cc.py` 一律用配置输出（`outColor`，float3）。现优先使用源链实际使用的输出插槽（`outAlpha`），并经 `smart_connect` 回退；`_cache` 记录该插槽
+- **`last_build_issues` 跨材质串味**：重置点提到 `_build()` 第一行（任何 `raise` 之前）
+- **SG 快照不完整不再有"半接线"风险**：`_snapshot_sg_wiring()` 返回 `(snapshot, unreadable)`，任一槽读取失败时 `_commit_shading_engines` **在改接前中止**（`reason = "failed to snapshot shading engine wiring"`、不可读槽记入 `sg_failures`、场景零改动、结果计入 `unwired`）；同时删除已不可达的 `_UNKNOWN_WIRING` 哨兵及其回滚分支
+
+### 修复（上报、配置、UI、启动）
+- **`NaN` 被静默写入**：非有限浮点值被拒写并记为 `issue`
+- **`TransferReport.ok` 恒为 True**：`transfer_all` 返回前 `ok = not critical`
+- **非 opacity 通道开启 Alpha Is Luminance 不可见**：现在会记一条 `issue`
+- **删除无消费方的配置键**：`texture_channels.json:use_alpha` 与 `colorSpace.json:default` 从未被读取，直接删除而非保留成"假旋钮"
+- **`ssOn` 硬编码**：搬进 `VRayMtl.json` 的 `material.builder_prerequisites`，由 builder 经 `apply_prerequisite_dict()` 消费
+- **删除 `MatchResult.stale`；`evidence_complete` 接入 UI**：Colorspace 诊断列追加 `[channel evidence incomplete]`
+- **`del exc` 吞掉横幅失败**：`show_warning_banner` / `show_result_banner` 失败回落到 `report_terminal`（stderr），失败可观测
+- **Log 页校验无防护**：改用 `set_enabled`（窗口销毁不再抛 `RuntimeError`），忙状态提升为**窗口级**、覆盖全部 6 个页
+- **`nodes=` 快照无上限**：`_normalize_nodes` 对已规范化元组短路，并以 `MAX_NODES`（50）截断、追加 `...(+N more)`
+- **`_evict_for` 退化为 O(n²)**：新增扫描游标，不再重走已知 critical 记录
+- **启动提示被 traceback 淹没**：`main.py` 解析不到项目根时不再 import `ui.main_window`
+- **符号链接根目录识别失败**：模块归属判定改用 `os.path.realpath`
+- **置换 / 配置 / bump 清理**：`DisplacementConverter.convert()` 注明为非事务便捷入口；`attr_map` 不再吸收 `displacement` 段的元键；`_collect` 对共享 bump/normal 节点只采集一次；删除不可达的 `_detect_bn_modes` path 分支；嵌套转换记 WARN；材质输出属性可配置（`material.output`，缺省 `outColor`）；`_restore_shared_source_chain` 限定只查下游；`_TRACE_SKIP_NODES` 改为按类型匹配纹理源节点；`_record_conflict` 删除语义模糊的 `new`；`_StateItem.__lt__` 与状态查表加防护；Colorspace 表格限制 `MAX_TABLE_ROWS`；`colorSpace.json:commonAttributeRoles` 不再重复渲染器属性名
+
+### 变更（守卫脚本）
+- `scripts/check_no_silent_pass.py` 升级为 **AST 结构检查**：每个 `except` 处理块必须记录日志、`raise`、调用 `report_terminal`，或带显式 `# noqa: silent-fallback <原因>` 标记；`print` / `cmds.warning` 也改为 AST 检测
+
+### 测试
+- 纯套件：**305 passed**（原 289）。新增：CC 拓扑、ramp 与完整链、ramp 配置失败、提交语义、快照中止、节点上限、淘汰、横幅回落
+- mayapy 套件：**91 passed, 3 skipped**（原 88）。新增：目标侧 CC 断言、outAlpha 标量通道、ramp 随 `vCoord` 响应、full chain 只作用于 roughness
+
+### 已知限制与后续项
+- **Full chain 的适用范围**：`Full chain` 开关**只作用于 `specularRoughness`**；`metallic` / `opacity` 恒为直连（有意为之）
+- **CC 驱动标量通道**：若**目标**渲染器的 CC 节点没有 `outAlpha`（如 `RedshiftColorCorrection`），该通道无法表示，转换仍会关键失败
+- **`partially_wired`** 为保留的模型能力：因 SG 提交失败即回滚（铁律 11），`wired` 只会是 `0` 或 `total_sgs`；回滚前的成功接线数由 `wired_before_rollback` 上报
+- **符号链接根目录**（`os.path.realpath` 处理）未在本机实测（Windows 创建符号链接需要特权）
+- **仅 GUI 路径**（跨页重入、窗口销毁、超大 Colorspace 表格）由代码路径分析 + 单元测试覆盖，未做端到端 GUI 运行
+- **`nodes=` 内存数据**来自 `tracemalloc`（纯 Python），非真实 Maya 场景占用
+
 ## 2026-10-18
 
 ### 修复（可靠性：成功判定可信）

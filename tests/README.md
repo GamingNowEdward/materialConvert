@@ -28,8 +28,11 @@ tests/
 `pytest.ini` sets `addopts = --ignore=tests/mayapy`, so a plain `pytest` run only
 collects the pure suite. CI runs on **ubuntu-latest** (Python 3.11 + PySide6) with
 the dependencies from `requirements-dev.txt`, then runs
-`scripts/check_no_silent_pass.py`. PySide2 / Maya 2024 and Windows path behaviour
-are covered by the local mayapy suite only.
+`scripts/check_no_silent_pass.py`. That guard is an **AST structural check**: every
+`except` handler must log, raise, call `report_terminal`, or carry an explicit
+`# noqa: silent-fallback <reason>` marker; `print` / `cmds.warning` are detected
+via AST. PySide2 / Maya 2024 and Windows path behaviour are covered by the local
+mayapy suite only.
 
 ## Pure suite (no Maya)
 
@@ -77,10 +80,10 @@ With Maya 2024 on Windows:
 | alphaIsLuminance (enable / exempt / cross-network) | `test_conversion_alpha_luminance_live.py` |
 | Displacement (sentinel / real node / failure propagation) | `test_conversion_displacement_live.py` |
 | Converter flow (SG rewiring / batch / progress / transactional rollback) | `test_converter_flow_live.py` |
-| CC chain conversion / reuse / restore / copied intermediate node | `test_cc_conversion_live.py` |
+| CC chain conversion / reuse / restore / copied intermediate node / outAlpha scalar channel | `test_cc_conversion_live.py` |
 | Prerequisites (material / attribute level, failure reporting) | `test_prerequisites_live.py` |
 | BuilderContext (naming / connections / layered) | `test_builder_context_live.py` |
-| MaterialBuilder (all channels, full/simple, QSS) | `test_material_builder_live.py` |
+| MaterialBuilder (all channels, full/simple chain, ramp, QSS) | `test_material_builder_live.py` |
 | BatchBuilder (build / batch / progress) | `test_batch_builder_live.py` |
 | Colorspace matcher (filename / channel / apply / ignore) | `test_colorspace_live.py` |
 | Node Tools logic (node-type groups / SG rename / P2D→file) | `test_node_tools_live.py` |

@@ -1,4 +1,4 @@
-"""Performance baseline for conversion and scanning (review finding O03).
+"""Performance baseline for conversion and scanning.
 
 Not a pass/fail benchmark: this suite records the number of ``cmds`` queries and
 the elapsed time for one fixed scenario so optimisations can be compared against

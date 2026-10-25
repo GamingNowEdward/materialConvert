@@ -35,7 +35,7 @@ def test_scan_groups_and_detects_conflicts(scan_dir):
 
 
 def test_conflict_records_every_candidate(scan_dir):
-    """回归保护（B07）：冲突必须保留全部候选与保留项，不只记一条日志。"""
+    """Regression guard: a conflict must keep every candidate and the kept path."""
     (scan_dir / "rock_Roughness.png").write_text("", encoding="utf-8")
     (scan_dir / "rock_Glossiness.png").write_text("", encoding="utf-8")
     (scan_dir / "rock_Gloss.png").write_text("", encoding="utf-8")

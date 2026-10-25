@@ -1,4 +1,4 @@
-"""Unit tests for normal-space preservation (review finding B05).
+"""Unit tests for normal-space preservation.
 
 Object-space and tangent-space normals share one switch attribute per renderer
 (Maya ``bumpInterp`` / Redshift ``inputType`` / V-Ray ``bumpMapType``); the

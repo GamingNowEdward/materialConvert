@@ -19,9 +19,11 @@ def _report_terminal(message):
     import sys
     try:
         sys.stderr.write(f"[{_SOURCE}] {message}\n")
-    except Exception as exc:
+    except Exception as exc:  # noqa: silent-fallback stderr is the last channel
         # Terminal fallback itself failed; never mask the original exception.
-        del exc  # guard-rule requirement (no silent pass), not business logic
+        # stderr is the single channel that depends on nothing (no logger, no
+        # UI, no Maya state), so there is nowhere left to report to.
+        del exc
 
 
 # Public alias: other UI modules reuse the logger-independent channel.
@@ -42,9 +44,10 @@ def show_warning_banner(message):
         )
         return True
     except Exception as exc:
-        # Best-effort UI feedback: the caller logs the failure; this must never
-        # change business control flow. `del exc` marks the guard rule.
-        del exc
+        # Best-effort UI feedback: fall back to the logger-independent channel so
+        # a failed banner is still observable.  This never changes control flow
+        # (the caller keeps running).
+        _report_terminal(f"warning banner failed: {exc!r}")
         return False
 
 
@@ -71,7 +74,7 @@ def show_result_banner(failed, with_issues, ok_message="Completed", partial=0):
         cmds.inViewMessage(amg=body, pos="topCenter", fade=True)
         return True
     except Exception as exc:
-        del exc
+        _report_terminal(f"result banner failed: {exc!r}")
         return False
 
 

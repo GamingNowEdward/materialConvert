@@ -1,8 +1,13 @@
 from ui import QtWidgets, QtCore, QtGui, cmds
 from core.colorspace import ColorSpaceMatcher, MatchState
 from core.logger import get_logger
+from ui.operation_state import OperationGuard
 
 _SOURCE = "ColorspaceTab"
+
+#: Upper bound on table rows: a scene with thousands of file nodes would
+#: otherwise build 5*N Qt items on every Refresh.
+MAX_TABLE_ROWS = 5000
 
 _STATE_RANK = {
     MatchState.CONFLICT: 0,
@@ -13,17 +18,32 @@ _STATE_RANK = {
 }
 
 
+def _state_from_value(value):
+    """``MatchState`` for a raw value, or None when it is not a valid state.
+
+    Uses the public constructor instead of the private
+    ``Enum._value2member_map_`` so it keeps working across Python versions.
+    """
+    try:
+        return MatchState(value)
+    except ValueError:  # noqa: silent-fallback unknown value -> None
+        return None
+
+
 class _StateItem(QtWidgets.QTableWidgetItem):
     """Diagnostic column item that sorts by problem severity, not alphabetically."""
 
     def _key(self):
         try:
             return MatchState(self.text().split(":", 1)[0])
-        except ValueError:
+        except ValueError:  # noqa: silent-fallback unknown state sorts last
             return None
 
     def __lt__(self, other):
-        return _STATE_RANK.get(self._key(), 99) < _STATE_RANK.get(other._key(), 99)
+        # ``other`` may be a plain QTableWidgetItem if a row is ever built
+        # differently; sort it last instead of raising AttributeError.
+        other_key = getattr(other, "_key", lambda: None)()
+        return _STATE_RANK.get(self._key(), 99) < _STATE_RANK.get(other_key, 99)
 
 
 class ColorspaceTab:
@@ -37,6 +57,29 @@ class ColorspaceTab:
         self.manual_combo = None
         self._loading = False
         self._results = []
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
+
+    def _guarded(self, action):
+        """Run a scene-modifying action under the busy guard.
+
+        Rejects re-entry and reports the busy state window-wide, so a batch on
+        another tab and this action can never overlap.
+        """
+        if not self.guard.try_begin():
+            return
+        try:
+            return action()
+        finally:
+            self.guard.end()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -55,12 +98,12 @@ class ColorspaceTab:
         self.refresh_btn = QtWidgets.QPushButton("Refresh")
         self.refresh_btn.setObjectName("refreshBtn")
         self.refresh_btn.setMinimumHeight(32)
-        self.refresh_btn.clicked.connect(self._refresh)
+        self.refresh_btn.clicked.connect(lambda: self._guarded(self._refresh))
         btn_row.addWidget(self.refresh_btn)
 
         btn_ignore = QtWidgets.QPushButton("Set ignoreColorSpaceFileRules on All File Nodes")
         btn_ignore.setMinimumHeight(32)
-        btn_ignore.clicked.connect(self._ignore_color_space_rules)
+        btn_ignore.clicked.connect(lambda: self._guarded(self._ignore_color_space_rules))
         btn_row.addWidget(btn_ignore)
 
         btn_row.addStretch()
@@ -102,7 +145,7 @@ class ColorspaceTab:
         btn_apply_manual = QtWidgets.QPushButton("Apply to Selected File Nodes")
         btn_apply_manual.setObjectName("applyCsBtn")
         btn_apply_manual.setMinimumHeight(32)
-        btn_apply_manual.clicked.connect(self._apply_manual)
+        btn_apply_manual.clicked.connect(lambda: self._guarded(self._apply_manual))
         manual_layout.addWidget(btn_apply_manual)
         layout.addWidget(manual_group)
 
@@ -114,19 +157,23 @@ class ColorspaceTab:
         btn_apply_selected = QtWidgets.QPushButton("Apply Selected")
         btn_apply_selected.setObjectName("convertBtn")
         btn_apply_selected.setMinimumHeight(32)
-        btn_apply_selected.clicked.connect(self._apply_selected)
+        btn_apply_selected.clicked.connect(lambda: self._guarded(self._apply_selected))
         apply_layout.addWidget(btn_apply_selected)
 
         btn_apply_all = QtWidgets.QPushButton("Apply All Matched")
         btn_apply_all.setObjectName("convertBtn")
         btn_apply_all.setMinimumHeight(32)
-        btn_apply_all.clicked.connect(self._apply_all_matched)
+        btn_apply_all.clicked.connect(lambda: self._guarded(self._apply_all_matched))
         apply_layout.addWidget(btn_apply_all)
 
         apply_layout.addStretch()
         layout.addWidget(apply_group)
 
         self._populate_manual_combo()
+        self._busy_widgets = [
+            self.refresh_btn, btn_ignore, self.manual_combo,
+            btn_apply_manual, btn_apply_selected, btn_apply_all,
+        ]
         self._widget = widget
         return widget
 
@@ -155,7 +202,10 @@ class ColorspaceTab:
         self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
 
-        for result in results:
+        # A scene with thousands of file nodes would otherwise build 5*N Qt
+        # items on every Refresh; bound the table and tell the user.
+        shown = results[:MAX_TABLE_ROWS]
+        for result in shown:
             row = self.table.rowCount()
             self.table.insertRow(row)
 
@@ -165,7 +215,12 @@ class ColorspaceTab:
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(result.file_path))
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(result.actual_colorspace))
             self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(result.prematch_colorspace or ""))
-            self.table.setItem(row, 4, _StateItem(f"{result.state.value}: {result.diagnostic}"))
+            diagnostic = f"{result.state.value}: {result.diagnostic}"
+            if not result.evidence_complete:
+                # "No conflict found" is weaker when the channel trace was
+                # truncated; surface that instead of leaving it invisible.
+                diagnostic += " [channel evidence incomplete]"
+            self.table.setItem(row, 4, _StateItem(diagnostic))
             path_item = self.table.item(row, 1)
             if path_item:
                 path_item.setToolTip(result.file_path)
@@ -177,20 +232,23 @@ class ColorspaceTab:
                         item.setBackground(QtGui.QColor("#4a2b2b"))
 
         self.table.setSortingEnabled(True)
-        self._update_status(len(results))
+        self._update_status(len(results), shown=len(shown))
         self._loading = False
 
-    def _update_status(self, total):
+    def _update_status(self, total, shown=None):
         counts = {}
         for result in self._results:
             state = result.state.value
             counts[state] = counts.get(state, 0) + 1
         ordered = sorted(
             counts.items(),
-            key=lambda kv: _STATE_RANK.get(MatchState._value2member_map_.get(kv[0]), 99),
+            key=lambda kv: _STATE_RANK.get(_state_from_value(kv[0]), 99),
         )
         summary = ", ".join(f"{k} {v}" for k, v in ordered)
-        self.status_label.setText(f"{total} file node(s): {summary}")
+        suffix = ""
+        if shown is not None and shown < total:
+            suffix = f" (showing first {shown}; apply still covers every match)"
+        self.status_label.setText(f"{total} file node(s): {summary}{suffix}")
 
     def _selected_results(self):
         results = []

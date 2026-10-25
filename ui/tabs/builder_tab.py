@@ -68,11 +68,14 @@ class BuilderTab:
 
         self.cb_normal_mode = geo_opts.get('normal_mode')
 
-        opt_layout = QtWidgets.QHBoxLayout()
+        opt_layout = QtWidgets.QVBoxLayout()
         self.cb_qss = QtWidgets.QCheckBox("Add To Quick Select Set")
         self.cb_qss.setChecked(True)
         opt_layout.addWidget(self.cb_qss)
-        opt_layout.addStretch()
+
+        self.cb_full_chain = QtWidgets.QCheckBox("Use Full Builder Pipeline")
+        self.cb_full_chain.setChecked(True)
+        opt_layout.addWidget(self.cb_full_chain)
         layout.addLayout(opt_layout)
 
         self.mat_combo = QtWidgets.QComboBox()
@@ -84,7 +87,8 @@ class BuilderTab:
         btn_build.setFixedHeight(52)
         btn_build.clicked.connect(self._create_material_logic)
         layout.addWidget(btn_build)
-        self._busy_widgets = [btn_build, self.mat_combo, self.name_input]
+        self._busy_widgets = [btn_build, self.mat_combo, self.name_input,
+                              self.cb_qss, self.cb_full_chain]
 
         self._populate_material_list()
         return widget
@@ -171,6 +175,7 @@ class BuilderTab:
             new_mat = self.builder.build(
                 node_type, mat_base, input_paths,
                 use_qss=self.cb_qss.isChecked(),
+                use_full_chain=self.cb_full_chain.isChecked(),
                 channel_options=channel_options,
             )
             self._last_operation_warnings = len(getattr(self.builder, "last_build_issues", []))

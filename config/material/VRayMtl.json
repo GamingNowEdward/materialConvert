@@ -26,6 +26,12 @@
         "value": 0
       }
     },
+    "builder_prerequisites": {
+      "subsurfaceColor": {
+        "attribute": "ssOn",
+        "value": 1
+      }
+    },
     "short_name": "vray",
     "uiPanel_display_name": "V-Ray",
     "renderer": "vray"

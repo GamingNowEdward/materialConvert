@@ -1,3 +1,5 @@
+import math
+
 import maya.cmds as cmds
 
 from dataclasses import dataclass, field
@@ -84,10 +86,11 @@ class AttributeConverter:
     def _fix_alpha_luminance(self, target_mat, target_renderer, target_config):
         if target_renderer == "redshift":
             self.log.debug("Alpha Is Luminance fix skipped for Redshift target", source=_SOURCE)
-            return []
+            return [], []
 
         failed = []
         fixed = []
+        notes = []
         checked = 0
         seen_plugs = set()
         for common_attr, maya_attr in target_config.attr_map.items():
@@ -128,6 +131,13 @@ class AttributeConverter:
                     cmds.setAttr(f"{tex_node}.alphaIsLuminance", True)
                     if tex_node not in fixed:
                         fixed.append(tex_node)
+                    # Every common attr reaching here is a non-opacity channel
+                    # (opacity is in _FIX_ALPHA_SKIP), so record it: enabling
+                    # Alpha Is Luminance changes the texture's semantics and the
+                    # user must be able to see it in the result.
+                    notes.append(
+                        f"{common_attr}: Alpha Is Luminance enabled on {tex_node} "
+                        f"for a non-opacity channel")
                     self.log.debug(f"Enabled Alpha Is Luminance on {tex_node}", source=_SOURCE, nodes=(tex_node,))
             except Exception as exc:
                 self.log.warn(f"Failed to enable alphaIsLuminance on {tex_node}: {exc}", source=_SOURCE, nodes=(tex_node,))
@@ -141,7 +151,7 @@ class AttributeConverter:
                 source=_SOURCE,
                 nodes=(target_mat,),
             )
-        return failed
+        return failed, notes
 
     def _trace_alpha_plug(self, start, visited=None, depth=0):
         """Recursively trace upstream from an attribute/node to find the bitmap texture
@@ -273,8 +283,11 @@ class AttributeConverter:
             for failed in self._apply_inversions(target_mat, source_config, target_config, invert_attrs):
                 report.issues.append(f"{failed}: inversion failed")
 
-        for failed in self._fix_alpha_luminance(target_mat, target_renderer, target_config):
+        alpha_failed, alpha_notes = self._fix_alpha_luminance(
+            target_mat, target_renderer, target_config)
+        for failed in alpha_failed:
             report.issues.append(f"{failed}: alphaIsLuminance not enabled")
+        report.issues.extend(alpha_notes)
 
         self.log.info(
             f"Attribute transfer finished: {transferred} transferred, {skipped} skipped, "
@@ -292,6 +305,9 @@ class AttributeConverter:
                 f"Non-critical transfer issue(s): {'; '.join(report.issues)}",
                 source=_SOURCE, nodes=(target_mat,),
             )
+        # Keep ``ok`` consistent with the documented TransferOutcome contract:
+        # a report with critical entries must not be truthy.
+        report.ok = not report.critical
         return report
 
     def _apply_inversions(self, target_mat, source_config, target_config, invert_attrs):
@@ -445,6 +461,16 @@ class AttributeConverter:
             return False
 
         if isinstance(value, (int, float)):
+            if not math.isfinite(value):
+                # Maya accepts NaN/Inf silently and the value would then corrupt
+                # the material (black spots / render artifacts) with no hint in
+                # the log or the result.
+                self.log.warn(
+                    f"{src_attr_name}: refusing to write non-finite value {value!r} "
+                    f"to {target_plug}",
+                    source=_SOURCE, nodes=(target_mat,),
+                )
+                return False
             try:
                 attr_type = cmds.getAttr(target_plug, type=True)
                 if attr_type in ("float3", "double3"):

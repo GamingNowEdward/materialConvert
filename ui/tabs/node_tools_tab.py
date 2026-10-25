@@ -3,6 +3,7 @@ from core.builder_context import BuilderContext, DEFAULT_MATERIALS
 from core.config_loader import ConfigLoader
 from core.logger import get_logger
 from core.material_builder import MaterialBuilder
+from ui.operation_state import OperationGuard
 
 _SOURCE = "NodeToolsTab"
 
@@ -13,6 +14,25 @@ class NodeToolsTab:
         self.ctx = ctx
         self.log = logger or get_logger()
         self.config = config or ConfigLoader()
+        self.guard = OperationGuard(logger=self.log, source=_SOURCE)
+        self._busy_widgets = []
+
+    @property
+    def on_busy_change(self):
+        return self.guard.on_change
+
+    @on_busy_change.setter
+    def on_busy_change(self, callback):
+        self.guard.on_change = callback
+
+    def _guarded(self, action):
+        """Run a scene-modifying action under the busy guard."""
+        if not self.guard.try_begin():
+            return
+        try:
+            return action()
+        finally:
+            self.guard.end()
 
     def build_ui(self):
         widget = QtWidgets.QWidget()
@@ -44,7 +64,8 @@ class NodeToolsTab:
         for label, handler in select_buttons:
             btn = QtWidgets.QPushButton(label)
             btn.setFixedHeight(35)
-            btn.clicked.connect(handler)
+            btn.clicked.connect(lambda _=False, h=handler: self._guarded(h))
+            self._busy_widgets.append(btn)
             grp_layout.addWidget(btn)
 
         layout.addWidget(grp_select)
@@ -61,7 +82,8 @@ class NodeToolsTab:
         for label, handler in sg_buttons:
             btn = QtWidgets.QPushButton(label)
             btn.setFixedHeight(35)
-            btn.clicked.connect(handler)
+            btn.clicked.connect(lambda _=False, h=handler: self._guarded(h))
+            self._busy_widgets.append(btn)
             sg_layout.addWidget(btn)
 
         layout.addWidget(grp_sg)
@@ -74,7 +96,8 @@ class NodeToolsTab:
         btn_create_file = QtWidgets.QPushButton("Create File From P2D")
         btn_create_file.setFixedHeight(35)
         btn_create_file.setObjectName("createFileBtn")
-        btn_create_file.clicked.connect(self._create_file_from_p2d)
+        btn_create_file.clicked.connect(lambda: self._guarded(self._create_file_from_p2d))
+        self._busy_widgets.append(btn_create_file)
         texture_layout.addWidget(btn_create_file)
 
         layout.addWidget(grp_texture)

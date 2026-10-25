@@ -101,7 +101,6 @@ class MatchResult:
     state: MatchState
     diagnostic: str
     evidence_complete: bool = True
-    stale: bool = False
 
 
 def _result_from_roles(roles, no_match_reason, ambiguous_reason):
@@ -157,13 +156,15 @@ class ChannelDriver:
     _TRACE_NODE_BUDGET = 1000
 
     _TRACE_SKIP_NODES = {
-        # Maya default bookkeeping containers.
+        # Maya default bookkeeping containers (matched by node *name*).
         "defaultTextureList1", "defaultRenderUtilityList1",
         "defaultShaderList1", "defaultColorMgtGlobals",
-        # Texture/UV source nodes. They are not material targets and should
-        # never be traversed as downstream shading nodes.
-        "place2dTexture", "file",
     }
+
+    #: Node *types* that are not material targets and must never be traversed as
+    #: downstream shading nodes.  Matching them by node name was a dead check
+    #: (a node literally called "file" is rare).
+    _TRACE_SKIP_TYPES = {"file", "place2dTexture"}
 
     _DEFAULT_MAX_DEPTH = 4
 
@@ -173,6 +174,16 @@ class ChannelDriver:
         self.expanded_keywords = self.config.get_expanded_attribute_keywords()
         self._shader_types = None
         self._material_node_cache = {}
+
+    def _is_skip_node(self, dnode):
+        """Whether *dnode* is a bookkeeping container or a texture source node."""
+        if dnode in self._TRACE_SKIP_NODES:
+            return True
+        try:
+            return cmds.nodeType(dnode) in self._TRACE_SKIP_TYPES
+        except Exception as exc:
+            self.log.debug(f"Failed to identify node type for {dnode}: {exc}", source=_SOURCE)
+            return False
 
     def reset(self):
         """Clear per-refresh caches (material node lookups, shader types)."""
@@ -232,11 +243,11 @@ class ChannelDriver:
                 try:
                     probe = cmds.listConnections(
                         node, plugs=True, source=False, destination=True) or []
-                except Exception as exc:
+                except Exception as exc:  # noqa: silent-fallback recorded in trace.errors
                     trace.errors.append(f"failed to probe downstream of {node}: {exc}")
                     trace.complete = False
                     continue
-                if any(dest.split(".", 1)[0] not in self._TRACE_SKIP_NODES
+                if any(not self._is_skip_node(dest.split(".", 1)[0])
                        for dest in probe if "." in dest):
                     trace.depth_limited = True
                     trace.complete = False
@@ -255,7 +266,7 @@ class ChannelDriver:
                 if "." not in dest:
                     continue
                 dnode, attr_path = dest.split(".", 1)
-                if dnode in self._TRACE_SKIP_NODES:
+                if self._is_skip_node(dnode):
                     continue
 
                 if self._is_material_node(dnode):

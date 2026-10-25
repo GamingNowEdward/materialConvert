@@ -1,4 +1,4 @@
-"""Re-entrancy guard tests (review finding B08).
+"""Re-entrancy guard tests.
 
 The guard is Qt-free on purpose: the failure mode is "a second submission while
 the first is still on the stack", which is testable without a Maya session.

@@ -34,13 +34,30 @@ def test_full_success_counts_as_converted():
 def test_created_but_unwired_is_not_a_plain_success():
     # Report finding #2: SG connection failed for every SG, yet the material
     # node exists. This must surface as failed + unwired, never as converted.
+    # ``sg_failures`` is what the production commit path records; a material that
+    # failed before the commit is a plain failure, not "unwired".
     result = _ok()
     result.total_sgs = 2
     result.wired = 0
+    result.sg_failures = [{"sg": "sg1", "reason": "locked"},
+                          {"sg": "sg2", "reason": "locked"}]
     assert result.unwired
     assert summarize_results([result]) == {
         "converted": 0, "skipped": 0, "failed": 1,
         "unwired": 1, "partial_wired": 0, "with_issues": 0,
+    }
+
+
+def test_created_converted_but_zero_sgs_without_failures_is_plain_failure():
+    # A zero-wired result with no commit failure is not "unwired"; it must not
+    # inflate the unwired counter.
+    result = _ok()
+    result.total_sgs = 2
+    result.wired = 0
+    assert not result.unwired
+    assert summarize_results([result]) == {
+        "converted": 1, "skipped": 0, "failed": 0,
+        "unwired": 0, "partial_wired": 0, "with_issues": 0,
     }
 
 
@@ -104,7 +121,8 @@ def test_mixed_batch_totals():
     results = [
         ConversionResult(material="a", skipped=True, reason="already target type"),
         ConversionResult(material="b", created=True, converted=True, total_sgs=1, wired=1),
-        ConversionResult(material="c", created=True, converted=True, total_sgs=1, wired=0),
+        ConversionResult(material="c", created=True, converted=True, total_sgs=1, wired=0,
+                         sg_failures=[{"sg": "sg", "reason": "locked"}]),
         ConversionResult(material="d", created=True, reason="conversion failed"),
         ConversionResult(material="e", created=True, converted=True, total_sgs=1, wired=1,
                          issues=["roughness: transfer failed"]),

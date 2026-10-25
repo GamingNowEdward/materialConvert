@@ -48,16 +48,16 @@ def test_hue_across_renderers():
     arnold = _cc([-1, 1], 0)
     maya = _cc([0, 360], 180)
     vray = _cc([-180, 180], 0)
-    # AGENTS.md 陷阱场景：Redshift hue=0 转换后应回到 Arnold 中性值 0
+    # AGENTS.md trap: Redshift hue=0 must round-trip to Arnold's neutral value 0
     offset = node_utils._hue_to_offset(0, rs)
     assert node_utils._offset_to_hue(offset, arnold) == pytest.approx(0)
-    # Redshift hue=30 -> Arnold 对称缩放
+    # Redshift hue=30 -> symmetric scaling for Arnold
     offset = node_utils._hue_to_offset(30, rs)
     assert node_utils._offset_to_hue(offset, arnold) == pytest.approx(30 / 180)
-    # Arnold hue=0.5 -> Maya 中心偏移
+    # Arnold hue=0.5 -> Maya's centre offset
     offset = node_utils._hue_to_offset(0.5, arnold)
     assert node_utils._offset_to_hue(offset, maya) == pytest.approx(270)
-    # Redshift hue=45 -> V-Ray 角度直通
+    # Redshift hue=45 -> V-Ray angle passes straight through
     offset = node_utils._hue_to_offset(45, rs)
     assert node_utils._offset_to_hue(offset, vray) == pytest.approx(45)
 

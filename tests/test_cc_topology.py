@@ -1,4 +1,4 @@
-"""Unit tests for CC chain topology handling (review finding B06).
+"""Unit tests for CC chain topology handling.
 
 The source material's own graph must never be rewritten: a shared intermediate
 node (layeredTexture / ramp / ...) between the source CC and the material is
@@ -29,6 +29,9 @@ class FakeUtils:
         self.smart_connects.append((src, dst))
         return True
 
+    def collect_cc_chain_params(self, cc_node, cc_config, logger=None):
+        return {}, None
+
     @staticmethod
     def node_name_from_plug(plug):
         return (plug or "").split(".", 1)[0]
@@ -41,6 +44,9 @@ class FakeConfig:
 
     def get_color_correction_config(self, renderer):
         return self.cc_config
+
+    def identify_cc_renderer(self, node_type):
+        return "arnold" if node_type else None
 
     def get_material_config(self, node_type):
         return object() if node_type in self.materials else None
@@ -72,8 +78,8 @@ class FakeCmds:
         clone = self.duplicates.get(node, name or (node + "_conv"))
         return [clone]
 
-    def disconnectAttr(self, dst, src):
-        self.disconnect_calls.append((dst, src))
+    def disconnectAttr(self, src, dst):
+        self.disconnect_calls.append((src, dst))
 
     def connectAttr(self, src, dst, force=True):
         error = self.connect_errors.get(dst)
@@ -116,7 +122,7 @@ def test_direct_topology_connects_target_plug(monkeypatch):
 
     assert outcome
     assert utils.created == ["cc1_ai"]
-    assert ("newCC.outColor", "mat.baseColor") in fake.connect_calls
+    assert ("newCC.outColor", "mat.baseColor") in utils.smart_connects
 
 
 def test_single_hop_copies_intermediate_node(monkeypatch):
@@ -133,7 +139,7 @@ def test_single_hop_copies_intermediate_node(monkeypatch):
 
     assert outcome
     # the source intermediate node is not touched: only the copy is rewired
-    assert ("layered1_conv.inputs[1].color", "cc1.outColor") in fake.disconnect_calls
+    assert ("cc1.outColor", "layered1_conv.inputs[1].color") in fake.disconnect_calls
     assert ("newCC.outColor", "layered1_conv.inputs[1].color") in fake.connect_calls
     assert ("layered1_conv.outColor", "mat.baseColor") in fake.connect_calls
     assert not any("layered1.inputs" in dst for _src, dst in fake.connect_calls)
@@ -207,3 +213,52 @@ def test_target_without_cc_config_connects_raw_input(monkeypatch):
     assert outcome
     assert utils.smart_connects == [("file1.outColor", "mat.baseColor")]
     assert utils.created == []
+
+
+def test_direct_topology_with_non_material_downstream_still_wires_target(monkeypatch):
+    """A shared CC that also drives a non-material node must still wire the
+    new material channel (it is never part of the CC's downstream list)."""
+    converter, fake, utils = _make(monkeypatch)
+    entry = _entry(cc_out_dests=["lay1.inputs[0].color"])
+
+    outcome = converter.transfer(entry, "mat.baseColor", "arnold")
+
+    assert outcome
+    # the external downstream follows the new CC ...
+    assert ("newCC.outColor", "lay1.inputs[0].color") in utils.smart_connects
+    # ... and the target material channel is wired explicitly
+    assert ("newCC.outColor", "mat.baseColor") in utils.smart_connects
+
+
+def test_cache_records_source_output_slot(monkeypatch):
+    """The slot the material actually reads (e.g. outAlpha) is remembered."""
+    converter, _fake, _utils = _make(monkeypatch)
+    cache = {}
+
+    converter._cache(cache, "specularRoughness", "cc1", "arnold", {"plug": "cc1.outAlpha"})
+
+    assert cache["specularRoughness"]["source_output_attr"] == "outAlpha"
+
+
+def test_cache_ignores_foreign_output_plug(monkeypatch):
+    converter, _fake, _utils = _make(monkeypatch)
+    cache = {}
+
+    # the material is fed through an intermediate node, so the CC output slot is
+    # unknown here
+    converter._cache(cache, "baseColor", "cc1", "arnold", {"plug": "lay1.outColor"})
+
+    assert cache["baseColor"]["source_output_attr"] is None
+
+
+def test_cc_scalar_channel_prefers_source_output_slot(monkeypatch):
+    """A CC driving a float channel connects through outAlpha, not outColor."""
+    converter, _fake, utils = _make(monkeypatch)
+    cache = {}
+    converter._cache(cache, "specularRoughness", "cc1", "arnold", {"plug": "cc1.outAlpha"})
+
+    outcome = converter.transfer(cache["specularRoughness"], "mat.specularRoughness", "arnold")
+
+    assert outcome
+    assert ("newCC.outAlpha", "mat.specularRoughness") in utils.smart_connects
+    assert ("newCC.outColor", "mat.specularRoughness") not in utils.smart_connects

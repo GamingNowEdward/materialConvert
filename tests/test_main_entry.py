@@ -1,4 +1,4 @@
-"""Startup contract tests (review finding B10).
+"""Startup contract tests.
 
 ``main.py`` is launched by ``exec(open(...).read())`` from a Maya shelf, which
 does not define ``__file__``.  The project root must be resolved from the

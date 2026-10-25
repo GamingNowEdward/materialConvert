@@ -58,10 +58,11 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 - 从纹理路径一键构建完整 PBR 材质
 - 支持 Color / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS / Emission 通道
-- SSS 通道支持（colorCorrect + layeredTexture + ramp）
+- SSS 通道支持（colorCorrect + layeredTexture）
 - 置换节点链支持
 - 材质类型下拉框由 `config/material/*.json` 驱动——新增材质自动出现
 - 可选"加入快速选择集"开关
+- 可选"Use Full Builder Pipeline"开关（默认开启）：**仅 Roughness 通道**走完整链（colorCorrect + layeredTexture + ramp）；Metallic / Opacity 恒为直连
 
 ### Batch Builder
 
@@ -72,7 +73,7 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 已解析通道、未解析文件**与全部贴图冲突**合并在同一表格展示，Status 列支持排序（`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`）；按字母序保留第一个文件，其余候选全部可见
 - 可选 `Skip Materials With Conflicts` 开关（默认关闭），未解决的通道冲突不会被悄悄按任意文件构建
 - 批量构建全部 / 选中材质到任意支持的渲染器
-- 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp）或简单直连
+- 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp，**仅 Roughness 通道**）或简单直连
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
 
 ### Colorspace

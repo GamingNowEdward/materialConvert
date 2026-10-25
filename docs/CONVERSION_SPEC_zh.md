@@ -77,8 +77,8 @@
 ### 1.3 值传递规则
 
 - **纹理连接**：通过 `_smart_connect()` 迁移，先尝试直连，失败则依次回退到 `outColor`、`outAlpha`，解决类型不兼容
-- **Alpha Is Luminance**：属性传递完成后，按目标配置的**实际属性名**扫描目标材质所有连接，并**递归追踪上游**（穿越 CC/ramp/layeredTexture/bump 等中间节点），若发现链条中使用 `outAlpha` 输出，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过；opacity 透明度通道豁免，避免误开真实 alpha 贴图）
-- **数值**：直接复制（float/int）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
+- **Alpha Is Luminance**：属性传递完成后，按目标配置的**实际属性名**扫描目标材质所有连接，并**递归追踪上游**（穿越 CC/ramp/layeredTexture/bump 等中间节点），若发现链条中使用 `outAlpha` 输出，自动开启源纹理节点的 `alphaIsLuminance`（Redshift 跳过；opacity 透明度通道豁免，避免误开真实 alpha 贴图）。**非 opacity 通道**命中时会在结果 `issues` 中记录一条提示（开启会改变贴图语义，必须让用户可见）
+- **数值**：直接复制（float/int）；**非有限值**（NaN / Inf）拒写并记入 `issues`（Maya 会静默接受 NaN，导致黑斑/渲染伪影）；若目标属性为 `float3`/`double3`（如 Arnold `opacity`/`subsurfaceRadius`、V-Ray `opacityMap`、Redshift `ms_radius`），自动广播为 (v, v, v)
 - **颜色值**：直接复制（tuple/list，长度 >= 3）；若目标属性为 float，自动回退取第一个通道值
 - **源属性反转**：若源配置在 `material.invert` 声明某通用属性，则按 `1 - x` 反转——数值直接反转，贴图/CC 连接在连向目标插槽的边上串入 Maya `reverse` 节点（不改动源链）
 - **失败分流**：**关键通道**失败（前置条件 / CC 链 / bump-normal / displacement）→ 整个材质计为失败并中止转换（`reason` + `converted=False`）；**非关键通道**失败（单个属性 / emission / alphaIsLuminance / reverse）记入 `ConversionResult.issues`（`converted` 仍 True，`summarize_results` 计入 `with_issues`）
@@ -236,7 +236,7 @@
 
 | 拓扑 | 结构 | 处理 |
 |---|---|---|
-| `direct` | `file → CC → 材质` | 新 CC 直接连接目标材质属性；新 CC 的其它非材质下游一并改接，源材质改接回原 CC |
+| `direct` | `file → CC → 材质` | 新 CC **始终单独连接目标材质属性**（不依赖 CC 的既有下游列表）；新 CC 的其它非材质下游一并改接，源材质改接回原 CC。若源链用 `outAlpha` 驱动标量通道，新 CC 优先使用同一输出插槽并经 `smart_connect` 回退 |
 | `single_hop` | `file → CC → layeredTexture/ramp → 材质` | **复制**中间节点（仅一层），新 CC 接入副本、副本输出接目标材质；源中间节点与其参数完全不动 |
 | `unsupported` | 两级及以上中间链、或无法定位 CC 的输入槽 | 不创建目标 CC、不改写任何源连接，记入结果 `issues`（显式限制） |
 
@@ -247,7 +247,7 @@ file → 原CC → layeredTexture → 源材质        （保持原样）
 file → 新CC → layeredTexture_conv → 目标材质
 ```
 
-无中间节点（CC 直连材质）时，新 CC 直接连接目标材质属性，并在源 CC 有其它非材质下游时把源材质属性改接回原 CC。
+无中间节点（CC 直连材质）时，**新 CC 始终单独连接目标材质属性**（不依赖源 CC 的既有下游列表）；源 CC 若还有其它非材质下游，它们一并改接到新 CC，源材质属性改接回原 CC。若源链用 `outAlpha` 驱动标量通道，新 CC 优先使用同一输出插槽并经 `smart_connect` 回退。
 
 > 早期版本在共享中间节点的场景下会把源材质属性直接接回原 CC（绕过 layeredTexture），导致源材质丢失中间处理。该行为已移除。
 
@@ -355,7 +355,10 @@ UI 支持同时批量转换多个材质：
 **结果语义**（见 `core/results.py`）：每个材质产出一个 `ConversionResult`
 （`created` / `converted` / `wired` / `total_sgs` / `skipped` / `reason`）。
 **所有** SG 接线均失败的转换计为失败（而非静默成功）——因为场景仍在使用旧材质。
-仅接线到**部分** SG 的转换仍计为成功，但会标记为 `partial_wired`，批次汇总会发出 WARN。
+**SG 接线快照不完整**（任一槽读取失败）时，在改接**之前**即中止：`reason` 设为
+`failed to snapshot shading engine wiring`、不可读槽记入 `sg_failures`、场景零改动，结果计入 `unwired`
+（已创建但未接线）。因提交是事务性的（任一失败即回滚），`wired` 只可能是 `0` 或 `total_sgs`；
+`partial_wired` 为保留能力、当前不可达，回滚前的成功接线数由 `wired_before_rollback` 上报。
 `convert_all(..., on_progress=...)` 会在批量过程中逐材质向 UI 汇报进度，
 界面在批次运行期间实时刷新进度条，而不是等全部完成后一次性拨动。
 
