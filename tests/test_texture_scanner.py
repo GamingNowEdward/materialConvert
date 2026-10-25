@@ -45,12 +45,15 @@ def test_conflict_records_every_candidate(scan_dir):
     assert len(result["conflicts"]) == 1
     conflict = result["conflicts"][0]
     assert conflict["common_attr"] == "specularRoughness"
-    assert conflict["kept"] == conflict["existing"]
+    # the first conflict seen is remembered as ``existing``, but Roughness
+    # outranks Glossiness, so the kept file ends up being rock_Roughness.png
+    assert Path(conflict["existing"]).stem == "rock_Gloss"
+    assert Path(conflict["kept"]).stem == "rock_Roughness"
     assert conflict["kept"] in conflict["candidates"]
     assert len(conflict["candidates"]) == 3
     assert len(conflict["dropped"]) == 2
     assert all(path not in conflict["dropped"] for path in [conflict["kept"]])
-    # the kept file wins deterministically (sorted directory listing)
+    # the kept file wins deterministically
     kept = result["materials"][0]["channels"]["specularRoughness"]["path"]
     assert kept == conflict["kept"]
 
@@ -286,12 +289,128 @@ def test_higher_resolution_wins_a_duplicate_channel(scan_dir):
     assert [Path(path).stem for path in result["conflicts"][0]["dropped"]] == ["rock_rough"]
 
 
-def test_equal_quality_keeps_the_first_name(scan_dir):
+def test_channel_priority_beats_name_order(scan_dir):
+    """Roughness outranks Glossiness when both map to specularRoughness."""
     _write_set(scan_dir, ["rock_Roughness", "rock_Glossiness", "rock_basecolor"])
 
     result = TextureScanner().scan(str(scan_dir))
 
     conflict = result["conflicts"][0]
-    assert Path(conflict["kept"]).stem == "rock_Glossiness"
-    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_Roughness"]
+    assert Path(conflict["kept"]).stem == "rock_Roughness"
+    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_Glossiness"]
     assert result["materials"][0]["channels"]["specularRoughness"]["path"] == conflict["kept"]
+
+
+def test_normal_priority_beats_bump(scan_dir):
+    """Normal outranks Bump when both map to normal_bump."""
+    _write_set(scan_dir, ["rock_bump", "rock_normal", "rock_basecolor"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    conflict = result["conflicts"][0]
+    assert Path(conflict["kept"]).stem == "rock_normal"
+    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_bump"]
+
+
+def test_equal_priority_keeps_the_first_name(scan_dir):
+    """Same channel priority: the first file in name order wins."""
+    _write_set(scan_dir, ["rock_Albedo", "rock_Diffuse", "rock_roughness"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    conflict = result["conflicts"][0]
+    assert Path(conflict["kept"]).stem == "rock_Albedo"
+    assert [Path(path).stem for path in conflict["dropped"]] == ["rock_Diffuse"]
+
+
+# --------------------------------------------------------------------------- #
+# Single-letter channel suffixes (Arroway / Finex style)
+# --------------------------------------------------------------------------- #
+
+def test_scan_single_letter_suffixes_when_the_set_uses_them(scan_dir):
+    _write_set(scan_dir, ["rock_d", "rock_b", "rock_s", "rock_r"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    material = result["materials"][0]
+    assert material["name"] == "rock"
+    channels = {data["channel"] for data in material["channels"].values()}
+    assert channels == {"BaseColor", "Bump", "Reflection", "Roughness"}
+
+
+def test_scan_single_letter_needs_several_distinct_letters(scan_dir):
+    """A directory with only one distinct letter must not treat it as a channel."""
+    _write_set(scan_dir, ["g1", "g2", "g3"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert result["materials"] == []
+    assert len(result["unparsed"]) == 3
+
+
+def test_scan_single_letter_requires_a_whitelisted_letter(scan_dir):
+    _write_set(scan_dir, ["rock_x", "rock_y"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert result["materials"] == []
+    assert len(result["unparsed"]) == 2
+
+
+# --------------------------------------------------------------------------- #
+# Ignore keywords (artwork / previews) and recursive scanning
+# --------------------------------------------------------------------------- #
+
+def test_scan_skips_ignore_keywords(scan_dir):
+    _write_set(scan_dir, ["preview_rock_col", "thumb_rock_col", "rock_col"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    assert result["unparsed"] == []
+    kept = result["materials"][0]["channels"]["baseColor"]["path"]
+    assert Path(kept).stem == "rock_col"
+
+
+def test_scan_ignore_keyword_does_not_eat_material_names(scan_dir):
+    """``page`` is a material name in some libraries, so it must not be ignored."""
+    _write_set(scan_dir, ["xxx_page_b", "xxx_page_r"])
+
+    result = TextureScanner().scan(str(scan_dir))
+
+    assert len(result["materials"]) == 1
+    assert result["materials"][0]["name"] == "xxx_page"
+    assert result["unparsed"] == []
+
+
+def test_scan_recursive_merges_subdirectories(scan_dir):
+    sub = scan_dir / "set_a"
+    sub.mkdir()
+    (sub / "rock_col.png").write_text("", encoding="utf-8")
+    (sub / "rock_nrm.png").write_text("", encoding="utf-8")
+    (scan_dir / "top_col.png").write_text("", encoding="utf-8")
+
+    non_recursive = TextureScanner().scan(str(scan_dir))
+    assert [m["name"] for m in non_recursive["materials"]] == ["top"]
+
+    recursive = TextureScanner().scan(str(scan_dir), recursive=True)
+    assert sorted(m["name"] for m in recursive["materials"]) == ["rock", "top"]
+    rock = next(m for m in recursive["materials"] if m["name"] == "rock")
+    assert set(rock["channels"]) == {"baseColor", "normal_bump"}
+
+
+def test_scan_recursive_short_suffix_is_per_directory(scan_dir):
+    """A lone single-letter set in one subfolder is not enabled by another."""
+    a = scan_dir / "a"
+    a.mkdir()
+    (a / "x_d.png").write_text("", encoding="utf-8")
+    b = scan_dir / "b"
+    b.mkdir()
+    (b / "y_d.png").write_text("", encoding="utf-8")
+    (b / "y_b.png").write_text("", encoding="utf-8")
+
+    result = TextureScanner().scan(str(scan_dir), recursive=True)
+
+    assert sorted(m["name"] for m in result["materials"]) == ["y"]
+    assert [Path(path).stem for path in result["unparsed"]] == ["x_d"]

@@ -2,7 +2,8 @@ import json
 import os
 import re
 
-from core.filename_match import ChannelMatcher, normalize_stem, quality_key, shared_keywords
+from core.filename_match import (ChannelMatcher, normalize_stem, quality_key,
+                                 shared_keywords, short_suffix_letters)
 from core.logger import get_logger
 
 _SOURCE = "TextureScanner"
@@ -23,9 +24,18 @@ class TextureScanner:
             ext.lower() for ext in self.config.get("extensions", [])
         }
         self.channels = self.config.get("channels", {})
+        #: File names carrying one of these tokens are artwork/previews, not
+        #: textures: they are skipped entirely instead of reported as unparsed.
+        self.ignore_keywords = {
+            str(kw).lower() for kw in self.config.get("ignore_keywords", [])
+        }
         # Filename matching lives in core.filename_match so the Colorspace name
         # driver matches names by exactly the same rules.
-        self._matcher = ChannelMatcher(self.channels, logger=self.log)
+        self._matcher = ChannelMatcher(
+            self.channels,
+            short_suffixes=self.config.get("short_suffixes", {}),
+            logger=self.log,
+        )
         self.log.debug(
             f"TextureScanner initialized: {len(self.channels)} channel(s), "
             f"{len(self.extensions)} extension(s), "
@@ -92,13 +102,15 @@ class TextureScanner:
                 drop[index] = True
         return "".join(char for index, char in enumerate(text) if not drop[index])
 
-    def _parse(self, stem, noise=()):
+    def _parse(self, stem, noise=(), enable_short_suffixes=False):
         normalized = self._normalize(stem)
         noise_spans = []
         if noise:
             normalized, noise_spans = self._mask_tokens(normalized, noise)
 
-        for match in self._matcher.matches_normalized(normalized, ignore_aliases=noise):
+        for match in self._matcher.matches_normalized(
+                normalized, ignore_aliases=noise,
+                enable_short_suffixes=enable_short_suffixes):
             channel_data = self._matcher.channels.get(match.channel, {})
             start, end = match.span
             base_name = self._clean_base_name(
@@ -120,15 +132,38 @@ class TextureScanner:
 
         return None
 
-    def scan(self, directory):
-        """Scan a directory (non-recursive) and group textures by material name."""
-        materials = {}
-        unparsed = []
-        conflicts = []
+    def scan(self, directory, recursive=False):
+        """Scan a directory and group textures by material name.
 
+        Non-recursive by default.  With ``recursive`` every subdirectory is
+        scanned too; each directory is handled on its own (the common-token and
+        single-letter decisions are per set) and the results are merged.
+        """
         if not directory or not os.path.isdir(directory):
             self.log.warn(f"Texture scan skipped: invalid directory {directory!r}", source=_SOURCE)
             return {"materials": [], "unparsed": [], "conflicts": [], "conflict_materials": []}
+
+        if not recursive:
+            return self._scan_one(directory)
+
+        results = [self._scan_one(path) for path in self._iter_scan_dirs(directory)]
+        return self._merge_results(results)
+
+    @staticmethod
+    def _iter_scan_dirs(directory):
+        """*directory* followed by every subdirectory (depth first, sorted)."""
+        directories = [directory]
+        for root, subdirs, _files in os.walk(directory):
+            subdirs.sort()
+            for name in subdirs:
+                directories.append(os.path.join(root, name))
+        return directories
+
+    def _scan_one(self, directory):
+        """Scan a single directory (non-recursive)."""
+        materials = {}
+        unparsed = []
+        conflicts = []
 
         try:
             files = sorted(os.listdir(directory))
@@ -155,9 +190,16 @@ class TextureScanner:
                 self.log.debug(f"{filename}: extension {ext} ignored", source=_SOURCE)
                 continue
 
-            candidates.append((filename, full_path, os.path.splitext(filename)[0]))
+            stem = os.path.splitext(filename)[0]
+            if self._is_ignored(stem):
+                self.log.debug(
+                    f"{filename}: matches an ignore keyword; skipped", source=_SOURCE)
+                continue
 
-        noise = self._noise_aliases([stem for _filename, _path, stem in candidates])
+            candidates.append((filename, full_path, stem))
+
+        stems = [stem for _filename, _path, stem in candidates]
+        noise = self._noise_aliases(stems)
         if noise:
             self.log.info(
                 f"Ignoring common alias token(s) shared by the texture set: "
@@ -165,7 +207,8 @@ class TextureScanner:
                 source=_SOURCE,
             )
 
-        parsed_files = self._parse_candidates(candidates, noise)
+        enable_short = len(short_suffix_letters(stems, self._matcher.short_suffixes)) >= 2
+        parsed_files = self._parse_candidates(candidates, noise, enable_short)
         if noise and not any(parsed is not None for parsed in parsed_files):
             # Nothing resolved with the common tokens ignored, so they really were
             # the channel markers (e.g. a directory holding only metallic maps):
@@ -175,7 +218,7 @@ class TextureScanner:
                 f"scanning without the common-token filter",
                 source=_SOURCE,
             )
-            parsed_files = self._parse_candidates(candidates, set())
+            parsed_files = self._parse_candidates(candidates, set(), enable_short)
 
         for (filename, full_path, stem), parsed in zip(candidates, parsed_files):
             if not parsed:
@@ -201,13 +244,13 @@ class TextureScanner:
                 kept = material["channels"][common_attr]
                 kept_path = kept["path"]
                 kept_stem = os.path.splitext(os.path.basename(kept_path))[0]
-                if quality_key(stem) > quality_key(kept_stem):
-                    # A higher bit depth / resolution wins, whatever the name order.
+                if self._better(stem, channel_name, kept_stem, kept["channel"]):
+                    # A higher bit depth / resolution or priority wins.
                     self._record_conflict(conflicts, base_name, common_attr, full_path, kept_path)
                     kept.update({"channel": channel_name, "path": full_path, "options": options})
                     self.log.warn(
                         f"Texture conflict for {base_name}/{common_attr}: keeping "
-                        f"{full_path} over {kept_path} (higher bit depth/resolution)",
+                        f"{full_path} over {kept_path} (higher bit depth/resolution/priority)",
                         source=_SOURCE,
                     )
                 else:
@@ -238,24 +281,88 @@ class TextureScanner:
         )
         return result
 
-    def _parse_candidates(self, candidates, noise):
+    def _merge_results(self, results):
+        """Merge per-directory scans for a recursive scan."""
+        materials = {}
+        unparsed = []
+        conflicts = []
+        for result in results:
+            unparsed.extend(result["unparsed"])
+            for material in result["materials"]:
+                target = materials.setdefault(
+                    material["name"], {"name": material["name"], "channels": {}})
+                for common_attr, data in material["channels"].items():
+                    self._merge_channel(target, common_attr, data, conflicts)
+
+        merged = {
+            "materials": list(materials.values()),
+            "unparsed": unparsed,
+            "conflicts": conflicts,
+            "conflict_materials": sorted({item["material"] for item in conflicts}),
+        }
+        self.log.info(
+            f"Recursive texture scan finished: {len(merged['materials'])} material(s), "
+            f"{len(unparsed)} unparsed, {len(conflicts)} conflict(s)",
+            source=_SOURCE,
+        )
+        return merged
+
+    def _merge_channel(self, material, common_attr, data, conflicts):
+        """Merge one channel into a material, resolving duplicates like a scan."""
+        existing = material["channels"].get(common_attr)
+        if existing is None:
+            material["channels"][common_attr] = data
+            return
+
+        existing_stem = os.path.splitext(os.path.basename(existing["path"]))[0]
+        new_stem = os.path.splitext(os.path.basename(data["path"]))[0]
+        if self._better(new_stem, data["channel"], existing_stem, existing["channel"]):
+            self._record_conflict(conflicts, material["name"], common_attr,
+                                  data["path"], existing["path"])
+            material["channels"][common_attr] = data
+        else:
+            self._record_conflict(conflicts, material["name"], common_attr,
+                                  existing["path"], data["path"])
+
+    def _better(self, stem, channel, other_stem, other_channel):
+        """Whether a candidate beats the current one for the same channel.
+
+        Higher bit depth / resolution first, then the configured channel
+        priority (e.g. Roughness over Glossiness), then the name order.
+        """
+        return (quality_key(stem), self._priority(channel)) > (
+            quality_key(other_stem), self._priority(other_channel))
+
+    def _priority(self, channel_name):
+        return self.channels.get(channel_name, {}).get("priority", 0)
+
+    def _is_ignored(self, stem):
+        """Whether *stem* carries a configured ignore keyword (artwork/preview)."""
+        if not self.ignore_keywords:
+            return False
+        return any(token in self.ignore_keywords
+                   for token in normalize_stem(stem).split("_"))
+
+    def _parse_candidates(self, candidates, noise, enable_short_suffixes=False):
         """Parse every candidate stem, ignoring the given common alias tokens."""
-        return [self._parse(stem, noise) for _filename, _path, stem in candidates]
+        return [self._parse(stem, noise, enable_short_suffixes)
+                for _filename, _path, stem in candidates]
 
     @staticmethod
     def _record_conflict(conflicts, material_name, common_attr, kept_path, dropped_path):
         """Accumulate one channel conflict, keeping every candidate visible.
 
         ``kept_path`` is the file the scan will use, ``dropped_path`` the one it
-        will not; the caller decides (the first file in name order wins unless a
-        later candidate has a higher bit depth or resolution).  ``dropped`` always
-        mirrors ``candidates`` minus ``kept``, so the UI shows the real outcome
-        instead of an arbitrary choice.
+        will not; the caller decides (a later candidate wins on higher bit depth
+        / resolution or channel priority, otherwise the first file in name order
+        wins).  ``dropped`` always mirrors ``candidates`` minus ``kept``, so the
+        UI shows the real outcome instead of an arbitrary choice.
         """
         for item in conflicts:
             if item["material"] == material_name and item["common_attr"] == common_attr:
-                if dropped_path not in item["candidates"]:
-                    item["candidates"].append(dropped_path)
+                for path in (dropped_path, kept_path):
+                    if path not in item["candidates"]:
+                        item["candidates"].append(path)
                 item["kept"] = kept_path
                 item["dropped"] = [path for path in item["candidates"] if path != kept_path]
                 return

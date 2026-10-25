@@ -33,6 +33,7 @@ class BatchBuilderTab:
             "conflicts": [],
         }
         self.directory_input = None
+        self.cb_recursive = None
         self.target_combo = None
         self.cb_full_chain = None
         self.cb_qss = None
@@ -70,7 +71,11 @@ class BatchBuilderTab:
         btn_scan.setObjectName("scanBtn")
         btn_scan.clicked.connect(self._scan_directory)
 
+        self.cb_recursive = QtWidgets.QCheckBox("Include Subfolders")
+        self.cb_recursive.setChecked(False)
+
         dir_layout.addWidget(self.directory_input, 1)
+        dir_layout.addWidget(self.cb_recursive)
         dir_layout.addWidget(btn_browse)
         dir_layout.addWidget(btn_scan)
         layout.addWidget(dir_group)
@@ -111,9 +116,9 @@ class BatchBuilderTab:
         btn_row.addWidget(btn_build_selected)
         layout.addLayout(btn_row)
         self._busy_widgets = [
-            btn_scan, btn_browse, self.directory_input, self.target_combo,
-            self.cb_full_chain, self.cb_qss, self.cb_skip_conflicts,
-            btn_build_all, btn_build_selected,
+            btn_scan, btn_browse, self.directory_input, self.cb_recursive,
+            self.target_combo, self.cb_full_chain, self.cb_qss,
+            self.cb_skip_conflicts, btn_build_all, btn_build_selected,
         ]
 
         self.progress_bar = QtWidgets.QProgressBar()
@@ -178,7 +183,8 @@ class BatchBuilderTab:
             self.log.warn("Please select a valid directory first.", source=_SOURCE)
             return
 
-        self.scan_result = self.scanner.scan(directory)
+        recursive = self.cb_recursive.isChecked()
+        self.scan_result = self.scanner.scan(directory, recursive=recursive)
         self._populate_table()
         self._populate_materials_to_build()
 

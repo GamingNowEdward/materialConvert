@@ -1,5 +1,17 @@
 {
   "extensions": [".png", ".jpg", ".jpeg", ".exr", ".tif", ".tiff", ".tx", ".hdr"],
+  "ignore_keywords": ["preview", "thumb", "demo", "render", "swatch",
+                      "teaser", "gross", "hires", "flat", "clay",
+                      "sphere", "cube", "donut", "icon", "logo"],
+  "short_suffixes": {
+    "d": "BaseColor",
+    "b": "Bump",
+    "n": "Normal",
+    "p": "Displacement",
+    "s": "Reflection",
+    "g": "Glossiness",
+    "r": "Roughness"
+  },
   "channels": {
     "BaseColor": {
       "aliases": ["basecolor", "basecolour", "basemap", "albedo", "albedomap",
@@ -47,7 +59,8 @@
     "Roughness": {
       "aliases": ["roughness", "roughnessmap", "roughmap", "rough", "rgh", "rghmap"],
       "common_attr": "specularRoughness",
-      "type": "float"
+      "type": "float",
+      "priority": 1
     },
     "Glossiness": {
       "aliases": ["glossiness", "glossinessmap", "glossmap", "glossy", "gloss", "glos"],
@@ -72,7 +85,8 @@
                     "normalmapdx", "nrm", "nrml", "nrmgl", "nrmdx",
                     "norgl", "nordx", "nmap"],
       "common_attr": "normal_bump",
-      "type": "normal"
+      "type": "normal",
+      "priority": 1
     },
     "Bump": {
       "aliases": ["bump", "bumpmap", "bumpgl", "bumpdx", "bmp", "bmpmap"],

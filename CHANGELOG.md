@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-26
+
+### Added
+- **Single-letter channel suffixes**: `texture_channels.json` now carries a global `short_suffixes` map (`d`→BaseColor, `b`→Bump, `n`→Normal, `p`→Displacement, `s`→Reflection, `g`→Glossiness, `r`→Roughness). A whitelisted letter is honoured only as the **last** token, bare or with a strength/resolution number (`d` / `b005` / `r100`), and only when the directory shows **≥2 distinct** such letters (`core.filename_match.short_suffix_letters`) — so a lone `_g` in a hash name or `g1.png` is never treated as a channel. The table is global, with **no per-directory special-casing**: `r` means Roughness everywhere (Arroway's `_r` reflection is therefore read as Roughness — a known, accepted trade-off)
+- **Ignore keywords** (`texture_channels.json: ignore_keywords`): file names carrying one of these tokens (`preview`, `thumb`, `demo`, `render`, `swatch`, `gross`, `hires`, `clay`, …) are skipped entirely instead of being reported as unparsed. `page` is deliberately **not** in the list: it is a material name in some libraries (`xxx_page_b.jpg`)
+- **Recursive Batch Builder scan**: `TextureScanner.scan(directory, recursive=True)` walks every subdirectory, scanning each one independently (common-token and single-letter decisions are per set) and merging the results; the Batch Builder tab gained an "Include Subfolders" checkbox
+
+### Fixed
+- **`NameDriver` matched the file name together with its extension**: the colorspace name driver normalised `rock_col.jpg` as one string, so a ≤3-letter alias right before the extension (`_col`, `_dif`, `_nrm`, `_sss`, `_bmp`, `_rgh`) never matched (the substring fallback requires ≥4 characters). It now matches the stem, so the Batch Builder scanner and the Colorspace name driver agree again (measured on a 37k-file library: `_dif` alone accounted for 205 misses)
+- **Channel conflicts were resolved by name order only**: when two files mapped to the same common attribute, the first name won — which kept `Gloss` over `Roughness` and `bump` over `normal`. Channels now carry a `priority` (`texture_channels.json`), and the comparison key is `(bit depth/resolution, priority)`, so **Roughness beats Glossiness** and **Normal beats Bump** regardless of name order; a tie still keeps the first file in name order. `_record_conflict()` also adds a replacing candidate to `candidates`, so `kept` is always part of it
+
 ## 2026-10-25
 
 ### Fixed (silent correctness, P0)

@@ -32,6 +32,26 @@ def test_name_driver_no_match():
     assert res.roles == []
 
 
+def test_name_driver_matches_short_aliases_at_the_end_of_a_filename():
+    """A short alias right before the extension must still match (stem matching)."""
+    driver = _name_driver()
+
+    assert driver.match(r"C:/tex/rock_col.jpg").roles == ["srgb"]
+    assert driver.match(r"C:/tex/rock_dif.png").roles == ["srgb"]
+    assert driver.match(r"C:/tex/rock_nrm.tif").roles == ["raw"]
+    assert driver.match(r"C:/tex/rock_sss.exr").roles == ["srgb"]
+
+
+def test_name_driver_short_suffix_only_when_enabled():
+    driver = _name_driver()
+
+    assert driver.match(r"C:/tex/rock_d.jpg").status == DriverStatus.NO_MATCH
+
+    res = driver.match(r"C:/tex/rock_d.jpg", enable_short_suffixes=True)
+    assert res.status == DriverStatus.MATCH
+    assert res.roles == ["srgb"]
+
+
 def test_name_driver_empty_path():
     assert _name_driver().match("").status == DriverStatus.NO_MATCH
     assert _name_driver().match("C:/tex/").status == DriverStatus.NO_MATCH

@@ -7,11 +7,14 @@ from core.filename_match import (
     normalize_stem,
     quality_key,
     shared_keywords,
+    short_suffix_letters,
 )
 
 
 def _matcher():
-    return ChannelMatcher(ConfigLoader().get_texture_channels())
+    loader = ConfigLoader()
+    return ChannelMatcher(loader.get_texture_channels(),
+                          short_suffixes=loader.get_short_suffixes())
 
 
 # --------------------------------------------------------------------------- #
@@ -143,4 +146,64 @@ def test_matcher_ignores_a_non_object_channel_definition():
                                             "type": "color"}})
 
     matches = matcher.matches_normalized("rock_basecolor")
+    assert [match.channel for match in matches] == ["BaseColor"]
+
+
+# --------------------------------------------------------------------------- #
+# Single-letter channel markers
+# --------------------------------------------------------------------------- #
+
+def test_short_suffix_letters_counts_distinct_letters():
+    table = {"d": "BaseColor", "b": "Bump", "r": "Roughness"}
+
+    assert short_suffix_letters(["a_d", "a_b", "a_r"], table) == {"d", "b", "r"}
+    # only the last token counts
+    assert short_suffix_letters(["a_d_b"], table) == {"b"}
+    # numbers glued to the letter still count
+    assert short_suffix_letters(["a_b005", "a_r100"], table) == {"b", "r"}
+    # letters outside the table are ignored
+    assert short_suffix_letters(["a_x", "a_d"], table) == {"d"}
+    # nothing when the table is empty
+    assert short_suffix_letters(["a_d"], {}) == set()
+
+
+def test_matcher_short_suffix_only_when_enabled():
+    matcher = _matcher()
+
+    assert matcher.matches_normalized("rock_d") == []
+
+    matches = matcher.matches_normalized("rock_d", enable_short_suffixes=True)
+    assert [match.channel for match in matches] == ["BaseColor"]
+    assert matches[0].span == (5, 6)
+
+
+def test_matcher_short_suffix_maps_letters():
+    matcher = _matcher()
+
+    def channel(name):
+        matches = matcher.matches_normalized(name, enable_short_suffixes=True)
+        return matches[-1].channel if matches else None
+
+    assert channel("a_d") == "BaseColor"
+    assert channel("a_b005") == "Bump"
+    assert channel("a_n") == "Normal"
+    assert channel("a_p050") == "Displacement"
+    assert channel("a_s100") == "Reflection"
+    assert channel("a_g100") == "Glossiness"
+    assert channel("a_r100") == "Roughness"
+    # a letter that is not the last token is not a short suffix
+    assert channel("a_d_extra") is None
+    # a real alias always wins the first-match tie-break
+    assert matcher.matches_normalized("a_basecolor_d")[0].channel == "BaseColor"
+
+
+def test_matcher_short_suffix_ignores_an_unknown_channel():
+    matcher = ChannelMatcher(
+        {"BaseColor": {"aliases": ["basecolor"], "common_attr": "baseColor",
+                       "type": "color"}},
+        short_suffixes={"d": "Missing", "b": "BaseColor"},
+    )
+
+    assert matcher.short_suffixes == {"b": "BaseColor"}
+    matches = matcher.matches_normalized("a_b", enable_short_suffixes=True)
     assert [match.channel for match in matches] == ["BaseColor"]
