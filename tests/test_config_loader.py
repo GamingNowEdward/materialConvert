@@ -351,6 +351,20 @@ def test_bn_extra_nodes_missing_node_type(tmp_path, monkeypatch):
     # an empty node_type must not leak into the discovery set
     assert "" not in loader.get_all_bn_types()
 
+def test_vray_sss_switches_are_declared():
+    """The Builder enables the V-Ray new SSS mode (translucencyMode = 6)."""
+    from core.config_loader import ConfigLoader
+
+    vray = ConfigLoader().get_material_config("VRayMtl")
+
+    assert vray.get_builder_prerequisites()["subsurfaceColor"] == {
+        "attribute": "translucencyMode", "value": 6}
+    # the Convert path enables the same mode through the weight channel
+    assert vray.get_attr_prerequisites("subsurfaceColor") is None
+    assert vray.get_attr_prerequisites("subsurfaceWeight") == {
+        "attribute": "translucencyMode", "value": 6}
+
+
 def test_normal_space_mapping_round_trips():
     """normal_space provides an explicit space -> switch-value mapping (config-driven)."""
     from core.config_loader import ConfigLoader

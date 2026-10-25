@@ -122,7 +122,9 @@
 | RedshiftMaterial（metallic） | `refl_fresnel_mode` | `2` |
 | VRayMtl（roughness） | `useRoughness` | `1` |
 | VRayMtl（默认反射） | `reflectionColor` | `[1, 1, 1]` |
-| VRayMtl（subsurface） | `translucencyMode` | `6`（SSS） |
+| VRayMtl（subsurface） | `translucencyMode` | `6`（新版 SSS） |
+
+> V-Ray 7 的 `sssOn` 是 **Legacy SSS** 开关（AE 里标签即 "Legacy SSS"，且默认状态下该控件被隐藏），**不是**通用 SSS 总开关：置 1 会切到旧版 SSS，此时 `translucencyAmount` 被隐藏/忽略（旧版改用 `scatterCoeff`/`thickness` 等）。因此目标侧只设 `translucencyMode = 6`（新版 SSS），`sssOn` 保持默认关闭。
 
 **源材质**侧通过 `material.invert` 声明 glossiness→roughness 反转（见 1.3）：VRayMtl 的 `useRoughness` 决定该材质把 glossiness 属性按 glossiness 还是 roughness 解释——目标侧强制 `useRoughness=1`，源侧则按实际取值决定是否反转。
 

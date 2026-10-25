@@ -23,6 +23,7 @@
 - **Alpha Is Luminance on non-opacity channels was invisible**: enabling it now records an `issue`
 - **Dead config keys removed**: `texture_channels.json:use_alpha` and `colorSpace.json:default` were never consumed; both were deleted rather than left as fake knobs
 - **`ssOn` hardcoded**: moved to `VRayMtl.json` `material.builder_prerequisites`, consumed by the builder via `apply_prerequisite_dict()`
+- **V-Ray SSS was not actually enabled**: the Builder never set `translucencyMode`, and `ssOn` does not exist on `VRayMtl`. The real attribute `sssOn` is the **Legacy SSS** switch (its AE label; the control is hidden in the default state) — not a generic SSS toggle, since turning it on hides/ignores `translucencyAmount`. `builder_prerequisites.subsurfaceColor` now enables the **new** SSS mode (`translucencyMode = 6`), so the Builder matches the Convert path; `sssOn` is left at its default off. Builder prerequisites are looked up per channel now (the hardcoded `subsurfaceColor` case is gone)
 - **`MatchResult.stale` removed; `evidence_complete` now shown**: the Colorspace diagnostic column appends `[channel evidence incomplete]`
 - **`del exc` swallowed banner failures**: `show_warning_banner` / `show_result_banner` fall back to `report_terminal` (stderr) so the failure is observable
 - **Log tab validation was unguarded**: it uses `set_enabled` (no `RuntimeError` on a destroyed button) and the busy state is now window-wide across all 6 tabs
@@ -36,8 +37,8 @@
 - `scripts/check_no_silent_pass.py` is now an **AST structural check**: every `except` handler must log, raise, call `report_terminal`, or carry an explicit `# noqa: silent-fallback <reason>` marker; `print` / `cmds.warning` are detected via AST
 
 ### Tests
-- Pure suite: **305 passed** (was 289). New coverage: CC topology, ramp / full chain, ramp-config failures, commit semantics, snapshot abort, node cap, eviction, banner fallback
-- mayapy suite: **91 passed, 3 skipped** (was 88). New: target-side CC assertion, outAlpha scalar channel, ramp responds to `vCoord`, full chain applies to roughness only
+- Pure suite: **310 passed** (was 289). New coverage: CC topology, ramp / full chain, ramp-config failures, commit semantics, snapshot abort, builder prerequisites, V-Ray SSS switches, node cap, eviction, banner fallback
+- mayapy suite: **92 passed, 3 skipped** (was 88). New: target-side CC assertion, outAlpha scalar channel, ramp responds to `vCoord`, full chain applies to roughness only, V-Ray SSS switches
 
 ### Known limitations and follow-ups
 - **Full chain scope**: the `Full chain` toggle applies to `specularRoughness` only; `metallic` / `opacity` are always direct passthroughs (by design)

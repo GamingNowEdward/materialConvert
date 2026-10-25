@@ -145,6 +145,9 @@ class ConversionSpecialLive(support.MayaTestCase):
                 target = result.new_material
                 self.assertEqual(cmds.getAttr(target + ".translucencyMode"), 6,
                                  "translucencyMode (SSS) not enabled")
+                if cmds.attributeQuery("sssOn", node=target, exists=True):
+                    self.assertFalse(cmds.getAttr(target + ".sssOn"),
+                                     "Legacy SSS (sssOn) must stay off")
                 self.assertAlmostEqual(cmds.getAttr(target + ".translucencyAmount"), 1.0, places=4)
                 checked += 1
         self.assertGreater(checked, 0)

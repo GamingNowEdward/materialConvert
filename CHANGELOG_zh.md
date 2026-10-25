@@ -23,6 +23,7 @@
 - **非 opacity 通道开启 Alpha Is Luminance 不可见**：现在会记一条 `issue`
 - **删除无消费方的配置键**：`texture_channels.json:use_alpha` 与 `colorSpace.json:default` 从未被读取，直接删除而非保留成"假旋钮"
 - **`ssOn` 硬编码**：搬进 `VRayMtl.json` 的 `material.builder_prerequisites`，由 builder 经 `apply_prerequisite_dict()` 消费
+- **V-Ray SSS 实际并未开启**：Builder 从未设置过 `translucencyMode`，而 `VRayMtl` 上并不存在 `ssOn`。真实属性 `sssOn` 按其 AE 标签是 **Legacy SSS** 开关（默认状态下该控件被隐藏），**不是**通用 SSS 总开关——置 1 会隐藏/忽略 `translucencyAmount`。现 `builder_prerequisites.subsurfaceColor` 启用**新版** SSS（`translucencyMode = 6`），与 Convert 路径一致；`sssOn` 保持默认关闭。builder prerequisite 改为**按通道**查表（去掉硬编码的 `subsurfaceColor` 分支）
 - **删除 `MatchResult.stale`；`evidence_complete` 接入 UI**：Colorspace 诊断列追加 `[channel evidence incomplete]`
 - **`del exc` 吞掉横幅失败**：`show_warning_banner` / `show_result_banner` 失败回落到 `report_terminal`（stderr），失败可观测
 - **Log 页校验无防护**：改用 `set_enabled`（窗口销毁不再抛 `RuntimeError`），忙状态提升为**窗口级**、覆盖全部 6 个页
@@ -36,8 +37,8 @@
 - `scripts/check_no_silent_pass.py` 升级为 **AST 结构检查**：每个 `except` 处理块必须记录日志、`raise`、调用 `report_terminal`，或带显式 `# noqa: silent-fallback <原因>` 标记；`print` / `cmds.warning` 也改为 AST 检测
 
 ### 测试
-- 纯套件：**305 passed**（原 289）。新增：CC 拓扑、ramp 与完整链、ramp 配置失败、提交语义、快照中止、节点上限、淘汰、横幅回落
-- mayapy 套件：**91 passed, 3 skipped**（原 88）。新增：目标侧 CC 断言、outAlpha 标量通道、ramp 随 `vCoord` 响应、full chain 只作用于 roughness
+- 纯套件：**310 passed**（原 289）。新增：CC 拓扑、ramp 与完整链、ramp 配置失败、提交语义、快照中止、builder prerequisite、V-Ray SSS 开关、节点上限、淘汰、横幅回落
+- mayapy 套件：**92 passed, 3 skipped**（原 88）。新增：目标侧 CC 断言、outAlpha 标量通道、ramp 随 `vCoord` 响应、full chain 只作用于 roughness、V-Ray SSS 开关
 
 ### 已知限制与后续项
 - **Full chain 的适用范围**：`Full chain` 开关**只作用于 `specularRoughness`**；`metallic` / `opacity` 恒为直连（有意为之）

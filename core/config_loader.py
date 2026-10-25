@@ -154,9 +154,9 @@ class MaterialConfig:
             if isinstance(prereq_section, dict):
                 self.prerequisites = dict(prereq_section)
 
-        # Builder-only, per-channel prerequisites (e.g. V-Ray ``ssOn`` when the
-        # subsurface channel is built).  Kept separate from ``prerequisites`` so
-        # the converter path is not affected.
+        # Builder-only, per-channel prerequisites (e.g. the V-Ray subsurface
+        # switches).  Kept separate from ``prerequisites`` so the converter path
+        # is not affected.
         builder_prereq_section = mat_data.get("builder_prerequisites", {})
         if isinstance(builder_prereq_section, dict):
             self.builder_prerequisites = dict(builder_prereq_section)

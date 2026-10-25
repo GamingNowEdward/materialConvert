@@ -206,21 +206,20 @@ class MaterialBuilder:
             self.ctx.connect(tex, "outColor", m_node, attr_name)
             self.log.debug(f"Built direct color chain for {common_attr}: {tex}.outColor -> {m_node}.{attr_name}", source=_SOURCE, nodes=(tex, m_node))
 
-        if common_attr == 'subsurfaceColor':
-            # V-Ray needs its subsurface switch enabled; declared per material in
-            # config (``builder_prerequisites``) instead of hardcoding ``ssOn``
-            # in Python.
-            prereq = mat_config.get_builder_prerequisites().get(common_attr)
-            if prereq:
-                outcome = apply_prerequisite_dict(m_node, prereq, logger=self.log)
-                if not outcome.ok:
-                    detail = "; ".join(outcome.failures) or "unknown cause"
-                    self.last_build_issues.append(
-                        f"{common_attr}: prerequisite failed ({detail})")
-                    self.log.warn(
-                        f"Failed to apply builder prerequisite for {common_attr} on {m_node}: {detail}",
-                        source=_SOURCE, nodes=(m_node,),
-                    )
+        # Per-channel builder prerequisites declared in the material JSON (e.g.
+        # V-Ray needs its subsurface switch enabled).  Never hardcode renderer
+        # attributes in Python.
+        prereq = mat_config.get_builder_prerequisites().get(common_attr)
+        if prereq:
+            outcome = apply_prerequisite_dict(m_node, prereq, logger=self.log)
+            if not outcome.ok:
+                detail = "; ".join(outcome.failures) or "unknown cause"
+                self.last_build_issues.append(
+                    f"{common_attr}: prerequisite failed ({detail})")
+                self.log.warn(
+                    f"Failed to apply builder prerequisite for {common_attr} on {m_node}: {detail}",
+                    source=_SOURCE, nodes=(m_node,),
+                )
 
         weight_common = self._resolve_weight_attr(common_attr)
         if weight_common:

@@ -82,7 +82,7 @@
 | `short_name` | 建议 | 转换后新材质的命名后缀：`{源材质名}_{short_name}`（缺省用 `"converted"`）。现有约定：`aiStd` / `aiPBR` / `rsStd` / `rsPBR` / `rsStdMat` / `vray` |
 | `plugin` | 建议 | 渲染器插件模块名（如 `mtoa` / `redshift4maya` / `vrayformaya`）。仅 Debug 校验使用：检测插件加载状态，未安装则该渲染器整组 SKIP，不会误报拼写错误 |
 | `prerequisites` | 可选 | 材质级前置条件，见下文 |
-| `builder_prerequisites` | 可选 | **仅 Builder 路径**使用的逐通道前置开关（如 V-Ray 的 `ssOn`），格式 `{通用属性名: {attribute, value}}`；转换（Convert）路径不受影响 |
+| `builder_prerequisites` | 可选 | **仅 Builder 路径**使用的逐通道前置开关（如 V-Ray 的 `translucencyMode` = 6 启用新版 SSS），格式 `{通用属性名: {attribute, value}}`；转换（Convert）路径不受影响 |
 | `output` | 可选 | 材质输出属性名，缺省 `outColor`。用于枚举 shadingEngine 与提交接线；`outColor` 是 Maya 通用属性，一般无需声明 |
 | `invert` | 可选 | 材质级源属性反转声明，见下文 |
 
@@ -147,8 +147,8 @@
 |---|---|
 | 格式 | `{ "任意说明性键名": { "attribute": "...", "value": ... } }` |
 | `value` 为数组 | 按 float3 多参数设置（广播到三个通道） |
-| `attribute` 为空或 `value` 为 null | 静默跳过 |
-| 设置失败 | 仅记录 WARN 日志，不中断转换 |
+| `attribute` 为空或 `value` 为 null | 记 DEBUG 并跳过 |
+| 设置失败 | Convert 路径（材质级 / 属性级）：**关键失败**，整个材质计为失败并中止；Builder 路径（`builder_prerequisites`）：记入 `issues`，不中断构建 |
 
 ### `invert`（源属性反转）
 
@@ -460,7 +460,7 @@ mayapy -m unittest discover -s tests/mayapy -t tests -v
 - 但 Builder 只支持已实现的通道策略：`color` / `float` / `roughness` / `normal_bump` / `displacement`。新增"普通属性"仍需扩展 Python 建链函数，不能仅靠 JSON
 - 颜色通道的权重属性由 `common.json` 的 `color_weight_pairs` 推导，无需额外配置
 - 两个 Builder 面板的 `Use Full Builder Pipeline` 开关**只作用于 `specularRoughness`**（走 colorCorrect + layeredTexture + ramp）；`metallic` / `opacity` 恒为直连。完整链 ramp 的停靠点由 `config/builder_naming.json` 的 `ramp_stops`（缺省黑→白）提供
-- Builder 专用的逐通道开关写在 `material.builder_prerequisites`（如 V-Ray `ssOn`），不要硬编码进 Python
+- Builder 专用的逐通道开关写在 `material.builder_prerequisites`（如 V-Ray `translucencyMode` = 6 启用新版 SSS），不要硬编码进 Python
 
 ### colorSpace 自动扩展
 

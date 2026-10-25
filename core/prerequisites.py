@@ -51,23 +51,20 @@ def apply_attr_prerequisites(material, config, common_attr, logger=None):
     return outcome
 
 
-def apply_prerequisite_dict(material, prereq_dict, logger=None):
-    """Apply a prerequisite mapping that comes straight from a config.
+def apply_prerequisite_dict(material, prereq_info, logger=None):
+    """Apply one ``{"attribute": ..., "value": ...}`` prerequisite from a config.
 
-    ``prereq_dict`` may be a single ``{"attribute": ..., "value": ...}`` entry or
-    a mapping of named entries.  Used by the Builder for its per-channel
-    prerequisites, so no renderer attribute name is hardcoded in Python.
+    Used by the Builder for its per-channel prerequisites, so no renderer
+    attribute name is hardcoded in Python.
     """
     log = _log_or_default(logger)
-    if not prereq_dict:
+    if not prereq_info:
         return PrerequisiteOutcome()
-    if "attribute" in prereq_dict:
-        ok, failure = _apply_single_prereq(material, prereq_dict, log)
-        outcome = PrerequisiteOutcome(ok=ok)
-        if failure:
-            outcome.failures.append(failure)
-        return outcome
-    return _apply_prereq_dict(material, prereq_dict, log)
+    ok, failure = _apply_single_prereq(material, prereq_info, log)
+    outcome = PrerequisiteOutcome(ok=ok)
+    if failure:
+        outcome.failures.append(failure)
+    return outcome
 
 
 def _apply_single_prereq(material, prereq_info, log):

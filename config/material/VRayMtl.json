@@ -28,8 +28,8 @@
     },
     "builder_prerequisites": {
       "subsurfaceColor": {
-        "attribute": "ssOn",
-        "value": 1
+        "attribute": "translucencyMode",
+        "value": 6
       }
     },
     "short_name": "vray",

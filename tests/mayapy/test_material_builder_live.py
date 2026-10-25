@@ -112,6 +112,21 @@ class MaterialBuilderLive(support.MayaTestCase):
             self.assertNotEqual(cmds.nodeType(up.split(".")[0]), "ramp",
                                 "%s must stay a direct passthrough" % common)
 
+    def test_vray_new_sss_mode_enabled(self):
+        """V-Ray SSS uses translucencyMode=6; Legacy SSS (sssOn) must stay off."""
+        cfg = self.loader.get_material_config("VRayMtl")
+        if cfg is None:
+            self.skipTest("VRayMtl missing")
+        cmds.file(new=True, force=True)
+        mat = support.build_material(self.loader, "VRayMtl", "sss_b",
+                                     {"subsurfaceColor": "C:/tex/sss.png"},
+                                     use_full_chain=False)
+        self.assertEqual(cmds.getAttr(mat + ".translucencyMode"), 6,
+                         "translucencyMode (SSS) not enabled")
+        if cmds.attributeQuery("sssOn", node=mat, exists=True):
+            self.assertFalse(cmds.getAttr(mat + ".sssOn"),
+                             "Legacy SSS (sssOn) must stay off for the new SSS mode")
+
     def test_material_level_prerequisites_applied(self):
         cfg = self.loader.get_material_config("VRayMtl")
         if cfg is None:
