@@ -3,8 +3,7 @@ import os
 import re
 
 from core.filename_match import (ChannelMatcher, normalize_stem, quality_key,
-                                 shared_keywords, short_suffix_letters,
-                                 token_matches)
+                                 shared_keywords, token_matches)
 from core.logger import get_logger
 
 _SOURCE = "TextureScanner"
@@ -39,11 +38,7 @@ class TextureScanner:
         }
         # Filename matching lives in core.filename_match so the Colorspace name
         # driver matches names by exactly the same rules.
-        self._matcher = ChannelMatcher(
-            self.channels,
-            short_suffixes=self.config.get("short_suffixes", {}),
-            logger=self.log,
-        )
+        self._matcher = ChannelMatcher(self.channels, logger=self.log)
         self.log.debug(
             f"TextureScanner initialized: {len(self.channels)} channel(s), "
             f"{len(self.extensions)} extension(s), "
@@ -136,15 +131,13 @@ class TextureScanner:
                 drop[index] = True
         return "".join(char for index, char in enumerate(text) if not drop[index])
 
-    def _parse(self, stem, noise=(), enable_short_suffixes=False):
+    def _parse(self, stem, noise=()):
         normalized = self._normalize(stem)
         noise_spans = []
         if noise:
             normalized, noise_spans = self._mask_tokens(normalized, noise)
 
-        matches = self._matcher.matches_normalized(
-            normalized, ignore_aliases=noise,
-            enable_short_suffixes=enable_short_suffixes)
+        matches = self._matcher.matches_normalized(normalized, ignore_aliases=noise)
         if not matches:
             return None
 
@@ -248,8 +241,7 @@ class TextureScanner:
                 source=_SOURCE,
             )
 
-        enable_short = len(short_suffix_letters(stems, self._matcher.short_suffixes)) >= 2
-        parsed_files = self._parse_candidates(candidates, noise, enable_short)
+        parsed_files = self._parse_candidates(candidates, noise)
         if noise and not any(parsed is not None for parsed in parsed_files):
             # Nothing resolved with the common tokens ignored, so they really were
             # the channel markers (e.g. a directory holding only metallic maps):
@@ -259,7 +251,7 @@ class TextureScanner:
                 f"scanning without the common-token filter",
                 source=_SOURCE,
             )
-            parsed_files = self._parse_candidates(candidates, set(), enable_short)
+            parsed_files = self._parse_candidates(candidates, set())
 
         for (filename, full_path, stem), parsed in zip(candidates, parsed_files):
             if not parsed:
@@ -384,10 +376,9 @@ class TextureScanner:
         return any(token in self.ignore_keywords
                    for token in normalize_stem(stem).split("_"))
 
-    def _parse_candidates(self, candidates, noise, enable_short_suffixes=False):
+    def _parse_candidates(self, candidates, noise):
         """Parse every candidate stem, ignoring the given common alias tokens."""
-        return [self._parse(stem, noise, enable_short_suffixes)
-                for _filename, _path, stem in candidates]
+        return [self._parse(stem, noise) for _filename, _path, stem in candidates]
 
     @staticmethod
     def _record_conflict(conflicts, material_name, common_attr, kept_path, dropped_path):

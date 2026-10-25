@@ -29,12 +29,6 @@ _BIT_DEPTHS = (8, 16, 32)
 _SUFFIX_RE = re.compile(r"(\d+)(k?)")
 #: A numeric suffix glued to an alias: ``nrm16`` / ``rough4k``.
 _GLUED_SUFFIX_RE = re.compile(r"\d+k?")
-#: A single-letter channel token, optionally with a strength/resolution number:
-#: ``d`` / ``b005`` / ``r100``.  Some libraries (Arroway, Finex) mark the channel
-#: with one letter at the very end of the name.
-_SHORT_TOKEN_RE = re.compile(r"([a-z])(\d+k?)?")
-
-
 def normalize_stem(name):
     """Lowercase a filename stem, turning separators into underscores.
 
@@ -163,28 +157,6 @@ def shared_keywords(stems, keywords, ratio=_COMMON_TOKEN_RATIO,
     return {keyword for keyword, count in counts.items() if count >= threshold}
 
 
-def short_suffix_letters(stems, table):
-    """Whitelisted single-letter channels used as the last token of *stems*.
-
-    Returns the set of distinct letters (keys of *table*) that appear as the
-    final token of at least one stem, in bare (``d``) or numbered form
-    (``b005``, ``r100``).  Callers use the size of this set as a directory-level
-    gate: a lone letter is too weak to be evidence, but several distinct letters
-    in one set mean the library is using single-letter channel markers.
-    """
-    if not table:
-        return set()
-    letters = set()
-    for stem in stems:
-        tokens = normalize_stem(stem).split("_")
-        if not tokens:
-            continue
-        match = _SHORT_TOKEN_RE.fullmatch(tokens[-1])
-        if match and match.group(1) in table:
-            letters.add(match.group(1))
-    return letters
-
-
 @dataclass(frozen=True)
 class ChannelMatch:
     """One texture channel matched by a file name."""
@@ -204,7 +176,7 @@ class ChannelMatcher:
     Colorspace name driver maps them to colorspace roles).
     """
 
-    def __init__(self, channels, short_suffixes=None, logger=None):
+    def __init__(self, channels, logger=None):
         self.log = logger or get_logger()
         self.channels = channels or {}
         self._candidates = self._compile_candidates()
@@ -216,21 +188,6 @@ class ChannelMatcher:
         self._aliases_by_length = tuple(ordered)
         #: The same aliases as a set, for membership tests.
         self.aliases = frozenset(ordered)
-        #: Single-letter channel markers (``d`` -> ``BaseColor``); only honoured
-        #: when the caller has confirmed them for the directory being scanned.
-        self.short_suffixes = self._compile_short_suffixes(short_suffixes)
-
-    def _compile_short_suffixes(self, short_suffixes):
-        table = {}
-        for letter, channel_name in (short_suffixes or {}).items():
-            if channel_name not in self.channels:
-                self.log.error(
-                    f"short_suffixes[{letter!r}] -> unknown channel "
-                    f"{channel_name!r}; ignored",
-                    source="ChannelMatcher")
-                continue
-            table[letter] = channel_name
-        return table
 
     def _compile_candidates(self):
         candidates = []
@@ -260,21 +217,13 @@ class ChannelMatcher:
                 return name
         return None
 
-    def matches_normalized(self, normalized, ignore_aliases=(),
-                           enable_short_suffixes=False):
+    def matches_normalized(self, normalized, ignore_aliases=()):
         """Every channel *normalized* matches, longest alias first.
 
         ``ignore_aliases`` are skipped: they belong to the whole set (see
         :func:`shared_keywords`) and are not evidence about one file.
-
-        ``enable_short_suffixes`` additionally considers a whitelisted
-        single-letter last token (``_d``, ``_b005``).  The caller turns it on per
-        directory (see :func:`short_suffix_letters`), so a lone letter is never
-        evidence on its own.  Such a match is appended last, so a real alias
-        always wins the "first match" tie-break.
         """
         matches = []
-        matched_channels = set()
         for channel_name, channel_data, alias_norm in self._candidates:
             if alias_norm in ignore_aliases:
                 continue
@@ -288,40 +237,8 @@ class ChannelMatcher:
                 alias=alias_norm,
                 span=found,
             ))
-            matched_channels.add(channel_name)
-
-        if enable_short_suffixes and self.short_suffixes:
-            short = self._short_suffix_match(normalized)
-            if short is not None and short.channel not in matched_channels:
-                matches.append(short)
         return matches
 
-    def _short_suffix_match(self, normalized):
-        """Match a whitelisted single-letter last token, or None.
-
-        Only the *last* token counts, and only as a bare letter or letter plus a
-        strength/resolution number (``d`` / ``b005`` / ``r100``).
-        """
-        tokens = normalized.split("_")
-        if not tokens:
-            return None
-        found = _SHORT_TOKEN_RE.fullmatch(tokens[-1])
-        if not found:
-            return None
-        channel_name = self.short_suffixes.get(found.group(1))
-        if not channel_name:
-            return None
-        channel_data = self.channels.get(channel_name, {})
-        start = len(normalized) - len(tokens[-1])
-        return ChannelMatch(
-            channel=channel_name,
-            common_attr=channel_data.get("common_attr", ""),
-            channel_type=channel_data.get("type", ""),
-            alias=found.group(1),
-            span=(start, len(normalized)),
-        )
-
-    def matches(self, stem, ignore_aliases=(), enable_short_suffixes=False):
+    def matches(self, stem, ignore_aliases=()):
         """Every channel *stem* matches, longest alias first."""
-        return self.matches_normalized(normalize_stem(stem), ignore_aliases,
-                                       enable_short_suffixes)
+        return self.matches_normalized(normalize_stem(stem), ignore_aliases)

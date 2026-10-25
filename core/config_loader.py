@@ -456,14 +456,6 @@ class ConfigLoader:
     def get_session_ignores(self):
         return list(self._session_ignores)
 
-    def get_short_suffixes(self):
-        """Single-letter channel markers (``d`` -> ``BaseColor``).
-
-        Honoured by the shared matcher only when a directory shows several of
-        them (see ``core.filename_match.short_suffix_letters``).
-        """
-        return dict(self._texture_channels.get("short_suffixes", {}))
-
     def get_ignore_keywords(self):
         """File-name tokens marking artwork/previews, not textures."""
         return list(self._texture_channels.get("ignore_keywords", []))

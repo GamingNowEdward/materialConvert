@@ -325,41 +325,6 @@ def test_equal_priority_keeps_the_first_name(scan_dir):
 
 
 # --------------------------------------------------------------------------- #
-# Single-letter channel suffixes (Arroway / Finex style)
-# --------------------------------------------------------------------------- #
-
-def test_scan_single_letter_suffixes_when_the_set_uses_them(scan_dir):
-    _write_set(scan_dir, ["rock_d", "rock_b", "rock_s", "rock_r"])
-
-    result = TextureScanner().scan(str(scan_dir))
-
-    assert len(result["materials"]) == 1
-    material = result["materials"][0]
-    assert material["name"] == "rock"
-    channels = {data["channel"] for data in material["channels"].values()}
-    assert channels == {"BaseColor", "Bump", "Reflection", "Roughness"}
-
-
-def test_scan_single_letter_needs_several_distinct_letters(scan_dir):
-    """A directory with only one distinct letter must not treat it as a channel."""
-    _write_set(scan_dir, ["g1", "g2", "g3"])
-
-    result = TextureScanner().scan(str(scan_dir))
-
-    assert result["materials"] == []
-    assert len(result["unparsed"]) == 3
-
-
-def test_scan_single_letter_requires_a_whitelisted_letter(scan_dir):
-    _write_set(scan_dir, ["rock_x", "rock_y"])
-
-    result = TextureScanner().scan(str(scan_dir))
-
-    assert result["materials"] == []
-    assert len(result["unparsed"]) == 2
-
-
-# --------------------------------------------------------------------------- #
 # Ignore keywords (artwork / previews) and recursive scanning
 # --------------------------------------------------------------------------- #
 
@@ -376,7 +341,7 @@ def test_scan_skips_ignore_keywords(scan_dir):
 
 def test_scan_ignore_keyword_does_not_eat_material_names(scan_dir):
     """``page`` is a material name in some libraries, so it must not be ignored."""
-    _write_set(scan_dir, ["xxx_page_b", "xxx_page_r"])
+    _write_set(scan_dir, ["xxx_page_bump", "xxx_page_roughness"])
 
     result = TextureScanner().scan(str(scan_dir))
 
@@ -399,22 +364,6 @@ def test_scan_recursive_merges_subdirectories(scan_dir):
     assert sorted(m["name"] for m in recursive["materials"]) == ["rock", "top"]
     rock = next(m for m in recursive["materials"] if m["name"] == "rock")
     assert set(rock["channels"]) == {"baseColor", "normal_bump"}
-
-
-def test_scan_recursive_short_suffix_is_per_directory(scan_dir):
-    """A lone single-letter set in one subfolder is not enabled by another."""
-    a = scan_dir / "a"
-    a.mkdir()
-    (a / "x_d.png").write_text("", encoding="utf-8")
-    b = scan_dir / "b"
-    b.mkdir()
-    (b / "y_d.png").write_text("", encoding="utf-8")
-    (b / "y_b.png").write_text("", encoding="utf-8")
-
-    result = TextureScanner().scan(str(scan_dir), recursive=True)
-
-    assert sorted(m["name"] for m in result["materials"]) == ["y"]
-    assert [Path(path).stem for path in result["unparsed"]] == ["x_d"]
 
 
 # --------------------------------------------------------------------------- #

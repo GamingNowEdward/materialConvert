@@ -77,6 +77,79 @@ Double-click `copy_launch.bat` to copy the launch command to clipboard, then pas
 - Toggle full Builder pipeline (colorCorrect + layeredTexture + ramp, **Roughness channel only**) or simple direct connection
 - Supports BaseColor / Roughness / Glossiness (inverted) / Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS (Translucency + Scattering) / Emission
 
+#### Custom Channel Names
+
+Below `Build Options` there is a **collapsed by default** panel for session-only (never written to disk) channel-name overrides and ignore tokens. Expanding it shows an `Ignore` line plus **three side-by-side editors** (grouped by channel type):
+
+```
+Color      BaseColor  =
+           Transmission =
+           …
+Scalar     Roughness  =
+           Glossiness =
+           …
+Geometry   Normal     =
+           Bump       =
+           Displacement =
+Ignore     =
+```
+
+**Syntax**
+
+| Line | Meaning |
+|---|---|
+| `BaseColor = d, skin` | Match this channel with **only** these words (replaces the alias list from `texture_channels.json`) |
+| `BaseColor =` (empty) | Keep the aliases from `texture_channels.json` |
+| `Ignore = g, metalness` | These tokens are **never read as a channel marker** and are stripped from the material name |
+| `# ...` | Comment (whole line or trailing) |
+
+- Channel names are **case-insensitive** (`basecolor` = `BaseColor`); words are comma-separated, spaces around commas are fine, empty/trailing commas are ignored.
+- Applied when you click **Scan Directory** (the scanner is rebuilt); the **Colorspace** tab shares the same overrides through one `ConfigLoader`, so both tabs always agree.
+
+**Matching rules** (identical to the aliases in `texture_channels.json`)
+
+1. **Token equality**: `_d` matches `d`.
+2. **Word + glued number**: `d100`→`d`, `s050`→`s`, `b005`→`b`, `nrm16`→`nrm`, `rough4k`→`rough`.
+3. **Long words (≥4 chars) across underscores**: `met_allic`→`metallic`.
+4. Short words (≤3 chars) match **whole tokens only**, so `school` never matches `col`.
+
+**Key rule: every "letter + number" token needs a home**
+
+Every token like `d100` / `s050` / `g025` / `b005` / `r100` / `p050` must land either in a channel line or in the `Ignore` line. **The one you leave out stays in the material name** and splits the set into a separate material.
+
+Arroway example (`-` is a separator, so `s050-g025` is **two** tokens):
+
+```
+concrete-45_d100.jpg        -> BaseColor
+concrete-45_b010.jpg        -> Bump
+concrete-45_s050-g025.jpg   -> needs both s050 and g025 handled
+```
+
+| Panel line | Material name for `concrete-45_s050-g025.jpg` |
+|---|---|
+| `Glossiness = s` | `concrete_45_g025` ❌ leftover |
+| `Glossiness = g` | `concrete_45_s050` ❌ leftover |
+| `Glossiness = s, g` | `concrete_45` ✅ |
+| `Glossiness = s` + `Ignore = g` | `concrete_45` ✅ |
+
+**Recommended Arroway setup**
+
+```
+Color      BaseColor  = d
+Scalar     Glossiness = s
+Geometry   Bump       = b
+Ignore     g
+```
+
+**Why single letters are user-supplied**
+
+Single letters (`d`/`b`/`s`/`g`…) have no built-in table because their meaning differs per library (`_r` is reflection in one library and roughness in another) and libraries use different suffix shapes (`_top` / `_front` / `(g000)`). Written in the panel they are **ordinary aliases**:
+
+- ✅ matched **anywhere** in the name, so `concrete-52_b005_top.jpg` and `concrete-05_s100-(g000).jpg` work too;
+- ⚠️ but there is **no built-in false-positive guard**: `g1.png` or a stray `_g` in a hash name will be misread as a channel — add those to `Ignore`.
+
+**Relation to the automatic rule**: besides the panel, the scanner treats an alias token shared by most files of a set (≥60% of ≥3 files, e.g. a `_METALNESS` suffix) as a set-wide suffix; `Ignore` is its manual counterpart.
+
 
 ### Colorspace
 

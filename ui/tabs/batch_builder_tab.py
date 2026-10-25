@@ -234,8 +234,12 @@ class BatchBuilderTab:
 
         body_layout = QtWidgets.QVBoxLayout()
         body_layout.setContentsMargins(12, 0, 12, 6)
-        body_layout.addWidget(QtWidgets.QLabel(
-            "# One rule per line:  Channel = alias1, alias2   (empty = json config)"))
+        hint = QtWidgets.QLabel(
+            "# One rule per line:  Channel = alias1, alias2   (empty = json config)\n"
+            "# Ignore = tok1, tok2  ->  never read as a channel.  Every 'letter+number'\n"
+            "# token (d100 / s050 / g025) needs a home: a channel line or Ignore.")
+        hint.setWordWrap(True)
+        body_layout.addWidget(hint)
         body_layout.addWidget(self.custom_ignore)
         body_layout.addLayout(columns)
         body_layout.addLayout(clear_row)

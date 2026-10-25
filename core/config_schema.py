@@ -376,15 +376,6 @@ def validate_cross_references(config_dir=None, issues=None):
                     "texture_channels.json", f"channels.{channel_name}.common_attr",
                     "ERROR", f"unknown common attribute '{common_attr}'"))
 
-    short_suffixes = (texture_channels.get("short_suffixes")
-                      if isinstance(texture_channels, dict) else None)
-    if isinstance(short_suffixes, dict) and isinstance(channels, dict):
-        for letter, channel_name in short_suffixes.items():
-            if channel_name not in channels:
-                issues.append(ConfigIssue(
-                    "texture_channels.json", f"short_suffixes.{letter}", "ERROR",
-                    f"unknown channel '{channel_name}'"))
-
     naming = _load_json(os.path.join(config_dir, "builder_naming.json"), issues)
     if isinstance(naming, dict):
         colors = naming.get("layered_colors")

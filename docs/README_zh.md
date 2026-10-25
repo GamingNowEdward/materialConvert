@@ -77,6 +77,79 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 - 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp，**仅 Roughness 通道**）或简单直连
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
 
+#### Custom Channel Names（自定义通道名）
+
+`Build Options` 下方有一个**默认折叠**的面板，用来临时（**不写盘**）给通道追加/覆盖文件名匹配词，并声明要忽略的 token。展开后是**首行 `Ignore` + 三列并排**（按通道类型分组）：
+
+```
+Color      BaseColor  =
+           Transmission =
+           …
+Scalar     Roughness  =
+           Glossiness =
+           …
+Geometry   Normal     =
+           Bump       =
+           Displacement =
+Ignore     =
+```
+
+**语法**
+
+| 写法 | 含义 |
+|---|---|
+| `BaseColor = d, skin` | 该通道**只用**这两个词匹配（替换 `texture_channels.json` 里的别名表） |
+| `BaseColor =`（留空） | 该通道沿用 `texture_channels.json` 的别名 |
+| `Ignore = g, metalness` | 这些 token **永不当作通道标记**，并从材质名中剔除 |
+| `# ...` | 注释（整行或行尾） |
+
+- 通道名**大小写不敏感**（`basecolor` 等同 `BaseColor`）；单词用 `,` 分隔，逗号前后空格随意，多余/尾随逗号自动忽略。
+- 点 **Scan Directory** 时生效并重建扫描器；**Colorspace** 标签页共用同一份设置（同一 `ConfigLoader`），两个页面的判定始终一致。
+
+**匹配规则**（与 `texture_channels.json` 里的别名完全一致）
+
+1. **token 相等**：`_d` 命中 `d`。
+2. **词 + 粘连数字**：`d100`→`d`、`s050`→`s`、`b005`→`b`、`nrm16`→`nrm`、`rough4k`→`rough`。
+3. **长词（≥4 字符）跨下划线**：`met_allic`→`metallic`。
+4. 短词（≤3 字符）**只按完整 token** 匹配，所以 `school` 不会命中 `col`。
+
+**关键规则：每个"字母+数字" token 都要有归宿**
+
+文件名里每个像 `d100` / `s050` / `g025` / `b005` / `r100` / `p050` 的 token，要么落在某个通道行里，要么落在 `Ignore` 行里；**漏掉的那个会留在材质名里**，把同一套贴图拆成独立材质。
+
+以 Arroway 为例（`-` 会被当作分隔符，所以 `s050-g025` 是**两个** token）：
+
+```
+concrete-45_d100.jpg        -> BaseColor
+concrete-45_b010.jpg        -> Bump
+concrete-45_s050-g025.jpg   -> 需要同时处理 s050 和 g025
+```
+
+| 面板写法 | `concrete-45_s050-g025.jpg` 的材质名 |
+|---|---|
+| `Glossiness = s` | `concrete_45_g025` ❌ 残留 |
+| `Glossiness = g` | `concrete_45_s050` ❌ 残留 |
+| `Glossiness = s, g` | `concrete_45` ✅ |
+| `Glossiness = s` + `Ignore = g` | `concrete_45` ✅ |
+
+**Arroway 推荐配方**
+
+```
+Color      BaseColor  = d
+Scalar     Glossiness = s
+Geometry   Bump       = b
+Ignore     g
+```
+
+**为什么单字母要自己写**
+
+单字母（`d`/`b`/`s`/`g`…）没有内置表，因为它们的语义**跨库不同**（`_r` 在一个库是 reflection、在另一个库是 roughness），而且不同库用不同的后缀形态（`_top` / `_front` / `(g000)`）。写进面板后它们是**普通别名**：
+
+- ✅ **任意位置**都能匹配，所以 `concrete-52_b005_top.jpg`、`concrete-05_s100-(g000).jpg` 也能识别；
+- ⚠️ 但**没有内置防误报**：`g1.png`、hash 文件名里的孤立 `_g` 会被误判成通道，需要写进 `Ignore` 排除。
+
+**与自动规则的关系**：面板之外，扫描器还会自动把"整套文件共有"的别名 token（出现在 ≥60% 且 ≥3 个文件里，如 `_METALNESS`）当作后缀忽略 —— `Ignore` 是它的手动兜底。
+
 ### Colorspace
 
 ![Colorspace 页](images/colorSpace_tab.webp)

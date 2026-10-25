@@ -3,15 +3,6 @@
   "ignore_keywords": ["preview", "thumb", "demo", "render", "swatch",
                       "teaser", "gross", "hires", "flat", "clay",
                       "sphere", "cube", "donut", "icon", "logo"],
-  "short_suffixes": {
-    "d": "BaseColor",
-    "b": "Bump",
-    "n": "Normal",
-    "p": "Displacement",
-    "s": "Reflection",
-    "g": "Glossiness",
-    "r": "Roughness"
-  },
   "channels": {
     "BaseColor": {
       "aliases": ["basecolor", "basecolour", "basemap", "albedo", "albedomap",

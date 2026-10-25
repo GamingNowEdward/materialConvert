@@ -17,8 +17,7 @@ from enum import Enum
 import maya.cmds as cmds
 
 from core.config_loader import ConfigLoader, normalize_keyword
-from core.filename_match import (ChannelMatcher, normalize_stem, shared_keywords,
-                                 short_suffix_letters)
+from core.filename_match import ChannelMatcher, normalize_stem, shared_keywords
 from core.logger import get_logger
 
 _SOURCE = "ColorSpaceCore"
@@ -133,19 +132,13 @@ class NameDriver:
         self.log = logger or get_logger()
         # Filename matching is shared with the Batch Builder scanner, so short
         # aliases (col/sss/nrm/...) count too — only as complete tokens.
-        self._matcher = ChannelMatcher(
-            self.config.get_texture_channels(),
-            short_suffixes=self.config.get_short_suffixes(),
-            logger=self.log,
-        )
+        self._matcher = ChannelMatcher(self.config.get_texture_channels(),
+                                       logger=self.log)
         #: Every alias, for callers that need to detect the ones a whole texture
         #: set shares (see ``core.filename_match.shared_keywords``).
         self.aliases = self._matcher.aliases
-        #: Single-letter markers (``d`` -> ``BaseColor``), gated per directory
-        #: by ``ColorSpaceMatcher.scan`` (see ``short_suffix_letters``).
-        self.short_suffixes = self._matcher.short_suffixes
 
-    def match(self, file_path, ignore_aliases=(), enable_short_suffixes=False):
+    def match(self, file_path, ignore_aliases=()):
         """Match a file path to one or more colorspace roles from its basename.
 
         The matched texture channels are mapped to roles by their configured
@@ -155,9 +148,6 @@ class NameDriver:
         ``ignore_aliases`` are skipped: an alias shared by every file of a set
         (e.g. a ``_METALNESS`` suffix) is a property of the set, not evidence
         about this file.
-
-        ``enable_short_suffixes`` allows a whitelisted single-letter last token;
-        the caller turns it on per directory (see ``short_suffix_letters``).
         """
         if not file_path:
             return NameDriverResult(DriverStatus.NO_MATCH, [], "file path is empty",
@@ -171,9 +161,7 @@ class NameDriver:
         # otherwise be glued to the extension ("col.jpg") and never match.
         normalized = normalize_stem(os.path.splitext(filename)[0])
         roles = []
-        for match in self._matcher.matches_normalized(
-                normalized, ignore_aliases,
-                enable_short_suffixes=enable_short_suffixes):
+        for match in self._matcher.matches_normalized(normalized, ignore_aliases):
             role = _role_for_channel_type(match.channel_type)
             if role not in roles:
                 roles.append(role)
@@ -444,14 +432,12 @@ class ColorSpaceMatcher:
                 f"{', '.join(sorted(shared[directory]))}",
                 source=_SOURCE,
             )
-        short = self._short_suffix_directories(paths)
         session_ignores = set(self.name_driver.config.get_session_ignores())
 
         results = [
             self.match(node,
                        ignore_aliases=(set(shared.get(os.path.dirname(paths[node]), ()))
-                                       | session_ignores),
-                       enable_short_suffixes=short.get(os.path.dirname(paths[node]), False))
+                                       | session_ignores))
             for node in file_nodes
         ]
         if shared and not any(
@@ -465,30 +451,10 @@ class ColorSpaceMatcher:
                 source=_SOURCE,
             )
             results = [
-                self.match(node, ignore_aliases=session_ignores,
-                           enable_short_suffixes=short.get(
-                               os.path.dirname(paths[node]), False))
+                self.match(node, ignore_aliases=session_ignores)
                 for node in file_nodes
             ]
         return results
-
-    def _short_suffix_directories(self, paths):
-        """Per-directory gate for single-letter channel markers.
-
-        A directory qualifies when at least two distinct whitelisted letters
-        appear as file-name last tokens (see ``short_suffix_letters``).
-        """
-        stems_by_directory = {}
-        for path in paths.values():
-            if not path:
-                continue
-            directory = os.path.dirname(path)
-            stems_by_directory.setdefault(directory, []).append(
-                os.path.splitext(os.path.basename(path))[0])
-        return {
-            directory: len(short_suffix_letters(stems, self.name_driver.short_suffixes)) >= 2
-            for directory, stems in stems_by_directory.items()
-        }
 
     def _shared_name_keywords(self, paths):
         """Per-directory filename keywords shared by most files of that set."""
@@ -602,13 +568,13 @@ class ColorSpaceMatcher:
 
         return {"applied": applied, "failed": failed, "skipped": skip_count}
 
-    def match(self, file_node, ignore_aliases=(), enable_short_suffixes=False):
+    def match(self, file_node, ignore_aliases=()):
         """Compute the match result for a single Maya file node. Read-only."""
         errors = []
         path = self._read_file_path(file_node, errors)
         actual = self._read_actual_colorspace(file_node, errors)
 
-        name_res = self.name_driver.match(path, ignore_aliases, enable_short_suffixes)
+        name_res = self.name_driver.match(path, ignore_aliases)
         channel_res = self.channel_driver.match(file_node)
 
         state, prematch, diagnostic = self._combine(name_res, channel_res)

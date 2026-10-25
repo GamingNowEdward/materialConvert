@@ -42,16 +42,6 @@ def test_name_driver_matches_short_aliases_at_the_end_of_a_filename():
     assert driver.match(r"C:/tex/rock_sss.exr").roles == ["srgb"]
 
 
-def test_name_driver_short_suffix_only_when_enabled():
-    driver = _name_driver()
-
-    assert driver.match(r"C:/tex/rock_d.jpg").status == DriverStatus.NO_MATCH
-
-    res = driver.match(r"C:/tex/rock_d.jpg", enable_short_suffixes=True)
-    assert res.status == DriverStatus.MATCH
-    assert res.roles == ["srgb"]
-
-
 def test_reload_name_driver_picks_up_session_overrides():
     from core.config_loader import ConfigLoader
 
