@@ -117,7 +117,7 @@ Ignore     =
 
 文件名里每个像 `d100` / `s050` / `g025` / `b005` / `r100` / `p050` 的 token，要么落在某个通道行里，要么落在 `Ignore` 行里；**漏掉的那个会留在材质名里**，把同一套贴图拆成独立材质。
 
-以 Arroway 为例（`-` 会被当作分隔符，所以 `s050-g025` 是**两个** token）：
+举例说明（`-` 会被当作分隔符，所以 `s050-g025` 是**两个** token）：
 
 ```
 concrete-45_d100.jpg        -> BaseColor
@@ -131,15 +131,6 @@ concrete-45_s050-g025.jpg   -> 需要同时处理 s050 和 g025
 | `Glossiness = g` | `concrete_45_s050` ❌ 残留 |
 | `Glossiness = s, g` | `concrete_45` ✅ |
 | `Glossiness = s` + `Ignore = g` | `concrete_45` ✅ |
-
-**Arroway 推荐配方**
-
-```
-Color      BaseColor  = d
-Scalar     Glossiness = s
-Geometry   Bump       = b
-Ignore     g
-```
 
 **为什么单字母要自己写**
 

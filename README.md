@@ -117,7 +117,7 @@ Ignore     =
 
 Every token like `d100` / `s050` / `g025` / `b005` / `r100` / `p050` must land either in a channel line or in the `Ignore` line. **The one you leave out stays in the material name** and splits the set into a separate material.
 
-Arroway example (`-` is a separator, so `s050-g025` is **two** tokens):
+For example (`-` is a separator, so `s050-g025` is **two** tokens):
 
 ```
 concrete-45_d100.jpg        -> BaseColor
@@ -131,15 +131,6 @@ concrete-45_s050-g025.jpg   -> needs both s050 and g025 handled
 | `Glossiness = g` | `concrete_45_s050` ❌ leftover |
 | `Glossiness = s, g` | `concrete_45` ✅ |
 | `Glossiness = s` + `Ignore = g` | `concrete_45` ✅ |
-
-**Recommended Arroway setup**
-
-```
-Color      BaseColor  = d
-Scalar     Glossiness = s
-Geometry   Bump       = b
-Ignore     g
-```
 
 **Why single letters are user-supplied**
 
