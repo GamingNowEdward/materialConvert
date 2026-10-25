@@ -28,10 +28,27 @@ def test_find_alias_short_only_token_match():
 
 
 def test_find_alias_long_skips_underscores_with_boundary():
-    assert find_alias("hero_met_allic_01", "metallic") is not None
+    assert find_alias("hero_met_allic_01", "metallic") == (5, 14)
     assert find_alias("hero_metallic", "metallic") == (5, 13)
     assert find_alias("hero_metallicx", "metallic") is None
     assert find_alias("heroxmetallic", "metallic") is None
+
+
+def test_find_alias_ignores_underscores_in_the_alias():
+    # an alias may itself contain underscores; both spellings are one token
+    assert find_alias("hero_met_allic_01", "met_allic") == (5, 14)
+    assert find_alias("hero_metallic", "met_allic") == (5, 13)
+    assert find_alias("hero_met_allic", "metallic") == (5, 14)
+
+
+def test_find_alias_rejects_an_all_underscore_alias():
+    assert find_alias("hero_metallic", "____") is None
+
+
+def test_find_alias_handles_repeated_and_leading_trailing_underscores():
+    assert find_alias("hero__col", "col") == (6, 9)
+    assert find_alias("hero_col_", "col") == (5, 8)
+    assert find_alias("__col", "col") == (2, 5)
 
 
 def test_find_alias_numeric_suffix_token():

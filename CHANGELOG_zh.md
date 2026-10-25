@@ -29,7 +29,7 @@
 - **重复通道原先只按文件名字典序取第一个**：现改为**位深/分辨率高者优先**（`NRM16` 胜 `NRM`、`nrm4k` 胜 `nrm`；独立 token 或粘在通道词后均可，且只做相对比较，整套共有的数字会抵消），平手时才回退到名字序第一个；`_record_conflict()` 始终重算 `dropped = candidates − kept`，UI 展示与最终采用者一致
 - **Batch Builder 表格把所有异常都涂成同一种红**：现按严重度分色——`CONFLICT (kept)` 琥珀色（被采用的那个文件）、被丢弃的重复文件保持红色、`UNPARSED` 灰蓝色，并在表格下方加一行图例说明三种状态
 - **Colorspace 对整套贴图误报冲突**：Name Driver 把整套共有的 `_METALNESS` 当作每个文件的证据，于是 `COL`/`SSS` 文件与 channel 证据冲突（raw vs srgb）而停在 `CONFLICT`。现 `ColorSpaceMatcher.scan()` 按**文件所在目录**分组，用共用的 `TextureScanner.shared_keywords()` 规则求出被 ≥60%（且该目录 ≥3 个 file 节点）文件共有的关键词，并通过 `NameDriver.match(..., ignore_keywords=...)` 忽略它们；若过滤后**没有任何节点**得到文件名证据（如目录里只有 metallic 贴图），则整场景重跑一次不过滤（兜底）
-- **文件名匹配改为单一实现**：`core/filename_match.py` 集中 `normalize_stem` / `find_alias` / `quality_key` / `shared_keywords` 与 `ChannelMatcher`（返回一个名字命中的**全部**通道，最长别名优先）；Batch Builder 扫描器只保留扫描职责，`NameDriver` 把命中的通道按 `texture_channels.json` 的 `type` 映射为 colorspace role（`color`→`srgb`、数据类→`raw`）并对 role 去重——同 role 多通道是一个结论，不同 role 保留 `AMBIGUOUS`。短别名（`col`/`sss`/`nrm`/`disp`/`mask`…）现在也提供文件名证据，但仍只按完整 token 匹配（`school` 不会命中 `col`）。`ConfigLoader.get_filename_role_keywords()` 由 `get_texture_channels()` 取代
+- **文件名匹配改为单一实现**：`core/filename_match.py` 集中 `normalize_stem` / `find_alias` / `quality_key` / `shared_keywords` 与 `ChannelMatcher`（返回一个名字命中的**全部**通道，最长别名优先）；Batch Builder 扫描器只保留扫描职责，`NameDriver` 把命中的通道按 `texture_channels.json` 的 `type` 映射为 colorspace role（`color`→`srgb`、数据类→`raw`）并对 role 去重——同 role 多通道是一个结论，不同 role 保留 `AMBIGUOUS`。短别名（`col`/`sss`/`nrm`/`disp`/`mask`…）现在也提供文件名证据，但仍只按完整 token 匹配（`school` 不会命中 `col`）。`ConfigLoader.get_filename_role_keywords()` 由 `get_texture_channels()` 取代；`find_alias` 改用正则实现（结果一致、约 1.5× 提速，且别名自身含下划线时如 `base_color` 现在也能匹配 `basecolor`）
 - **`del exc` 吞掉横幅失败**：`show_warning_banner` / `show_result_banner` 失败回落到 `report_terminal`（stderr），失败可观测
 - **Log 页校验无防护**：改用 `set_enabled`（窗口销毁不再抛 `RuntimeError`），忙状态提升为**窗口级**、覆盖全部 6 个页
 - **`nodes=` 快照无上限**：`_normalize_nodes` 对已规范化元组短路，并以 `MAX_NODES`（50）截断、追加 `...(+N more)`
@@ -42,7 +42,7 @@
 - `scripts/check_no_silent_pass.py` 升级为 **AST 结构检查**：每个 `except` 处理块必须记录日志、`raise`、调用 `report_terminal`，或带显式 `# noqa: silent-fallback <原因>` 标记；`print` / `cmds.warning` 也改为 AST 检测
 
 ### 测试
-- 纯套件：**337 passed**（原 289）。新增：CC 拓扑、ramp 与完整链、ramp 配置失败、提交语义、快照中止、builder prerequisite、V-Ray SSS 开关、共享文件名匹配、整套共有 token、重复通道优先规则、Batch Builder 表格分色、colorspace 整套共有关键词、节点上限、淘汰、横幅回落
+- 纯套件：**340 passed**（原 289）。新增：CC 拓扑、ramp 与完整链、ramp 配置失败、提交语义、快照中止、builder prerequisite、V-Ray SSS 开关、共享文件名匹配、别名内下划线匹配、整套共有 token、重复通道优先规则、Batch Builder 表格分色、colorspace 整套共有关键词、节点上限、淘汰、横幅回落
 - mayapy 套件：**92 passed, 3 skipped**（原 88）。新增：目标侧 CC 断言、outAlpha 标量通道、ramp 随 `vCoord` 响应、full chain 只作用于 roughness、V-Ray SSS 开关
 
 ### 已知限制与后续项

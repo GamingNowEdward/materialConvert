@@ -10,6 +10,7 @@ caller (``TextureScanner`` loads them itself, ``ColorSpaceMatcher`` gets them fr
 import math
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 from core.logger import get_logger
 
@@ -39,6 +40,21 @@ def normalize_stem(name):
     return re.sub(r"[- ]", "_", name.lower())
 
 
+@lru_cache(maxsize=None)
+def _underscore_pattern(alias):
+    """Regex matching *alias* in a normalized stem with underscores ignored.
+
+    The alias' own underscores are dropped first, so ``base_color`` and
+    ``basecolor`` are the same token, and underscores are then allowed between
+    the remaining characters (``met_allic`` matches ``metallic``).  Cached: the
+    alias table is fixed and this runs once per file per alias.
+    """
+    cleaned = alias.replace("_", "")
+    if not cleaned:
+        return None
+    return re.compile(r"_*".join(re.escape(char) for char in cleaned))
+
+
 def find_alias(normalized, alias):
     """Return ``(start, end)`` of *alias* in *normalized*, or None.
 
@@ -50,46 +66,32 @@ def find_alias(normalized, alias):
     3. Substring match ignoring underscores, only for longer aliases, and only
        when the alias is bounded by non-alphanumeric characters.
     """
-    offset = 0
-    for token in normalized.split("_"):
+    for match in re.finditer(r"[^_]+", normalized):
+        token = match.group()
+        start, end = match.span()
+
         if token == alias:
-            return offset, offset + len(alias)
+            return start, end
+
         suffix = token[len(alias):]
         if token.startswith(alias) and _GLUED_SUFFIX_RE.fullmatch(suffix):
             # The whole token is the match: the numeric suffix is part of it.
-            return offset, offset + len(token)
-        offset += len(token) + 1
+            return start, end
 
     if len(alias) < 4:
         return None
 
-    n = len(normalized)
-    i = 0
-    while i < n:
-        if normalized[i] == "_":
-            i += 1
-            continue
+    pattern = _underscore_pattern(alias)
+    if pattern is None:
+        return None
 
-        start = i
-        j = i
-        k = 0
-        while j < n and k < len(alias):
-            if normalized[j] == "_":
-                j += 1
-                continue
-            if normalized[j] != alias[k]:
-                break
-            k += 1
-            j += 1
+    for match in pattern.finditer(normalized):
+        start, end = match.span()
+        before = normalized[start - 1] if start > 0 else ""
+        after = normalized[end] if end < len(normalized) else ""
 
-        if k == len(alias):
-            before = normalized[start - 1] if start > 0 else ""
-            after = normalized[j] if j < n else ""
-
-            if (not before.isalnum()) and (not after.isalnum()):
-                return start, j
-
-        i += 1
+        if (not before.isalnum()) and (not after.isalnum()):
+            return start, end
 
     return None
 
