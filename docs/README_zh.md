@@ -68,11 +68,11 @@ exec(open(r"你的路径\materialConvert\main.py").read())
 
 ![Batch Builder 页](images/batchBuilder_tab.webp)
 
-- 选择目录并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）；某通道词若被整套文件共有（如每个文件都以 `_METALNESS` 结尾）会被视为**整套共有后缀**而非该文件的通道，粘在通道词后的数字（`nrm16`、`disp16`）仍能识别
+- 选择目录（可选 `Include Subfolders`，每个子目录**独立**扫描）并自动按文件名解析 PBR 贴图（规则参考 `config/texture_channels.json`）；某通道词若被整套文件共有（如每个文件都以 `_METALNESS` 结尾）会被视为**整套共有后缀**而非该文件的通道，粘在通道词后的数字（`nrm16`、`disp16`）仍能识别；文件名含 `ignore_keywords` 词（`preview`、`thumb`、`render` 等）的预览/图册文件**直接跳过**
 - 将贴图分组为材质，并预览将要创建的材质列表（Materials to Build）
 - 已解析通道、未解析文件**与全部贴图冲突**合并在同一表格展示，Status 列支持排序（`OK` / `CONFLICT (kept)` / `CONFLICT` / `UNPARSED`）；按字母序保留第一个文件，其余候选全部可见
 - 可选 `Skip Materials With Conflicts` 开关（默认关闭），未解决的通道冲突不会被悄悄按任意文件构建
-- 通道重复：**位深/分辨率高者优先**（`NRM16` 胜 `NRM`、`nrm4k` 胜 `nrm`），平手保留文件名字典序第一个；表格中被采用的文件标 `CONFLICT (kept)`（琥珀色）、被丢弃的标 `CONFLICT`（红色）、无法识别的标 `UNPARSED`（灰色），表格下方有图例说明
+- 通道重复：先比**位深/分辨率**（`NRM16` 胜 `NRM`、`nrm4k` 胜 `nrm`），再比通道 `priority`（`Roughness` 胜 `Glossiness`、`Normal` 胜 `Bump`），最后才看名字序；表格中被采用的文件标 `CONFLICT (kept)`（琥珀色）、被丢弃的标 `CONFLICT`（红色）、无法识别的标 `UNPARSED`（灰色），表格下方有图例说明
 - 批量构建全部 / 选中材质到任意支持的渲染器
 - 可切换完整 Builder 流程（colorCorrect + layeredTexture + ramp，**仅 Roughness 通道**）或简单直连
 - 支持 BaseColor / Roughness / Glossiness（自动反相）/ Metallic / Normal / Bump / Displacement / Opacity / Transmission / Reflection / Sheen / SSS（Translucency + Scattering）/ Emission
@@ -157,7 +157,7 @@ Ignore     g
 - 独立 **Colorspace** 标签页——file 节点色彩空间操作的**唯一 UI 入口**（Node Tools 不再提供任何 colorspace UI）
 - **File Node List**：扫描场景全部 `file` 节点为可排序表格（File Node / File Path / Colorspace / Prematch Colorspace / Diagnostic）；Diagnostic 列承载匹配状态（如 `CONFLICT: ...`）并按问题严重度排序而非字母序
 - **Refresh**：对每个 file 节点评估自动匹配，**不修改 scene**
-- **自动匹配** 由两个 driver 驱动：**Name Driver**（文件名关键词来自 `config/texture_channels.json`）与 **Channel Driver**（BFS 追踪全部下游连接，匹配 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词）；最终状态 `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`。同一目录下被多数文件共有的文件名关键词（如整套都以 `_METALNESS` 结尾）视为**整套后缀**、不作为单个文件的证据，从而让 channel 证据说话。追踪因深度/节点预算截断时证据不完整，仅有 channel 证据的匹配会降级为 `AMBIGUOUS`（不自动应用）
+- **自动匹配** 由两个 driver 驱动：**Name Driver**（通道别名来自 `config/texture_channels.json`，外加 Batch Builder 的 *Custom Channel Names* 面板设置的会话覆盖；命中通道按 `type` 决定 srgb / raw）与 **Channel Driver**（BFS 追踪全部下游连接，匹配 `commonAttributeRoles` + `config/material/*.json` 扩展的属性关键词）；最终状态 `MATCHED` / `CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID`。同一目录下被多数文件共有的别名（如整套都以 `_METALNESS` 结尾）视为**整套后缀**、不作为单个文件的证据，从而让 channel 证据说话。追踪因深度/节点预算截断时证据不完整，仅有 channel 证据的匹配会降级为 `AMBIGUOUS`（不自动应用）
 - **Apply Selected** / **Apply All Matched**：仅将 `MATCHED` 结果应用到 `file.colorSpace`（单步 undo chunk），应用前逐项重新匹配，已过期的建议计入 `stale` 不写入；`CONFLICT` / `AMBIGUOUS` / `UNMATCHED` / `INVALID` 一律不自动应用
 - **Manual Colorspace Assignment**：从 Maya 实际可用的 input spaces 中选择并只应用到选中行——不修改匹配规则或配置
 - 选中行会同步 Maya 选择到对应 file 节点；工具按钮可对所有 file 节点设置 `ignoreColorSpaceFileRules`

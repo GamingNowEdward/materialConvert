@@ -7,7 +7,7 @@
 
 ### 新增
 - **忽略关键词**（`texture_channels.json: ignore_keywords`）：文件名含这些 token（`preview`/`thumb`/`demo`/`render`/`swatch`/`gross`/`hires`/`clay` 等）的文件直接跳过，不再进 unparsed。**故意不含 `page`**——它是某些库的材质名（`xxx_page_b.jpg`）
-- **Batch Builder 递归扫描**：`TextureScanner.scan(directory, recursive=True)` 遍历所有子目录，每个目录**独立**扫描（共有关键词与单字母判定都是逐目录的）再合并结果；Batch Builder 标签页新增 "Include Subfolders" 勾选框
+- **Batch Builder 递归扫描**：`TextureScanner.scan(directory, recursive=True)` 遍历所有子目录，每个目录**独立**扫描（共有关键词判定是逐目录的）再合并结果；Batch Builder 标签页新增 "Include Subfolders" 勾选框
 - **Batch Builder 的会话级自定义通道名**：默认折叠的 "Custom Channel Names" 面板预填**所有通道、值为空**，并按通道 `type` 分成**三列并排编辑**（Color / Scalar / Geometry）。通道名**大小写不敏感**；填了的行**替换**该通道的别名；空行沿用 `texture_channels.json`；`Ignore = tok1, tok2` 行把这些 token 标记为**永不当作通道标记**（整套共有 token 检测的手动版——当某后缀出现文件太少、自动检测不触发时很有用）。**不落盘**：点击 Scan 时应用并重建 scanner。同一份覆盖经共享 `ConfigLoader` 传到 Colorspace（`ColorSpaceMatcher.reload_name_driver()`），两个标签页判定始终一致
 
 ### 修复
@@ -43,7 +43,7 @@
 - **整套贴图共用"通道词后缀"时 Batch Builder 全部判错**：若一套贴图每个文件都以 `_METALNESS` 结尾，会被整体判成 metallic，且每个文件被拆成独立材质。`TextureScanner` 现在统计每个**别名 token** 出现在多少个文件里：在 ≥3 个贴图文件的目录中，被 ≥60% 文件共有的别名 token 视为**整套共有后缀**——匹配时忽略、并从材质名中剔除；同时支持粘在通道词后的数字/分辨率（`nrm16`→`nrm`、`rough4k`→`rough`）。若忽略共有 token 后没有任何文件能解析出通道（如只放 `*_METALNESS.png` 的单通道目录），整目录回退到原始行为；只有别名 token 参与该判定，资源名永不被剥离
 - **重复通道原先只按文件名字典序取第一个**：现改为**位深/分辨率高者优先**（`NRM16` 胜 `NRM`、`nrm4k` 胜 `nrm`；独立 token 或粘在通道词后均可，且只做相对比较，整套共有的数字会抵消），平手时才回退到名字序第一个；`_record_conflict()` 始终重算 `dropped = candidates − kept`，UI 展示与最终采用者一致
 - **Batch Builder 表格把所有异常都涂成同一种红**：现按严重度分色——`CONFLICT (kept)` 琥珀色（被采用的那个文件）、被丢弃的重复文件保持红色、`UNPARSED` 灰蓝色，并在表格下方加一行图例说明三种状态
-- **Colorspace 对整套贴图误报冲突**：Name Driver 把整套共有的 `_METALNESS` 当作每个文件的证据，于是 `COL`/`SSS` 文件与 channel 证据冲突（raw vs srgb）而停在 `CONFLICT`。现 `ColorSpaceMatcher.scan()` 按**文件所在目录**分组，用共用的 `TextureScanner.shared_keywords()` 规则求出被 ≥60%（且该目录 ≥3 个 file 节点）文件共有的关键词，并通过 `NameDriver.match(..., ignore_keywords=...)` 忽略它们；若过滤后**没有任何节点**得到文件名证据（如目录里只有 metallic 贴图），则整场景重跑一次不过滤（兜底）
+- **Colorspace 对整套贴图误报冲突**：Name Driver 把整套共有的 `_METALNESS` 当作每个文件的证据，于是 `COL`/`SSS` 文件与 channel 证据冲突（raw vs srgb）而停在 `CONFLICT`。现 `ColorSpaceMatcher.scan()` 按**文件所在目录**分组，用共用的 `TextureScanner.shared_keywords()` 规则求出被 ≥60%（且该目录 ≥3 个 file 节点）文件共有的关键词，并通过 `NameDriver.match(..., ignore_aliases=...)` 忽略它们；若过滤后**没有任何节点**得到文件名证据（如目录里只有 metallic 贴图），则整场景重跑一次不过滤（兜底）
 - **文件名匹配改为单一实现**：`core/filename_match.py` 集中 `normalize_stem` / `find_alias` / `quality_key` / `shared_keywords` 与 `ChannelMatcher`（返回一个名字命中的**全部**通道，最长别名优先）；Batch Builder 扫描器只保留扫描职责，`NameDriver` 把命中的通道按 `texture_channels.json` 的 `type` 映射为 colorspace role（`color`→`srgb`、数据类→`raw`）并对 role 去重——同 role 多通道是一个结论，不同 role 保留 `AMBIGUOUS`。短别名（`col`/`sss`/`nrm`/`disp`/`mask`…）现在也提供文件名证据，但仍只按完整 token 匹配（`school` 不会命中 `col`）。`ConfigLoader.get_filename_role_keywords()` 由 `get_texture_channels()` 取代；`find_alias` 改用正则实现（结果一致、约 1.5× 提速，且别名自身含下划线时如 `base_color` 现在也能匹配 `basecolor`）
 - **`del exc` 吞掉横幅失败**：`show_warning_banner` / `show_result_banner` 失败回落到 `report_terminal`（stderr），失败可观测
 - **Log 页校验无防护**：改用 `set_enabled`（窗口销毁不再抛 `RuntimeError`），忙状态提升为**窗口级**、覆盖全部 6 个页
